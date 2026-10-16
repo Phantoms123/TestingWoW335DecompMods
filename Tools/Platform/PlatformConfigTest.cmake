@@ -61,12 +61,12 @@ endif ()
 
 set(fixture /module/Common.cpp /module/Win32/Impl.cpp /module/Win64/Impl.cpp
     /module/Linux/Impl.cpp /module/Darwin/Impl.cpp /module/Posix/Impl.cpp
-    /module/SDL/Impl.cpp /module/Posix/Arch/X86/Impl.cpp /module/Posix/Arch/ARM64/Impl.cpp)
+    /module/SDL/Impl.cpp /module/Native/Impl.cpp /module/Posix/Arch/X86/Impl.cpp /module/Posix/Arch/ARM64/Impl.cpp)
 wowdecomp_filter_platform_sources(selected ${fixture})
 if (WOWDECOMP_OS STREQUAL "Windows")
     set(expected /module/Common.cpp /module/Win32/Impl.cpp /module/Win64/Impl.cpp)
 else ()
-    set(expected /module/Common.cpp /module/${WOWDECOMP_OS}/Impl.cpp /module/Posix/Impl.cpp /module/SDL/Impl.cpp)
+    set(expected /module/Common.cpp /module/${WOWDECOMP_OS}/Impl.cpp /module/Posix/Impl.cpp /module/SDL/Impl.cpp /module/Native/Impl.cpp)
     if (WOWDECOMP_CPU STREQUAL "arm64")
         list(APPEND expected /module/Posix/Arch/ARM64/Impl.cpp)
     else ()

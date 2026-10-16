@@ -52,7 +52,7 @@ message(STATUS "WoW target: ${WOWDECOMP_OS}/${WOWDECOMP_CPU}, ${WOWDECOMP_POINTE
 function(wowdecomp_filter_platform_sources output)
     set(sources ${ARGN})
     if (WOWDECOMP_OS STREQUAL "Windows")
-        list(FILTER sources EXCLUDE REGEX "/(Linux|Darwin|Posix|SDL)/")
+        list(FILTER sources EXCLUDE REGEX "/(Linux|Darwin|Posix|SDL|Native)/")
     else ()
         list(FILTER sources EXCLUDE REGEX "/(Win32|Win64)/")
         if (WOWDECOMP_OS STREQUAL "Linux")

@@ -23,6 +23,27 @@ target_compile_definitions(PlatformTest PRIVATE
     EXPECTED_COMPILER=WOW_COMPILER_${_wow_compiler}
     EXPECTED_POINTER_BITS=${WOWDECOMP_POINTER_BITS})
 add_test(NAME PlatformIdentity COMMAND PlatformTest)
+add_executable(BoundaryHeadersTest BoundaryHeadersTest.cpp)
+target_compile_features(BoundaryHeadersTest PRIVATE cxx_std_17)
+target_include_directories(BoundaryHeadersTest PRIVATE "${WOWDECOMP_ROOT}")
+add_test(NAME BoundaryHeaders COMMAND BoundaryHeadersTest)
+add_test(NAME BoundarySources COMMAND "${CMAKE_COMMAND}" -P "${CMAKE_CURRENT_SOURCE_DIR}/BoundarySources.cmake")
+find_package(Git QUIET)
+if (Git_FOUND)
+    add_test(NAME WindowsLeaves COMMAND "${CMAKE_COMMAND}" "-DGIT_EXECUTABLE=${GIT_EXECUTABLE}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/WindowsLeaves.cmake")
+endif ()
+if (WOWDECOMP_POSIX)
+    file(GLOB_RECURSE native_contracts
+        "${WOWDECOMP_ROOT}/Engine/Source/BlizzardCore/Source/*.cpp"
+        "${WOWDECOMP_ROOT}/Engine/Source/Os/Native/*.cpp"
+        "${WOWDECOMP_ROOT}/WoW/Source/Native/*.cpp")
+    list(FILTER native_contracts INCLUDE REGEX "/Native/")
+    wowdecomp_filter_platform_sources(native_contracts ${native_contracts})
+    add_library(NativeAlgorithmContracts OBJECT ${native_contracts})
+    target_compile_features(NativeAlgorithmContracts PRIVATE cxx_std_17)
+    target_include_directories(NativeAlgorithmContracts PRIVATE "${WOWDECOMP_ROOT}")
+endif ()
 foreach (case linux-x64 linux-arm64 macos-arm64 macos-x64 windows-x86 windows-x64 windows-arm64 unknown-os unknown-cpu bad-width universal)
     add_test(NAME PlatformConfig-${case} COMMAND "${CMAKE_COMMAND}"
         "-DCASE=${case}" -P "${CMAKE_CURRENT_SOURCE_DIR}/PlatformConfigTest.cmake")
