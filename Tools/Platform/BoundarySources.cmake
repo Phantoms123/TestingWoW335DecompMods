@@ -1,5 +1,6 @@
 get_filename_component(root "../.." ABSOLUTE BASE_DIR "${CMAKE_CURRENT_LIST_DIR}")
 file(GLOB_RECURSE native_sources "${root}/Engine/Source/BlizzardCore/Source/*.cpp"
+    "${root}/Engine/Source/Gx/CGxDeviceD3d/Native/*.cpp"
     "${root}/Engine/Source/Os/Native/*.cpp" "${root}/WoW/Source/Native/*.cpp")
 list(FILTER native_sources INCLUDE REGEX "/Native/")
 list(LENGTH native_sources count)

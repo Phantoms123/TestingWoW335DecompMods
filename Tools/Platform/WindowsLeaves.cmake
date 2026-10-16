@@ -1,5 +1,6 @@
 get_filename_component(root "../.." ABSOLUTE BASE_DIR "${CMAKE_CURRENT_LIST_DIR}")
 set(paths
+    Engine/Source/Gx/CGxDeviceD3d/CGxDeviceD3d.cpp
     Engine/Source/BlizzardCore/Source/System/Debug/Win64/Debug.cpp
     Engine/Source/BlizzardCore/Source/System/Hardware/Win64/Hardware.cpp
     Engine/Source/BlizzardCore/Source/System/Time/Win64/Time.cpp
