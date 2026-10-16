@@ -14,7 +14,8 @@ OPTIONAL_COUNTERS = ('resident_upload_bytes', 'resident_bytes', 'retired_buffer_
                      'resident_device_allocations', 'resident_staging_reuses',
                      'staging_arena_allocations', 'staging_arena_bytes',
                      'texture_cache_hits', 'texture_cache_lookups',
-                     'image_cache_reuses', 'resource_cache_bytes', 'resource_cache_evictions')
+                     'image_cache_reuses', 'resource_cache_bytes', 'resource_cache_evictions',
+                     'resident_device_reuses')
 
 
 def percentile(values, fraction):

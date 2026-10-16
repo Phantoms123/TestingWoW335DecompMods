@@ -1,4 +1,5 @@
 #include "ResidentBuffer.h"
+#include "ResourceCache.h"
 #include <cstring>
 #include <limits>
 #include <stdexcept>
@@ -19,7 +20,7 @@ VkDeviceSize AlignedSize(VkDeviceSize bytes) {
 Buffer CreateBuffer(VkDevice device, const VkPhysicalDeviceMemoryProperties& memory,
     VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties) {
     Buffer buffer;
-    buffer.size = size;
+    buffer.size = size; buffer.usage = usage; buffer.properties = properties;
     VkBufferCreateInfo create{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
     create.size = size; create.usage = usage; create.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     Check(vkCreateBuffer(device, &create, nullptr, &buffer.buffer), "vkCreateBuffer");
@@ -35,6 +36,7 @@ Buffer CreateBuffer(VkDevice device, const VkPhysicalDeviceMemoryProperties& mem
         VkMemoryAllocateInfo allocate{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
         allocate.allocationSize = requirements.size; allocate.memoryTypeIndex = type;
         Check(vkAllocateMemory(device, &allocate, nullptr, &buffer.memory), "vkAllocateMemory(buffer)");
+        buffer.allocationBytes = requirements.size;
         Check(vkBindBufferMemory(device, buffer.buffer, buffer.memory, 0), "vkBindBufferMemory");
         if (properties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
             Check(vkMapMemory(device, buffer.memory, 0, size, 0, reinterpret_cast<void**>(&buffer.mapped)), "vkMapMemory(buffer)");
@@ -60,7 +62,7 @@ void ResidentBuffer::Retire(std::vector<Buffer>& retired) {
 }
 VkBuffer ResidentBuffer::Resolve(VkDevice device, const VkPhysicalDeviceMemoryProperties& memory,
     VkCommandBuffer command, uint64_t frame, const void* data, VkDeviceSize bytes,
-    std::vector<Buffer>& retired, uint64_t& uploadedBytes, StagingSlice borrowed, UploadStats* stats) {
+    std::vector<Buffer>& retired, uint64_t& uploadedBytes, StagingSlice borrowed, UploadStats* stats, ResourceCache* cache) {
     const auto size = AlignedSize(bytes);
     if (!data || !frame) throw std::invalid_argument("Invalid resident buffer source/frame");
     if (NeedsUpload(bytes)) {
@@ -80,11 +82,13 @@ VkBuffer ResidentBuffer::Resolve(VkDevice device, const VkPhysicalDeviceMemoryPr
                 if (stats) ++stats->stagingAllocations;
             }
             if (replace) {
-                destination = CreateBuffer(device, memory, size,
-                    VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
-                    VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-                if (stats) ++stats->deviceAllocations;
+                bool reused = false;
+                destination = cache ? cache->AcquireBuffer(size, reused) : CreateBuffer(device, memory, size,
+                    ResourceCache::ResidentUsage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+                if (stats) {
+                    if (reused) ++stats->deviceReuses;
+                    else ++stats->deviceAllocations;
+                }
             }
             // Reserve ownership before touching storage or recording commands.
             retired.reserve(retired.size() + (replace && m_buffer.buffer ? 1 : 0) + (!borrowed.buffer ? 1 : 0));

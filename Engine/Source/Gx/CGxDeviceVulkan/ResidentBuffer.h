@@ -6,18 +6,21 @@
 #include <vector>
 
 namespace GxVulkan {
+class ResourceCache;
 struct Buffer {
     VkBuffer buffer = VK_NULL_HANDLE;
     VkDeviceMemory memory = VK_NULL_HANDLE;
     uint8_t* mapped = nullptr;
-    VkDeviceSize size = 0;
+    VkDeviceSize size = 0, allocationBytes = 0;
+    VkBufferUsageFlags usage = 0;
+    VkMemoryPropertyFlags properties = 0;
 };
 Buffer CreateBuffer(VkDevice device, const VkPhysicalDeviceMemoryProperties& memory,
     VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties);
 void DestroyBuffer(VkDevice device, Buffer& buffer);
 
 struct UploadStats {
-    uint64_t stagingAllocations = 0, deviceAllocations = 0, stagingReuses = 0;
+    uint64_t stagingAllocations = 0, deviceAllocations = 0, stagingReuses = 0, deviceReuses = 0;
 };
 // Borrowed coherent staging storage. Its range must remain unchanged until the
 // submission fence completes; the resident buffer never owns or retires it.
@@ -36,7 +39,7 @@ public:
     VkBuffer Resolve(VkDevice device, const VkPhysicalDeviceMemoryProperties& memory,
         VkCommandBuffer command, uint64_t frame, const void* data, VkDeviceSize bytes,
         std::vector<Buffer>& retired, uint64_t& uploadedBytes,
-        StagingSlice staging = {}, UploadStats* stats = nullptr);
+        StagingSlice staging = {}, UploadStats* stats = nullptr, ResourceCache* cache = nullptr);
     void Retire(std::vector<Buffer>& retired);
     VkDeviceSize Size() const { return m_buffer.size; }
 private:

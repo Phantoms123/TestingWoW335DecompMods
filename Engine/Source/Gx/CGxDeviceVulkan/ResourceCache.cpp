@@ -25,19 +25,22 @@ ResourceCache::ResourceCache(VkDevice device, const VkPhysicalDeviceMemoryProper
     : m_device(device), m_memory(memory), m_budget(budget) {
     if (!device) throw std::invalid_argument("Resource cache requires a Vulkan device");
     // No host allocation is needed while consuming completed retirement lists.
-    m_images.reserve(EntryLimit);
+    m_resources.reserve(EntryLimit);
 }
 ResourceCache::~ResourceCache() {
-    for (auto& image : m_images) DestroyImage(m_device, image);
+    for (auto& entry : m_resources) Destroy(entry);
 }
 Image ResourceCache::AcquireImage(const ImageDescription& d) {
     if (!d.width || !d.height || !d.levels || !d.layers || !d.usage || !d.aspect || d.format == VK_FORMAT_UNDEFINED)
         throw std::invalid_argument("Invalid cached image description");
-    auto found = std::find_if(m_images.begin(), m_images.end(), [&](const Image& image) { return image.Matches(d); });
-    if (found != m_images.end()) {
-        Image image = *found;
+    auto found = std::find_if(m_resources.begin(), m_resources.end(), [&](const Entry& entry) {
+        const auto* image = std::get_if<Image>(&entry);
+        return image && image->Matches(d);
+    });
+    if (found != m_resources.end()) {
+        Image image = std::get<Image>(*found);
         m_cachedBytes -= image.allocationBytes;
-        m_images.erase(found);
+        m_resources.erase(found);
         // Treat reuse like fresh image creation: the caller must transition and
         // initialise it. An UNDEFINED old layout explicitly discards old texels.
         image.layout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -75,12 +78,37 @@ Image ResourceCache::AcquireImage(const ImageDescription& d) {
     } catch (...) { DestroyImage(m_device, image); throw; }
     return image;
 }
-void ResourceCache::EvictImage() {
-    auto image = m_images.front();
-    m_cachedBytes -= image.allocationBytes;
-    m_images.erase(m_images.begin());
-    DestroyImage(m_device, image);
+Buffer ResourceCache::AcquireBuffer(VkDeviceSize size, bool& reused) {
+    if (!size) throw std::invalid_argument("Invalid cached resident buffer size");
+    auto found = std::find_if(m_resources.begin(), m_resources.end(), [&](const Entry& entry) {
+        const auto* buffer = std::get_if<Buffer>(&entry);
+        return buffer && buffer->size == size;
+    });
+    reused = found != m_resources.end();
+    if (reused) {
+        Buffer buffer = std::get<Buffer>(*found);
+        m_cachedBytes -= buffer.allocationBytes;
+        m_resources.erase(found);
+        ++m_stats.bufferReuses;
+        return buffer;
+    }
+    auto buffer = CreateBuffer(m_device, m_memory, size, ResidentUsage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    ++m_stats.bufferAllocations;
+    return buffer;
+}
+void ResourceCache::Destroy(Entry& entry) {
+    if (auto* image = std::get_if<Image>(&entry)) DestroyImage(m_device, *image);
+    else DestroyBuffer(m_device, std::get<Buffer>(entry));
+}
+void ResourceCache::EvictOldest() {
+    auto& entry = m_resources.front();
+    m_cachedBytes -= std::visit([](const auto& resource) { return resource.allocationBytes; }, entry);
+    Destroy(entry);
+    m_resources.erase(m_resources.begin());
     ++m_stats.evictions;
+}
+void ResourceCache::MakeRoom(VkDeviceSize bytes) {
+    while (m_cachedBytes > m_budget - bytes || m_resources.size() == EntryLimit) EvictOldest();
 }
 void ResourceCache::Recycle(Image& image) {
     // Samplers are state-dependent and are not part of this allocation cache.
@@ -89,19 +117,31 @@ void ResourceCache::Recycle(Image& image) {
         DestroyImage(m_device, image);
         return;
     }
-    while (!m_images.empty() && (m_cachedBytes > m_budget - image.allocationBytes || m_images.size() == EntryLimit))
-        EvictImage();
+    MakeRoom(image.allocationBytes);
     m_cachedBytes += image.allocationBytes;
-    m_images.push_back(image);
+    m_resources.emplace_back(image);
     image = {};
 }
-bool ResourceCache::Collect(VkFence completion, std::vector<Image>& retired) {
+void ResourceCache::Recycle(Buffer& buffer) {
+    // Staging/readback allocations must never masquerade as resident geometry.
+    if (!buffer.buffer || !buffer.allocationBytes || buffer.allocationBytes > m_budget || buffer.mapped ||
+        buffer.usage != ResidentUsage || buffer.properties != VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
+        DestroyBuffer(m_device, buffer);
+        return;
+    }
+    MakeRoom(buffer.allocationBytes);
+    m_cachedBytes += buffer.allocationBytes;
+    m_resources.emplace_back(buffer);
+    buffer = {};
+}
+bool ResourceCache::Collect(VkFence completion, std::vector<Image>& images, std::vector<Buffer>& buffers) {
     if (!completion) throw std::invalid_argument("Resource retirement requires a completion fence");
     const auto status = vkGetFenceStatus(m_device, completion);
     if (status == VK_NOT_READY) return false;
     Check(status, "vkGetFenceStatus(resource cache)");
-    for (auto& image : retired) Recycle(image);
-    retired.clear();
+    for (auto& image : images) Recycle(image);
+    for (auto& buffer : buffers) Recycle(buffer);
+    images.clear(); buffers.clear();
     return true;
 }
 }

@@ -294,7 +294,7 @@ void CGxDeviceVulkan::State::Initialize() {
     if (const char* path = std::getenv("WOWDECOMP_VULKAN_PROFILE"); path && *path) {
         profile.open(path);
         if (!profile) throw std::runtime_error("Cannot open Vulkan frame profile output");
-        profile << "frame,interval_ms,record_ms,fence_wait_ms,acquire_ms,width,height,draws,triangles,upload_bytes,textures,pipelines,readbacks,resident_upload_bytes,resident_bytes,retired_buffer_bytes,geometry_lock_scans,geometry_lock_visits,geometry_dirty_marks,stream_locks,image_allocations,resident_staging_allocations,resident_device_allocations,resident_staging_reuses,staging_arena_allocations,staging_arena_bytes,texture_cache_hits,texture_cache_lookups,image_cache_reuses,resource_cache_bytes,resource_cache_evictions,gpu_ms\n";
+        profile << "frame,interval_ms,record_ms,fence_wait_ms,acquire_ms,width,height,draws,triangles,upload_bytes,textures,pipelines,readbacks,resident_upload_bytes,resident_bytes,retired_buffer_bytes,geometry_lock_scans,geometry_lock_visits,geometry_dirty_marks,stream_locks,image_allocations,resident_staging_allocations,resident_device_allocations,resident_staging_reuses,staging_arena_allocations,staging_arena_bytes,texture_cache_hits,texture_cache_lookups,image_cache_reuses,resource_cache_bytes,resource_cache_evictions,resident_device_reuses,gpu_ms\n";
         if (timestampBits) {
             VkQueryPoolCreateInfo query{VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
             query.queryType = VK_QUERY_TYPE_TIMESTAMP; query.queryCount = 2;
@@ -443,11 +443,10 @@ bool CGxDeviceVulkan::State::BeginFrame() {
     }
     for (auto framebuffer : framebuffers) vkDestroyFramebuffer(device, framebuffer, nullptr);
     framebuffers.clear();
-    // Only the signalled submission fence admits images to the idle cache.
-    if (!resourceCache->Collect(fence, retiredImages))
+    // Images and resident buffers share one idle budget. Neither can be reused
+    // until the submission fence has completed; staging is destroyed normally.
+    if (!resourceCache->Collect(fence, retiredImages, retiredBuffers))
         throw std::runtime_error("Vulkan retirement fence was not complete after waiting");
-    for (auto& buffer : retiredBuffers) DestroyBuffer(buffer);
-    retiredBuffers.clear();
     if (resize) RecreateSwapchain();
     const auto acquireStart = profile.is_open() ? Clock::now() : Clock::time_point{};
     VkResult result = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, acquired, VK_NULL_HANDLE, &imageIndex);
@@ -775,7 +774,7 @@ std::pair<VkBuffer, VkDeviceSize> CGxDeviceVulkan::State::Geometry(CGxBuf* buffe
     }
     const auto result = cached.resident.Resolve(device, memoryProperties, command, bufferFrame,
         data.data() + buffer->m_index, buffer->m_size, retiredBuffers, residentUploadBytes,
-        staging, profile.is_open() ? &residentAllocations : nullptr);
+        staging, profile.is_open() ? &residentAllocations : nullptr, resourceCache.get());
     if (staging.buffer) residentStagingOffset += paddedBytes;
     return {result, 0};
 }
@@ -1176,7 +1175,7 @@ void CGxDeviceVulkan::State::Submit(bool present, bool resume) {
             << ',' << residentAllocations.stagingReuses << ',' << stagingArenaAllocations << ',' << residentStaging.size
             << ',' << textureCacheHits << ',' << textureCacheLookups
             << ',' << resourceCache->Stats().imageReuses << ',' << resourceCache->CachedBytes()
-            << ',' << resourceCache->Stats().evictions;
+            << ',' << resourceCache->Stats().evictions << ',' << residentAllocations.deviceReuses;
         pendingProfile = row.str();
         lockScans = lockVisits = lockDirtyMarks = streamLocks = stagingArenaAllocations = 0;
         resourceCache->ResetStats();

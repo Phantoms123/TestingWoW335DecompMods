@@ -93,7 +93,8 @@ class FrameProfileTest(unittest.TestCase):
                     analyse([sample(121, **{key: value})])
 
     def test_resource_cache_metrics_are_optional_and_validated(self):
-        fields = ('image_cache_reuses', 'resource_cache_bytes', 'resource_cache_evictions')
+        fields = ('image_cache_reuses', 'resource_cache_bytes', 'resource_cache_evictions',
+                  'resident_device_reuses')
         old = analyse([sample(121)])
         new = analyse([sample(121, **dict.fromkeys(fields, '4'))])
         for key in fields:

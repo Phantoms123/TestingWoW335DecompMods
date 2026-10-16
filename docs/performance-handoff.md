@@ -221,7 +221,7 @@ remain stable; the cache owns idle image handles, not live texture bindings.
 The default idle cache budget is 32 MiB of actual Vulkan allocation requirements,
 with a 128-entry metadata cap. Overflow evicts idle resources; oversized resources
 are destroyed normally. Live/in-flight allocations are not part of this budget.
-Buffer reuse is the next approved step and must share this same budget.
+The buffer step below extends the same cache and shares this budget.
 
 Validation passed: Release client build, 44 portability tests and five Vulkan
 CTest registrations (12 Python profiling tests). New `ResourceCacheGpu` tests
@@ -235,6 +235,46 @@ Logs: `out/modern-renderer/image-cache-*.log`.
 CSV adds optional `image_cache_reuses`, `resource_cache_bytes` and
 `resource_cache_evictions`. Gameplay traversal and a clean-machine performance
 baseline remain open. No server, graphics-quality or external dependency changes.
+
+### Bounded resource reuse — resident-buffer step
+
+Texture reuse was committed separately as `6f0ce1b`. The follow-up adds exact-size
+resident device-local buffer reuse to the same typed FIFO cache. Images and
+buffers together share the 32 MiB requested-allocation budget and 128-entry cap;
+it is not a total VRAM bound. Live/in-flight resources remain outside the cache.
+Staging/readback buffers and different usage/memory-property allocations are
+explicitly excluded. Resources are admitted only after their covering submission
+fence completes; a stale fence from an earlier submission is not a valid token.
+
+`ResidentBuffer::Resolve` can acquire completed destinations, but never returns
+its current-frame snapshots to the cache. Failure before recording keeps the
+existing cleanup path. Resize compatibility remains exact, including padded
+buffer capacity, and reused destinations are always freshly uploaded. New CSV
+`resident_device_reuses` distinguishes reuse from new destination allocations.
+
+Production GPU fixture coverage now includes both types, shared byte-budget
+pressure/eviction in both directions, mapped/usage exclusion, unsignalled-fence
+exclusion, recycled same-frame snapshots, resized/padded GPU data, and deterministic
+churn counts. With caching disabled/enabled, repeated logical resident-buffer
+creation performed 32/1 destination allocations with 0/31 reuses; every GPU
+readback matched the expected changing data. The image fixture has the same
+32-to-1 allocation result. These are narrow deterministic allocation results,
+not a measured gameplay speedup.
+
+Canonical client build, all 44 portability and five Vulkan CTest registrations
+passed; optional numeric CSV parsing remains compatible with older captures.
+Direct syntax checks passed on the four touched C++ translation units. The full
+resource-cache fixture also passed the existing local Khronos synchronization
+validation layer with no messages. Logs: `out/modern-renderer/buffer-cache-*.log`.
+The older 68 MiB mesh and fixed-function/mixed-stage GPU tests still pass.
+
+Prepare a new profiling build and baseline with other builds stopped by the user;
+do not stop unrelated processes automatically. Normal build:
+`out/client-vulkan/bin/Wow`; refreshed profiling build/flags/hash audit:
+`out/modern-renderer/flamegraph-profile-build.json`. Earlier hashes/captures above
+refer to earlier binaries, not this cache implementation. Current implementation
+validation evidence/hashes: `out/modern-renderer/resource-reuse-validation.json`.
+No server, graphics-quality, allocator-package or frames-in-flight changes.
 
 ## Historical status and scope
 

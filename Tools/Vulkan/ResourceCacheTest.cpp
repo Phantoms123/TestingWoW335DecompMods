@@ -1,6 +1,7 @@
 #include "Engine/Source/Gx/CGxDeviceVulkan/ResourceCache.h"
 #include "Engine/Source/Gx/CGxDeviceVulkan/ResidentBuffer.h"
 #include <array>
+#include <algorithm>
 #include <cstring>
 #include <iostream>
 #include <stdexcept>
@@ -23,16 +24,29 @@ struct OwnedImage {
     OwnedImage& operator=(const OwnedImage&) = delete;
     GxVulkan::Image Release() { auto result = value; value = {}; return result; }
 };
+struct OwnedBuffer {
+    VkDevice device;
+    GxVulkan::Buffer value;
+    OwnedBuffer(VkDevice device, GxVulkan::Buffer buffer) : device(device), value(buffer) {}
+    ~OwnedBuffer() { GxVulkan::DestroyBuffer(device, value); }
+    OwnedBuffer(const OwnedBuffer&) = delete;
+    OwnedBuffer& operator=(const OwnedBuffer&) = delete;
+    GxVulkan::Buffer Release() { auto result = value; value = {}; return result; }
+};
 struct Fixture {
     VkInstance instance{}; VkDevice device{}; VkQueue queue{};
     VkPhysicalDeviceMemoryProperties memory{};
     VkCommandPool pool{}; VkCommandBuffer command{}; VkFence fence{};
     GxVulkan::Buffer readback;
     std::vector<GxVulkan::Image> retired;
+    std::vector<GxVulkan::Buffer> retiredBuffers;
+    GxVulkan::ResidentBuffer resident;
     ~Fixture() {
         if (device) {
             vkDeviceWaitIdle(device);
             for (auto& image : retired) GxVulkan::DestroyImage(device, image);
+            for (auto& buffer : retiredBuffers) GxVulkan::DestroyBuffer(device, buffer);
+            resident.Destroy(device);
             GxVulkan::DestroyBuffer(device, readback);
             if (fence) vkDestroyFence(device, fence, nullptr);
             if (pool) vkDestroyCommandPool(device, pool, nullptr);
@@ -58,6 +72,8 @@ struct Fixture {
         }
         Check(physical != VK_NULL_HANDLE, "No Vulkan graphics device");
         vkGetPhysicalDeviceMemoryProperties(physical, &memory);
+        VkPhysicalDeviceProperties properties; vkGetPhysicalDeviceProperties(physical, &properties);
+        std::cout << "Resource cache GPU: " << properties.deviceName << '\n';
         const float priority = 1;
         VkDeviceQueueCreateInfo queueInfo{VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO};
         queueInfo.queueFamilyIndex = family; queueInfo.queueCount = 1; queueInfo.pQueuePriorities = &priority;
@@ -74,12 +90,13 @@ struct Fixture {
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
     }
     void Begin() {
+        Vk(vkResetFences(device, 1, &fence));
         Vk(vkResetCommandPool(device, pool, 0));
         VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
         Vk(vkBeginCommandBuffer(command, &begin));
     }
     void Submit() {
-        Vk(vkEndCommandBuffer(command)); Vk(vkResetFences(device, 1, &fence));
+        Vk(vkEndCommandBuffer(command));
         VkSubmitInfo submit{VK_STRUCTURE_TYPE_SUBMIT_INFO}; submit.commandBufferCount = 1; submit.pCommandBuffers = &command;
         Vk(vkQueueSubmit(queue, 1, &submit, fence)); Vk(vkWaitForFences(device, 1, &fence, true, UINT64_MAX));
     }
@@ -101,6 +118,20 @@ struct Fixture {
         image.layout = barrier.newLayout;
         VkBufferImageCopy copy{}; copy.imageSubresource = {image.aspect, 0, 0, 1}; copy.imageExtent = {16, 16, 1};
         vkCmdCopyImageToBuffer(command, image.image, image.layout, readback.buffer, 1, &copy);
+        HostReadback();
+    }
+    void CopyBuffer(VkBuffer source, VkDeviceSize bytes, VkDeviceSize destination = 0) {
+        VkBufferMemoryBarrier ready{VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
+        ready.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT; ready.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        ready.srcQueueFamilyIndex = ready.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        ready.buffer = source; ready.size = VK_WHOLE_SIZE;
+        vkCmdPipelineBarrier(command, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+            0, 0, nullptr, 1, &ready, 0, nullptr);
+        const VkBufferCopy copy{0, destination, bytes};
+        vkCmdCopyBuffer(command, source, readback.buffer, 1, &copy);
+        HostReadback();
+    }
+    void HostReadback() {
         VkBufferMemoryBarrier host{VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
         host.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT; host.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
         host.srcQueueFamilyIndex = host.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -193,10 +224,116 @@ void TestImageChurn(Fixture& f) {
         std::cout << "Image churn: allocations=" << cache.Stats().imageAllocations << " reuses=" << cache.Stats().imageReuses << '\n';
     }
 }
+void TestBufferSnapshots(Fixture& f) {
+    using namespace GxVulkan;
+    ResourceCache cache(f.device, f.memory);
+    const uint32_t a[] = {11, 22, 33}, b[] = {44, 55, 66}, c[] = {77, 88, 99};
+    uint64_t uploaded = 0, frame = 1;
+    UploadStats stats;
+    const auto resolve = [&](const uint32_t* data) {
+        return f.resident.Resolve(f.device, f.memory, f.command, frame, data, sizeof(a),
+            f.retiredBuffers, uploaded, {}, &stats, &cache);
+    };
+    const auto equal = [&](std::size_t offset, const void* data, std::size_t bytes) {
+        Check(std::memcmp(f.readback.mapped + offset, data, bytes) == 0, "Resident snapshot was overwritten or stale");
+    };
+    bool reused = false;
+    Reject([&] { cache.AcquireBuffer(0, reused); });
+    f.Begin();
+    const auto first = resolve(a); f.CopyBuffer(first, sizeof(a));
+    f.resident.MarkDirty(); const auto second = resolve(b); f.CopyBuffer(second, sizeof(b), 16);
+    Check(first != second, "Same-frame mutation reused an in-flight destination");
+    f.resident.Retire(f.retiredBuffers);
+    Check(!cache.Collect(f.fence, f.retired, f.retiredBuffers) && cache.CachedBytes() == 0,
+        "Unsignalled fence admitted a resident buffer");
+    f.Submit(); equal(0, a, sizeof(a)); equal(16, b, sizeof(b));
+    Check(cache.Collect(f.fence, f.retired, f.retiredBuffers), "Completed resident buffers were not collected");
+    const auto cached = cache.CachedBytes();
+    OwnedBuffer incompatible(f.device, cache.AcquireBuffer(sizeof(a) + 4, reused));
+    Check(!reused && cache.CachedBytes() == cached, "Different buffer sizes reused the same allocation");
+    ++frame; f.Begin();
+    const auto third = resolve(c); f.CopyBuffer(third, sizeof(c));
+    f.resident.MarkDirty(); const auto fourth = resolve(a); f.CopyBuffer(fourth, sizeof(a), 16);
+    Check(third != fourth, "Recycled destinations alias within one frame");
+    Check(stats.deviceAllocations == 2 && stats.deviceReuses == 2, "Resident resolve did not consume completed cache entries");
+    f.resident.Retire(f.retiredBuffers);
+    Check(!cache.Collect(f.fence, f.retired, f.retiredBuffers), "Pending recycled snapshots were cached again");
+    f.Submit(); equal(0, c, sizeof(c)); equal(16, a, sizeof(a));
+    Check(cache.Collect(f.fence, f.retired, f.retiredBuffers), "Recycled snapshots were not retired");
+    std::array<uint8_t, 16> grown{}; grown[0] = 9; grown[12] = 123;
+    ++frame; f.Begin();
+    const auto resized = f.resident.Resolve(f.device, f.memory, f.command, frame, grown.data(), 13,
+        f.retiredBuffers, uploaded, {}, &stats, &cache);
+    f.CopyBuffer(resized, 16); f.resident.Retire(f.retiredBuffers); f.Submit(); equal(0, grown.data(), 16);
+    Check(stats.deviceAllocations == 3 && stats.deviceReuses == 2, "Resize reused an incompatible cached destination");
+    Check(cache.Collect(f.fence, f.retired, f.retiredBuffers), "Resized snapshot retirement failed");
+    std::cout << "Buffer cache: exact size, completion fence, same-frame snapshots, resize and GPU readback passed\n";
+}
+void TestBufferEligibilityAndBudget(Fixture& f) {
+    using namespace GxVulkan;
+    const auto description = Description();
+    ResourceCache source(f.device, f.memory);
+    bool reused = false;
+    OwnedImage image(f.device, source.AcquireImage(description));
+    OwnedBuffer buffer(f.device, source.AcquireBuffer(64, reused));
+    const auto imageBytes = image.value.allocationBytes, bufferBytes = buffer.value.allocationBytes;
+    ResourceCache shared(f.device, f.memory, std::max(imageBytes, bufferBytes));
+    const auto bufferHandle = buffer.value.buffer;
+    f.retired.push_back(image.Release()); f.retiredBuffers.push_back(buffer.Release());
+    Check(shared.Collect(f.fence, f.retired, f.retiredBuffers), "Mixed resources were not collected");
+    Check(shared.CachedBytes() == bufferBytes && shared.Stats().evictions == 1,
+        "Images and buffers did not share a single byte budget");
+    OwnedBuffer checkedOut(f.device, shared.AcquireBuffer(64, reused));
+    Check(reused && checkedOut.value.buffer == bufferHandle, "Mixed cache did not retain its newest buffer");
+    f.retiredBuffers.push_back(checkedOut.Release());
+    Check(shared.Collect(f.fence, f.retired, f.retiredBuffers), "Mixed buffer retirement failed");
+    OwnedImage next(f.device, shared.AcquireImage(description)); f.retired.push_back(next.Release());
+    Check(shared.Collect(f.fence, f.retired, f.retiredBuffers), "Mixed image retirement failed");
+    Check(shared.CachedBytes() == imageBytes && shared.Stats().evictions == 2,
+        "An idle buffer was not evicted to admit an image");
+    for (VkDeviceSize budget : {VkDeviceSize(0), bufferBytes - 1}) {
+        ResourceCache limited(f.device, f.memory, budget);
+        OwnedBuffer oversized(f.device, limited.AcquireBuffer(64, reused)); f.retiredBuffers.push_back(oversized.Release());
+        Check(limited.Collect(f.fence, f.retired, f.retiredBuffers) && limited.CachedBytes() == 0,
+            "Oversized buffer escaped the cache budget");
+    }
+    ResourceCache eligibility(f.device, f.memory);
+    OwnedBuffer host(f.device, CreateBuffer(f.device, f.memory, 64, ResourceCache::ResidentUsage,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
+    OwnedBuffer wrongUsage(f.device, CreateBuffer(f.device, f.memory, 64, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
+    f.retiredBuffers.push_back(host.Release()); f.retiredBuffers.push_back(wrongUsage.Release());
+    Check(eligibility.Collect(f.fence, f.retired, f.retiredBuffers) && eligibility.CachedBytes() == 0,
+        "Staging/readback or incompatible-usage buffers entered the resident cache");
+    std::cout << "Shared image/buffer cache: byte budget, cross-type eviction and staging exclusion passed\n";
+}
+void TestBufferChurn(Fixture& f) {
+    using namespace GxVulkan;
+    for (VkDeviceSize budget : {VkDeviceSize(0), ResourceCache::DefaultBudget}) {
+        ResourceCache cache(f.device, f.memory, budget);
+        uint64_t uploaded = 0; UploadStats stats;
+        for (uint64_t frame = 1; frame <= 32; ++frame) {
+            const std::array<uint32_t, 4> data{static_cast<uint32_t>(frame), 2, 3, 4};
+            f.Begin();
+            const auto handle = f.resident.Resolve(f.device, f.memory, f.command, frame, data.data(), sizeof(data),
+                f.retiredBuffers, uploaded, {}, &stats, &cache);
+            f.CopyBuffer(handle, sizeof(data)); f.resident.Retire(f.retiredBuffers); f.Submit();
+            Check(std::memcmp(f.readback.mapped, data.data(), sizeof(data)) == 0, "Recycled buffer contents are stale");
+            Check(cache.Collect(f.fence, f.retired, f.retiredBuffers), "Buffer churn retirement failed");
+            Check(cache.CachedBytes() <= budget, "Buffer churn exceeded the shared byte budget");
+        }
+        Check(stats.deviceAllocations == (budget ? 1 : 32) && stats.deviceReuses == (budget ? 31 : 0),
+            "Resident destination cache did not reduce allocations deterministically");
+        Check(cache.Stats().bufferAllocations == stats.deviceAllocations && cache.Stats().bufferReuses == stats.deviceReuses,
+            "Cache and resident allocation counters disagree");
+        std::cout << "Buffer churn: allocations=" << stats.deviceAllocations << " reuses=" << stats.deviceReuses << '\n';
+    }
+}
 }
 int main() {
     try {
         Fixture fixture; fixture.Init(); TestImages(fixture); TestImageChurn(fixture);
+        TestBufferSnapshots(fixture); TestBufferEligibilityAndBudget(fixture); TestBufferChurn(fixture);
         return 0;
     } catch (const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }
 }

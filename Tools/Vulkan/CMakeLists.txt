@@ -56,7 +56,8 @@ if (WOWDECOMP_SLANGC)
         WOWDECOMP_SLANG_TEST_DIR="${WOWDECOMP_VULKAN_SHADER_DIR}")
     if (Vulkan_FOUND)
         add_executable(FixedFunctionTest FixedFunctionTest.cpp
-            "${WOWDECOMP_ROOT}/Engine/Source/Gx/CGxDeviceVulkan/ResidentBuffer.cpp")
+            "${WOWDECOMP_ROOT}/Engine/Source/Gx/CGxDeviceVulkan/ResidentBuffer.cpp"
+            "${WOWDECOMP_ROOT}/Engine/Source/Gx/CGxDeviceVulkan/ResourceCache.cpp")
         target_link_libraries(FixedFunctionTest PRIVATE Vulkan::Vulkan GxVulkanShaders)
         target_compile_definitions(FixedFunctionTest PRIVATE
             WOWDECOMP_SLANG_TEST_DIR="${WOWDECOMP_VULKAN_SHADER_DIR}")
