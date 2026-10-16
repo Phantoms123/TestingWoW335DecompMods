@@ -92,6 +92,17 @@ class FrameProfileTest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     analyse([sample(121, **{key: value})])
 
+    def test_resource_cache_metrics_are_optional_and_validated(self):
+        fields = ('image_cache_reuses', 'resource_cache_bytes', 'resource_cache_evictions')
+        old = analyse([sample(121)])
+        new = analyse([sample(121, **dict.fromkeys(fields, '4'))])
+        for key in fields:
+            self.assertEqual(old['counters'][key], {'samples': 0})
+            self.assertEqual(new['counters'][key]['median'], 4)
+            for value in ('-1', 'nan', 'inf'):
+                with self.assertRaises(ValueError):
+                    analyse([sample(121, **{key: value})])
+
     def test_percentile_single_sample(self):
         self.assertEqual(percentile([3], .99), 3)
 

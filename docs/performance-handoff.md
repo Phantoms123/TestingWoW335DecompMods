@@ -204,6 +204,38 @@ snapshots, and draw submission/descriptors. Preserve snapshot/lifetime correctne
 no blanket map replacement or memory allocator dependency is justified by these
 percentages.
 
+### Approved bounded resource reuse — image step
+
+The user confirmed other CPU builds were running during earlier flights. Those
+FPS comparisons are not a controlled baseline; rebuild the baseline from scratch
+on a quiet machine after the approved small optimizations.
+
+Implemented texture-image allocation reuse in `ResourceCache.{h,cpp}`. Only a
+signalled submission fence can admit retired images. Matching includes extent,
+mips, layers, format, aspect and usage; the factory always uses the same optimal
+2D/single-sample/exclusive creation policy. Reuse discards old contents through
+the normal UNDEFINED-layout initialization path. Old samplers are destroyed after
+completion rather than cached. Entry/view addresses in the live texture map
+remain stable; the cache owns idle image handles, not live texture bindings.
+
+The default idle cache budget is 32 MiB of actual Vulkan allocation requirements,
+with a 128-entry metadata cap. Overflow evicts idle resources; oversized resources
+are destroyed normally. Live/in-flight allocations are not part of this budget.
+Buffer reuse is the next approved step and must share this same budget.
+
+Validation passed: Release client build, 44 portability tests and five Vulkan
+CTest registrations (12 Python profiling tests). New `ResourceCacheGpu` tests
+exact compatibility, unsignalled-fence exclusion, actual GPU texel replacement,
+zero/oversized budgets, FIFO image eviction and entry-count limits. It also passed
+with the existing local synchronization-validation layer and no messages.
+Repeated-image fixture: 32 allocations without caching versus one allocation and
+31 reuses with caching, with GPU pixel checks after each update. No FPS claim.
+Logs: `out/modern-renderer/image-cache-*.log`.
+
+CSV adds optional `image_cache_reuses`, `resource_cache_bytes` and
+`resource_cache_evictions`. Gameplay traversal and a clean-machine performance
+baseline remain open. No server, graphics-quality or external dependency changes.
+
 ## Historical status and scope
 
 The user has paused performance investigation in favour of AA and ray-traced lighting/shadows.

@@ -2,6 +2,7 @@
 #include "Shader.h"
 #include "Slang.h"
 #include "ResidentBuffer.h"
+#include "ResourceCache.h"
 #include "Timing.h"
 #include "Engine/Source/Gx/Blit.h"
 #include "Engine/Source/Gx/Buffer.h"
@@ -63,16 +64,7 @@ struct CachedGeometry {
     uint32_t index = 0, bytes = 0;
     GxVulkan::ResidentBuffer resident;
 };
-struct NativeImage {
-    VkImage image = VK_NULL_HANDLE;
-    VkDeviceMemory memory = VK_NULL_HANDLE;
-    VkImageView view = VK_NULL_HANDLE;
-    VkSampler sampler = VK_NULL_HANDLE;
-    VkFormat format = VK_FORMAT_UNDEFINED;
-    uint32_t width = 0, height = 0, levels = 1, layers = 1;
-    VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
-    VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
-};
+using NativeImage = GxVulkan::Image;
 struct NativeShader {
     uint64_t id;
     GxVulkan::Shader reflection;
@@ -138,6 +130,7 @@ struct CGxDeviceVulkan::State {
     uint64_t bufferFrame = 0, residentUploadBytes = 0;
     std::map<CGxTex*, NativeImage> textures;
     std::vector<NativeImage> retiredImages;
+    std::unique_ptr<GxVulkan::ResourceCache> resourceCache;
     std::map<CGxShader*, NativeShader> shaders;
     uint64_t nextShader = 1;
     GxVulkan::SlangCompiler shaderCompiler;
@@ -152,7 +145,7 @@ struct CGxDeviceVulkan::State {
     VkQueryPool timestamps = VK_NULL_HANDLE;
     uint32_t timestampBits = 0;
     uint64_t profileFrame = 0, frameDrawStart = 0, frameTriangleStart = 0, frameReadbacks = 0;
-    uint64_t lockScans = 0, lockVisits = 0, lockDirtyMarks = 0, streamLocks = 0, imageAllocations = 0;
+    uint64_t lockScans = 0, lockVisits = 0, lockDirtyMarks = 0, streamLocks = 0;
     uint64_t textureCacheHits = 0, textureCacheLookups = 0;
     using Clock = std::chrono::steady_clock;
     Clock::time_point previousFrameStart{}, recordStart{};
@@ -160,7 +153,6 @@ struct CGxDeviceVulkan::State {
     std::string pendingProfile;
     void CollectProfile();
 
-    uint32_t MemoryType(uint32_t mask, VkMemoryPropertyFlags flags) const;
     NativeBuffer MakeBuffer(VkDeviceSize size, VkBufferUsageFlags usage);
     void DestroyBuffer(NativeBuffer& buffer);
     NativeImage MakeImage(uint32_t width, uint32_t height, uint32_t levels, uint32_t layers,
@@ -183,11 +175,6 @@ struct CGxDeviceVulkan::State {
     void Draw(CGxBatch& batch, bool indexed);
 };
 
-uint32_t CGxDeviceVulkan::State::MemoryType(uint32_t mask, VkMemoryPropertyFlags flags) const {
-    for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; ++i)
-        if ((mask & (1u << i)) && (memoryProperties.memoryTypes[i].propertyFlags & flags) == flags) return i;
-    throw std::runtime_error("Vulkan device has no suitable memory type");
-}
 NativeBuffer CGxDeviceVulkan::State::MakeBuffer(VkDeviceSize size, VkBufferUsageFlags usage) {
     return GxVulkan::CreateBuffer(device, memoryProperties, size, usage,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
@@ -197,37 +184,10 @@ void CGxDeviceVulkan::State::DestroyBuffer(NativeBuffer& buffer) {
 }
 NativeImage CGxDeviceVulkan::State::MakeImage(uint32_t width, uint32_t height, uint32_t levels,
     uint32_t layers, VkFormat format, VkImageAspectFlags aspect, VkImageUsageFlags usage) {
-    NativeImage image;
-    image.width = width; image.height = height; image.levels = levels; image.layers = layers;
-    image.format = format; image.aspect = aspect;
-    VkImageCreateInfo info{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
-    info.flags = layers == 6 ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0;
-    info.imageType = VK_IMAGE_TYPE_2D; info.format = format; info.extent = {width, height, 1};
-    info.mipLevels = levels; info.arrayLayers = layers; info.samples = VK_SAMPLE_COUNT_1_BIT;
-    info.tiling = VK_IMAGE_TILING_OPTIMAL; info.usage = usage; info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    GX_VK(vkCreateImage(device, &info, nullptr, &image.image));
-    try {
-        VkMemoryRequirements requirements;
-        vkGetImageMemoryRequirements(device, image.image, &requirements);
-        VkMemoryAllocateInfo allocation{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
-        allocation.allocationSize = requirements.size;
-        allocation.memoryTypeIndex = MemoryType(requirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-        GX_VK(vkAllocateMemory(device, &allocation, nullptr, &image.memory));
-        if (profile.is_open()) ++imageAllocations;
-        GX_VK(vkBindImageMemory(device, image.image, image.memory, 0));
-        VkImageViewCreateInfo view{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
-        view.image = image.image; view.viewType = layers == 6 ? VK_IMAGE_VIEW_TYPE_CUBE : VK_IMAGE_VIEW_TYPE_2D;
-        view.format = format; view.subresourceRange = {aspect, 0, levels, 0, layers};
-        GX_VK(vkCreateImageView(device, &view, nullptr, &image.view));
-    } catch (...) { DestroyImage(image); throw; }
-    return image;
+    return resourceCache->AcquireImage({width, height, levels, layers, format, aspect, usage});
 }
 void CGxDeviceVulkan::State::DestroyImage(NativeImage& image) {
-    if (image.sampler) vkDestroySampler(device, image.sampler, nullptr);
-    if (image.view) vkDestroyImageView(device, image.view, nullptr);
-    if (image.image) vkDestroyImage(device, image.image, nullptr);
-    if (image.memory) vkFreeMemory(device, image.memory, nullptr);
-    image = {};
+    GxVulkan::DestroyImage(device, image);
 }
 void CGxDeviceVulkan::State::Barrier(VkImage image, VkImageAspectFlags aspect,
     uint32_t levels, uint32_t layers, VkImageLayout oldLayout, VkImageLayout newLayout) {
@@ -330,10 +290,11 @@ void CGxDeviceVulkan::State::Initialize() {
     create.enabledExtensionCount = static_cast<uint32_t>(extensions.size()); create.ppEnabledExtensionNames = extensions.data();
     GX_VK(vkCreateDevice(physical, &create, nullptr, &device));
     vkGetDeviceQueue(device, queueFamily, 0, &queue);
+    resourceCache = std::make_unique<GxVulkan::ResourceCache>(device, memoryProperties);
     if (const char* path = std::getenv("WOWDECOMP_VULKAN_PROFILE"); path && *path) {
         profile.open(path);
         if (!profile) throw std::runtime_error("Cannot open Vulkan frame profile output");
-        profile << "frame,interval_ms,record_ms,fence_wait_ms,acquire_ms,width,height,draws,triangles,upload_bytes,textures,pipelines,readbacks,resident_upload_bytes,resident_bytes,retired_buffer_bytes,geometry_lock_scans,geometry_lock_visits,geometry_dirty_marks,stream_locks,image_allocations,resident_staging_allocations,resident_device_allocations,resident_staging_reuses,staging_arena_allocations,staging_arena_bytes,texture_cache_hits,texture_cache_lookups,gpu_ms\n";
+        profile << "frame,interval_ms,record_ms,fence_wait_ms,acquire_ms,width,height,draws,triangles,upload_bytes,textures,pipelines,readbacks,resident_upload_bytes,resident_bytes,retired_buffer_bytes,geometry_lock_scans,geometry_lock_visits,geometry_dirty_marks,stream_locks,image_allocations,resident_staging_allocations,resident_device_allocations,resident_staging_reuses,staging_arena_allocations,staging_arena_bytes,texture_cache_hits,texture_cache_lookups,image_cache_reuses,resource_cache_bytes,resource_cache_evictions,gpu_ms\n";
         if (timestampBits) {
             VkQueryPoolCreateInfo query{VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
             query.queryType = VK_QUERY_TYPE_TIMESTAMP; query.queryCount = 2;
@@ -482,8 +443,9 @@ bool CGxDeviceVulkan::State::BeginFrame() {
     }
     for (auto framebuffer : framebuffers) vkDestroyFramebuffer(device, framebuffer, nullptr);
     framebuffers.clear();
-    for (auto& image : retiredImages) DestroyImage(image);
-    retiredImages.clear();
+    // Only the signalled submission fence admits images to the idle cache.
+    if (!resourceCache->Collect(fence, retiredImages))
+        throw std::runtime_error("Vulkan retirement fence was not complete after waiting");
     for (auto& buffer : retiredBuffers) DestroyBuffer(buffer);
     retiredBuffers.clear();
     if (resize) RecreateSwapchain();
@@ -613,6 +575,7 @@ void CGxDeviceVulkan::State::Destroy() {
         retiredBuffers.clear();
         DestroyImage(white); DestroyImage(depth); DestroyBuffer(upload);
         DestroyBuffer(residentStaging);
+        resourceCache.reset();
         for (auto view : swapViews) if (view) vkDestroyImageView(device, view, nullptr);
         swapViews.clear(); swapImages.clear();
         if (swapchain) vkDestroySwapchainKHR(device, swapchain, nullptr);
@@ -1208,12 +1171,15 @@ void CGxDeviceVulkan::State::Submit(bool present, bool resume) {
             << drawCount - frameDrawStart << ',' << triangleCount - frameTriangleStart << ','
             << uploadOffset << ',' << textures.size() << ',' << pipelines.size() << ',' << frameReadbacks
             << ',' << residentUploadBytes << ',' << residentBytes << ',' << retiredBytes
-            << ',' << lockScans << ',' << lockVisits << ',' << lockDirtyMarks << ',' << streamLocks << ',' << imageAllocations
+            << ',' << lockScans << ',' << lockVisits << ',' << lockDirtyMarks << ',' << streamLocks << ',' << resourceCache->Stats().imageAllocations
             << ',' << residentAllocations.stagingAllocations << ',' << residentAllocations.deviceAllocations
             << ',' << residentAllocations.stagingReuses << ',' << stagingArenaAllocations << ',' << residentStaging.size
-            << ',' << textureCacheHits << ',' << textureCacheLookups;
+            << ',' << textureCacheHits << ',' << textureCacheLookups
+            << ',' << resourceCache->Stats().imageReuses << ',' << resourceCache->CachedBytes()
+            << ',' << resourceCache->Stats().evictions;
         pendingProfile = row.str();
-        lockScans = lockVisits = lockDirtyMarks = streamLocks = imageAllocations = stagingArenaAllocations = 0;
+        lockScans = lockVisits = lockDirtyMarks = streamLocks = stagingArenaAllocations = 0;
+        resourceCache->ResetStats();
         residentAllocations = {};
         textureCacheHits = textureCacheLookups = 0;
     }

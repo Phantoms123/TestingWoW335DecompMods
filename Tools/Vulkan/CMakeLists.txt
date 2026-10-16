@@ -33,6 +33,17 @@ if (Python3_Interpreter_FOUND)
     add_test(NAME FrameProfile COMMAND "${Python3_EXECUTABLE}" -m unittest discover
         -s "${CMAKE_CURRENT_SOURCE_DIR}" -p "test_frame_profile.py")
 endif ()
+find_package(Vulkan 1.1 QUIET)
+if (Vulkan_FOUND)
+    add_executable(ResourceCacheTest ResourceCacheTest.cpp
+        "${WOWDECOMP_ROOT}/Engine/Source/Gx/CGxDeviceVulkan/ResourceCache.cpp"
+        "${WOWDECOMP_ROOT}/Engine/Source/Gx/CGxDeviceVulkan/ResidentBuffer.cpp")
+    target_include_directories(ResourceCacheTest PRIVATE "${WOWDECOMP_ROOT}")
+    target_link_libraries(ResourceCacheTest PRIVATE Vulkan::Vulkan)
+    add_test(NAME ResourceCacheGpu COMMAND ResourceCacheTest)
+    set_tests_properties(ResourceCacheGpu PROPERTIES TIMEOUT 30
+        ENVIRONMENT "VK_LOADER_LAYERS_DISABLE=~implicit~")
+endif ()
 if (WOWDECOMP_SLANGC)
     include("${WOWDECOMP_ROOT}/cmake/SlangCompiler.cmake")
     target_sources(GxVulkanShaders PRIVATE "${WOWDECOMP_ROOT}/Engine/Source/Gx/CGxDeviceVulkan/Slang.cpp")
@@ -43,7 +54,6 @@ if (WOWDECOMP_SLANGC)
     add_dependencies(VulkanShaderTest GxSlangShaders)
     target_compile_definitions(VulkanShaderTest PRIVATE
         WOWDECOMP_SLANG_TEST_DIR="${WOWDECOMP_VULKAN_SHADER_DIR}")
-    find_package(Vulkan 1.1 QUIET)
     if (Vulkan_FOUND)
         add_executable(FixedFunctionTest FixedFunctionTest.cpp
             "${WOWDECOMP_ROOT}/Engine/Source/Gx/CGxDeviceVulkan/ResidentBuffer.cpp")
