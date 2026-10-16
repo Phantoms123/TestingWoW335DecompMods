@@ -8,6 +8,10 @@ if (NOT WOWDECOMP_POSIX)
 endif ()
 find_package(Threads REQUIRED)
 enable_testing()
+add_executable(CloudNoiseTest CloudNoiseTest.cpp)
+target_compile_features(CloudNoiseTest PRIVATE cxx_std_17)
+target_include_directories(CloudNoiseTest PRIVATE "${WOWDECOMP_ROOT}")
+add_test(NAME CloudNoise COMMAND CloudNoiseTest)
 add_library(PosixServices STATIC
     "${WOWDECOMP_ROOT}/Engine/Source/Os/Posix/TimeManager.cpp"
     "${WOWDECOMP_ROOT}/Engine/Source/Os/Posix/Tls.cpp"

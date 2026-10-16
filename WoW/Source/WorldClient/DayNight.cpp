@@ -1,4 +1,5 @@
 #include "WoW/Source/WorldClient/DayNight__DNInfo.h"
+#include "WoW/Source/WorldClient/CloudNoise.h"
 #include <cmath>
 #include <new>
 #include <typeinfo>
@@ -617,7 +618,7 @@ void DayNight::ApplyFogSettings(const SMOFog::Fog* fog) {
 static void InitCloudNoise() {
     for (uint32_t i = 0; i < 256; i++) {
         int32_t value = rand();
-        s_cloudNoise[i] = 1.0f - (value * 0.000030518509f + value * 0.000030518509f);
+        s_cloudNoise[i] = DayNight::CloudNoiseSample(value, RAND_MAX);
     }
 
     for (uint32_t i = 0; i < 256; i++) {
