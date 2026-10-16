@@ -79,6 +79,19 @@ class FrameProfileTest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     analyse([sample(121, **{field: value})])
 
+    def test_texture_cache_metrics_are_optional_and_validated(self):
+        old = analyse([sample(121)])
+        for key in ('texture_cache_hits', 'texture_cache_lookups'):
+            self.assertEqual(old['counters'][key], {'samples': 0})
+        result = analyse([sample(121, texture_cache_hits='500', texture_cache_lookups='3'),
+                          sample(122, texture_cache_hits='700', texture_cache_lookups='0')])
+        self.assertEqual(result['counters']['texture_cache_hits']['median'], 600)
+        self.assertEqual(result['counters']['texture_cache_lookups']['maximum'], 3)
+        for key in ('texture_cache_hits', 'texture_cache_lookups'):
+            for value in ('-1', 'nan', 'inf'):
+                with self.assertRaises(ValueError):
+                    analyse([sample(121, **{key: value})])
+
     def test_percentile_single_sample(self):
         self.assertEqual(percentile([3], .99), 3)
 

@@ -153,6 +153,7 @@ struct CGxDeviceVulkan::State {
     uint32_t timestampBits = 0;
     uint64_t profileFrame = 0, frameDrawStart = 0, frameTriangleStart = 0, frameReadbacks = 0;
     uint64_t lockScans = 0, lockVisits = 0, lockDirtyMarks = 0, streamLocks = 0, imageAllocations = 0;
+    uint64_t textureCacheHits = 0, textureCacheLookups = 0;
     using Clock = std::chrono::steady_clock;
     Clock::time_point previousFrameStart{}, recordStart{};
     double intervalMs = 0, fenceWaitMs = 0, acquireMs = 0;
@@ -332,7 +333,7 @@ void CGxDeviceVulkan::State::Initialize() {
     if (const char* path = std::getenv("WOWDECOMP_VULKAN_PROFILE"); path && *path) {
         profile.open(path);
         if (!profile) throw std::runtime_error("Cannot open Vulkan frame profile output");
-        profile << "frame,interval_ms,record_ms,fence_wait_ms,acquire_ms,width,height,draws,triangles,upload_bytes,textures,pipelines,readbacks,resident_upload_bytes,resident_bytes,retired_buffer_bytes,geometry_lock_scans,geometry_lock_visits,geometry_dirty_marks,stream_locks,image_allocations,resident_staging_allocations,resident_device_allocations,resident_staging_reuses,staging_arena_allocations,staging_arena_bytes,gpu_ms\n";
+        profile << "frame,interval_ms,record_ms,fence_wait_ms,acquire_ms,width,height,draws,triangles,upload_bytes,textures,pipelines,readbacks,resident_upload_bytes,resident_bytes,retired_buffer_bytes,geometry_lock_scans,geometry_lock_visits,geometry_dirty_marks,stream_locks,image_allocations,resident_staging_allocations,resident_device_allocations,resident_staging_reuses,staging_arena_allocations,staging_arena_bytes,texture_cache_hits,texture_cache_lookups,gpu_ms\n";
         if (timestampBits) {
             VkQueryPoolCreateInfo query{VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
             query.queryType = VK_QUERY_TYPE_TIMESTAMP; query.queryCount = 2;
@@ -655,29 +656,42 @@ NativeImage& CGxDeviceVulkan::State::Texture(CGxTex* texture) {
         }
         return white;
     }
-    auto found = textures.find(texture);
-    if (found == textures.end() || texture->m_needsCreation) {
-        EndPass();
-        if (found != textures.end()) {
-            retiredImages.push_back(found->second); textures.erase(found);
+    // std::map keeps entry addresses stable. Creation publishes this pointer;
+    // TexDestroy and State::Destroy invalidate it on texture/device teardown.
+    // Updates and sampler changes still run through the common path below.
+    auto* cached = static_cast<NativeImage*>(texture->m_apiSpecificData);
+    if (cached && !texture->m_needsCreation) {
+        if (profile.is_open()) ++textureCacheHits;
+    } else {
+        if (profile.is_open()) ++textureCacheLookups;
+        auto found = textures.find(texture);
+        if (found == textures.end() || texture->m_needsCreation) {
+            EndPass();
+            if (found != textures.end()) {
+                retiredImages.push_back(found->second);
+                // A failed recreation must not leave a dangling fast-path pointer.
+                texture->m_apiSpecificData = nullptr;
+                textures.erase(found);
+            }
+            uint32_t width, height, baseMip, mipCount;
+            gx.ITexWHDStartEnd(texture, width, height, baseMip, mipCount);
+            VkFormat format = TextureFormat(texture->m_format);
+            VkImageAspectFlags aspect = texture->m_format == GxTex_D24X8 ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
+            VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+            if (texture->m_flags.m_renderTarget) usage |= aspect == VK_IMAGE_ASPECT_DEPTH_BIT ?
+                VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT : VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+            const uint32_t levels = texture->m_flags.m_renderTarget ? 1 : mipCount - baseMip;
+            NativeImage image = MakeImage(width, height, std::max(levels, 1u), texture->m_target == GxTex_CubeMap ? 6 : 1,
+                format, aspect, usage);
+            Barrier(image.image, image.aspect, image.levels, image.layers, image.layout, VK_IMAGE_LAYOUT_GENERAL);
+            image.layout = VK_IMAGE_LAYOUT_GENERAL;
+            found = textures.emplace(texture, image).first;
+            texture->m_needsCreation = 0; texture->m_needsFlagUpdate = 1;
         }
-        uint32_t width, height, baseMip, mipCount;
-        gx.ITexWHDStartEnd(texture, width, height, baseMip, mipCount);
-        VkFormat format = TextureFormat(texture->m_format);
-        VkImageAspectFlags aspect = texture->m_format == GxTex_D24X8 ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
-        VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-        if (texture->m_flags.m_renderTarget) usage |= aspect == VK_IMAGE_ASPECT_DEPTH_BIT ?
-            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT : VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-        const uint32_t levels = texture->m_flags.m_renderTarget ? 1 : mipCount - baseMip;
-        NativeImage image = MakeImage(width, height, std::max(levels, 1u), texture->m_target == GxTex_CubeMap ? 6 : 1,
-            format, aspect, usage);
-        Barrier(image.image, image.aspect, image.levels, image.layers, image.layout, VK_IMAGE_LAYOUT_GENERAL);
-        image.layout = VK_IMAGE_LAYOUT_GENERAL;
-        found = textures.emplace(texture, image).first;
-        texture->m_apiSpecificData = &found->second;
-        texture->m_needsCreation = 0; texture->m_needsFlagUpdate = 1;
+        cached = &found->second;
+        texture->m_apiSpecificData = cached;
     }
-    NativeImage& image = found->second;
+    NativeImage& image = *cached;
     if (!image.sampler || texture->m_needsFlagUpdate) {
         if (image.sampler) {
             NativeImage old; old.sampler = image.sampler; retiredImages.push_back(old);
@@ -1196,10 +1210,12 @@ void CGxDeviceVulkan::State::Submit(bool present, bool resume) {
             << ',' << residentUploadBytes << ',' << residentBytes << ',' << retiredBytes
             << ',' << lockScans << ',' << lockVisits << ',' << lockDirtyMarks << ',' << streamLocks << ',' << imageAllocations
             << ',' << residentAllocations.stagingAllocations << ',' << residentAllocations.deviceAllocations
-            << ',' << residentAllocations.stagingReuses << ',' << stagingArenaAllocations << ',' << residentStaging.size;
+            << ',' << residentAllocations.stagingReuses << ',' << stagingArenaAllocations << ',' << residentStaging.size
+            << ',' << textureCacheHits << ',' << textureCacheLookups;
         pendingProfile = row.str();
         lockScans = lockVisits = lockDirtyMarks = streamLocks = imageAllocations = stagingArenaAllocations = 0;
         residentAllocations = {};
+        textureCacheHits = textureCacheLookups = 0;
     }
     if (resume) {
         ++frameReadbacks;

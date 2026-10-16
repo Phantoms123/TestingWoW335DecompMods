@@ -19,8 +19,11 @@ were imported. Configure fresh build/run directories before using capture helper
 
 The UI/buffer/residency/cloud commits landed and were fast-forwarded into this
 worktree through `991fd53`. Existing worktrees were not modified. Performance
-changes below are uncommitted on top of that revision; no staging/commits/pushes
-were performed.
+changes are on top of that revision. The scan/staging pass was committed as
+`0c6291a`; the texture fast path is a separate follow-up commit. The user explicitly
+authorized unsigned commits after a GPG timeout. Signing was disabled only for
+those commit invocations; repository/global configuration was not changed.
+Nothing was pushed.
 
 ### Implemented first pass
 
@@ -172,11 +175,34 @@ Exclusive CPU cycle-weight hotspots (all threads, not wall-frame percentages):
   overhead as production work.
 - Descriptor allocation 1.33%, pipeline binding 0.66% exclusive.
 
-Next candidates require a focused plan: resident-texture lookup fast path,
-allocation attribution/reuse for images and destination snapshots, and draw
-submission/descriptors. No further source changes approved or implemented from
-this fresh graph yet. Preserve snapshot/lifetime correctness; no blanket map
-replacement or memory allocator dependency is justified by these percentages.
+### Approved texture lookup fast path
+
+The user approved implementing the resident-texture lookup fast path as another
+commit. `State::Texture` now uses `CGxTex::m_apiSpecificData` for existing images
+unless recreation is requested. Creation publishes the stable map-entry address;
+recreation clears it before erasing the old entry, including the failure path.
+Sampler and texel updates still use the common path. Texture/device teardown
+already clears the pointer. New opt-in CSV counters are `texture_cache_hits` and
+`texture_cache_lookups`; both remain optional in the Python parser.
+
+Validation: direct renderer syntax check, Release client build, all 44 portability
+and four Vulkan CTest registrations passed; the Python test count is now 11.
+Logs: `out/modern-renderer/texture-cache-*-build.log` and
+`texture-cache-syntax.log`. Existing GPU fixtures are regression checks, not
+full production texture-recreation failure injection. Live hit-rate/lifetime
+smoke checks and matched-flight FPS measurement remain open; the old profiling
+client was still running at the end of implementation and was not interrupted.
+
+The initial checkpoint attempt failed because GPG signing timed out. The user
+then explicitly requested no signing. The earlier validated performance pass
+was committed separately as `0c6291a`, preserving this texture fast-path delta
+for its own commit. Use per-command signing overrides, not persistent config
+changes. Neither commit authorizes a push.
+
+Remaining candidates are allocation attribution/reuse for images and destination
+snapshots, and draw submission/descriptors. Preserve snapshot/lifetime correctness;
+no blanket map replacement or memory allocator dependency is justified by these
+percentages.
 
 ## Historical status and scope
 
