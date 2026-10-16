@@ -16,6 +16,16 @@ Buffer CreateBuffer(VkDevice device, const VkPhysicalDeviceMemoryProperties& mem
     VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties);
 void DestroyBuffer(VkDevice device, Buffer& buffer);
 
+struct UploadStats {
+    uint64_t stagingAllocations = 0, deviceAllocations = 0, stagingReuses = 0;
+};
+// Borrowed coherent staging storage. Its range must remain unchanged until the
+// submission fence completes; the resident buffer never owns or retires it.
+struct StagingSlice {
+    const Buffer* buffer = nullptr;
+    VkDeviceSize offset = 0;
+};
+
 // One Gx buffer's persistent device-local snapshot. The renderer owns retirement:
 // old snapshots and staging allocations survive until its submission fence.
 class ResidentBuffer {
@@ -25,7 +35,8 @@ public:
     void MarkDirty() { m_dirty = true; }
     VkBuffer Resolve(VkDevice device, const VkPhysicalDeviceMemoryProperties& memory,
         VkCommandBuffer command, uint64_t frame, const void* data, VkDeviceSize bytes,
-        std::vector<Buffer>& retired, uint64_t& uploadedBytes);
+        std::vector<Buffer>& retired, uint64_t& uploadedBytes,
+        StagingSlice staging = {}, UploadStats* stats = nullptr);
     void Retire(std::vector<Buffer>& retired);
     VkDeviceSize Size() const { return m_buffer.size; }
 private:
