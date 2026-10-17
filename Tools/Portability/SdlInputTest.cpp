@@ -189,6 +189,14 @@ void CheckWindows(SDL_Window* window) {
     Push(size);
     auto event = Next();
     Check(event.id == OS_INPUT_SIZE && event.param[0] == 640 && event.param[1] == 480, "window resize event");
+    int width = 0, height = 0;
+    SDL_GetWindowSize(window, &width, &height);
+    auto display = Window(SDL_WINDOWEVENT_DISPLAY_CHANGED);
+    display.window.data1 = 17;
+    Push(display);
+    event = Next();
+    Check(event.id == OS_INPUT_SIZE && event.param[0] == width && event.param[1] == height,
+          "display transition refreshes sizing without treating display index as width");
     OsInputSetEventPollProc([] { ++polls; });
     Push(Window(SDL_WINDOWEVENT_EXPOSED));
     auto foreign = Key(SDL_KEYDOWN, SDL_SCANCODE_Z);
