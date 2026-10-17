@@ -52,3 +52,26 @@ if (WOWDECOMP_SLANGC)
             ENVIRONMENT "VK_LOADER_LAYERS_DISABLE=~implicit~")
     endif ()
 endif ()
+
+set(WOWDECOMP_VULKAN_CLIENT_BUILD "" CACHE PATH "Built native Vulkan client archives for production integration fixtures")
+if (TARGET FixedFunctionTest AND WOWDECOMP_VULKAN_CLIENT_BUILD)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(SDL2 REQUIRED IMPORTED_TARGET sdl2)
+    add_executable(FfxAlignmentTest FfxAlignmentTest.cpp
+        "${WOWDECOMP_ROOT}/Engine/Source/Gx/CGxDeviceVulkan/CGxDeviceVulkan.cpp"
+        "${WOWDECOMP_ROOT}/Engine/Source/FFX/FFX.cpp")
+    target_include_directories(FfxAlignmentTest PRIVATE "${WOWDECOMP_ROOT}")
+    target_compile_definitions(FfxAlignmentTest PRIVATE WOWDECOMP_ARCH_64=1 WOWDECOMP_VULKAN=1
+        WOWDECOMP_VULKAN_SHADER_DIR="${WOWDECOMP_VULKAN_SHADER_DIR}")
+    target_compile_options(FfxAlignmentTest PRIVATE -ffunction-sections -fdata-sections -UNDEBUG)
+    target_link_options(FfxAlignmentTest PRIVATE -Wl,--gc-sections)
+    set(ffxArchives)
+    foreach (library Gx Gxu Os Storm Base Tempest BlizzardCore Images expat jpeg blast zlib bzip2 lzma GxMojoShader)
+        list(APPEND ffxArchives "${WOWDECOMP_VULKAN_CLIENT_BUILD}/lib/lib${library}.a")
+    endforeach ()
+    target_link_libraries(FfxAlignmentTest PRIVATE GxVulkanShaders -Wl,--start-group ${ffxArchives} -Wl,--end-group
+        Vulkan::Vulkan PkgConfig::SDL2 curl dl m)
+    add_dependencies(FfxAlignmentTest GxSlangShaders)
+    add_test(NAME FfxAlignmentGpu COMMAND FfxAlignmentTest)
+    set_tests_properties(FfxAlignmentGpu PROPERTIES TIMEOUT 90 ENVIRONMENT "VK_LOADER_LAYERS_DISABLE=~implicit~")
+endif ()

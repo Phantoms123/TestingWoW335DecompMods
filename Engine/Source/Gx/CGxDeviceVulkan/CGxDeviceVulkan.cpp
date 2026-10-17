@@ -411,7 +411,11 @@ void CGxDeviceVulkan::State::RecreateSwapchain() {
     CRect rect;
     rect.minX = rect.minY = 0; rect.maxX = static_cast<float>(extent.width); rect.maxY = static_cast<float>(extent.height);
     gx.DeviceSetDefWindow(rect); gx.DeviceSetCurWindow(rect);
-    gx.m_format.m_size = {static_cast<int32_t>(extent.width), static_cast<int32_t>(extent.height)};
+    int windowWidth = 0, windowHeight = 0;
+    SDL_GetWindowSize(window, &windowWidth, &windowHeight);
+    gx.m_format.m_size = {windowWidth, windowHeight};
+    std::fprintf(stderr, "Native display: driver=%s window=%dx%d drawable=%dx%d swapchain=%ux%u\n",
+        SDL_GetCurrentVideoDriver(), windowWidth, windowHeight, width, height, extent.width, extent.height);
     gx.m_viewportDirty = 1; resize = false;
 }
 
@@ -1002,7 +1006,10 @@ void CGxDeviceVulkan::State::Draw(CGxBatch& batch, bool indexed) {
     vkCmdBindVertexBuffers(command, 0, static_cast<uint32_t>(vertexBuffers.size()), vertexBuffers.data(), offsets.data());
     VkViewport viewport{};
     viewport.x = gx.m_viewport.m_x.m_l * targetExtent.width;
-    viewport.y = (1.0f - gx.m_viewport.m_y.m_l) * targetExtent.height;
+    // Like the D3D backend, render textures use a top-origin valid region.
+    // The backbuffer retains the engine's bottom-origin viewport convention.
+    const bool renderToTexture = gx.m_textureTarget[GxBuffers_Color].m_texture || gx.m_textureTarget[GxBuffers_Depth].m_texture;
+    viewport.y = (renderToTexture ? gx.m_viewport.m_y.m_h : 1.0f - gx.m_viewport.m_y.m_l) * targetExtent.height;
     viewport.width = (gx.m_viewport.m_x.m_h - gx.m_viewport.m_x.m_l) * targetExtent.width;
     viewport.height = -(gx.m_viewport.m_y.m_h - gx.m_viewport.m_y.m_l) * targetExtent.height;
     viewport.minDepth = gx.m_viewport.m_z.m_l; viewport.maxDepth = gx.m_viewport.m_z.m_h;
@@ -1124,7 +1131,7 @@ int32_t CGxDeviceVulkan::DeviceSetFormat(const CGxFormat& format) {
         }
         if (!state.window) {
             if (!(SDL_WasInit(SDL_INIT_VIDEO) & SDL_INIT_VIDEO)) throw std::runtime_error("SDL video is not initialized");
-            uint32_t flags = SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE;
+            uint32_t flags = SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI;
             if (!m_format.m_window) flags |= SDL_WINDOW_FULLSCREEN;
             else if (m_format.m_maximize == 1) flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
             state.window = SDL_CreateWindow("World of Warcraft (Vulkan)", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
@@ -1186,7 +1193,7 @@ int32_t CGxDeviceVulkan::DeviceWM(EGxWM wm, uintptr_t, uintptr_t param2) {
             m_windowVisible = param2 != 1 && param2 != 2;
             if (m_windowVisible) {
                 int width, height;
-                SDL_GetWindowSize(m_native->window, &width, &height);
+                SDL_Vulkan_GetDrawableSize(m_native->window, &width, &height);
                 if (width > 0 && height > 0) {
                     CRect rect;
                     rect.minX = rect.minY = 0;
