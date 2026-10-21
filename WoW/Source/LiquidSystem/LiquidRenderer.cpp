@@ -1,4 +1,5 @@
 #include "Liquid.h"
+#include "WoW/Source/LiquidSystem/CataWater.h"
 #include <cstdlib>
 #include "Engine/Source/Gx/CGxDevice/CGxDevice.h"
 #include "Engine/Source/Gx/CGxLight.h"
@@ -119,6 +120,19 @@ void Liquid::CRenderer::Flush(const C3Vector& cameraPos, uint32_t pass) {
     qsort(instances.m_data, instances.Count(), sizeof(Liquid::CInstance*), Liquid::CRenderer::s_drawListSorter[pass]);
 
     uint32_t count = instances.Count();
+
+    // CHANGED: the 4.3.4 water's reflection blend is drawn from every see-through water surface first.
+    if (pass == 1 && Liquid::Cata::BeginReflectionMask(cameraPos)) {
+        for (uint32_t i = 0; i < count; i++) {
+            Liquid::CInstance* instance = instances.m_data[i];
+
+            if (dynamic_cast<Liquid::CMaterialWater*>(instance->m_material) || dynamic_cast<Liquid::CMaterialWaterNoSpec*>(instance->m_material)) {
+                Liquid::Cata::DrawReflectionMask(instance->m_geomFactory, cameraPos, &instance->m_transform, instance->m_settings);
+            }
+        }
+
+        Liquid::Cata::EndReflectionMask();
+    }
 
     for (uint32_t i = 0; i < count; i++) {
         Liquid::CInstance* instance = instances.m_data[i];

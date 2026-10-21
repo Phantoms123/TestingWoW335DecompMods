@@ -25,6 +25,9 @@
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/depthfade_ps.h"
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/fill_ps.h"
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/mix_ps.h"
+#include "Engine/Source/ShaderEffect/PostShaders/vkd3d/watermask_vs.h"
+#include "Engine/Source/ShaderEffect/PostShaders/vkd3d/watermask_ps.h"
+#include "Engine/Source/ShaderEffect/PostShaders/vkd3d/lerp_ps.h"
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/fxaa_ps.h"
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/haze_ps.h"
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/post_vs.h"
@@ -38,6 +41,9 @@
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/depthfade_ps_sm4.h"
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/fill_ps_sm4.h"
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/mix_ps_sm4.h"
+#include "Engine/Source/ShaderEffect/PostShaders/vkd3d/watermask_vs_sm4.h"
+#include "Engine/Source/ShaderEffect/PostShaders/vkd3d/watermask_ps_sm4.h"
+#include "Engine/Source/ShaderEffect/PostShaders/vkd3d/lerp_ps_sm4.h"
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/fxaa_ps_sm4.h"
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/haze_ps_sm4.h"
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/post_vs_sm4.h"
@@ -86,6 +92,9 @@ static CGxShader* s_sharpenPs;
 static CGxShader* s_fillPs;
 static CGxShader* s_depthFadePs;
 static CGxShader* s_mixPs;
+static CGxShader* s_lerpPs;
+static CGxShader* s_waterMaskVs;
+static CGxShader* s_waterMaskPs;
 
 static CTexture* s_sceneTex;
 static CTexture* s_aoTex[2];
@@ -178,6 +187,9 @@ static void Destroy() {
     ReleaseShader(s_fillPs);
     ReleaseShader(s_depthFadePs);
     ReleaseShader(s_mixPs);
+    ReleaseShader(s_lerpPs);
+    ReleaseShader(s_waterMaskVs);
+    ReleaseShader(s_waterMaskPs);
     DestroyTargets();
     s_created = false;
 }
@@ -709,6 +721,49 @@ bool PostEffects::Blend(CGxTex* target, CGxTex* source, float amount) {
     Pass(state, target, s_mixPs, nullptr);
     state.End();
     return true;
+}
+
+// Draws a and b blended by amount's red (all three the size of target) into target.
+bool PostEffects::Lerp(CGxTex* target, CGxTex* a, CGxTex* b, CGxTex* amount) {
+    if (!target || !a || !b || !amount) {
+        return false;
+    }
+
+    if (!s_vs) {
+        s_vs = EMBEDDED(GxSh_Vertex, "PostEffects", g_post_vs);
+    }
+
+    if (!s_lerpPs) {
+        s_lerpPs = EMBEDDED(GxSh_Pixel, "PostLerp", g_post_lerp_ps);
+    }
+
+    if (!s_vs || !s_lerpPs) {
+        return false;
+    }
+
+    CGxDevice* device = g_theGxDevicePtr;
+    PassState state;
+    state.Begin();
+    device->RsSet(GxRs_Texture0, a);
+    device->RsSet(GxRs_Texture1, b);
+    device->RsSet(GxRs_Texture2, amount);
+    Pass(state, target, s_lerpPs, nullptr);
+    state.End();
+    return true;
+}
+
+bool PostEffects::WaterMaskShaders(CGxShader*& vertexShader, CGxShader*& pixelShader) {
+    if (!s_waterMaskVs) {
+        s_waterMaskVs = EMBEDDED(GxSh_Vertex, "PostWaterMask", g_post_watermask_vs);
+    }
+
+    if (!s_waterMaskPs) {
+        s_waterMaskPs = EMBEDDED(GxSh_Pixel, "PostWaterMask", g_post_watermask_ps);
+    }
+
+    vertexShader = s_waterMaskVs;
+    pixelShader = s_waterMaskPs;
+    return s_waterMaskVs && s_waterMaskPs;
 }
 
 // Softens target with a separable Gaussian through temp (the same size), radius in texels.

@@ -80,6 +80,16 @@ static const uint32_t REFLECTION_MIXES = 3;
 static CTexture* s_reflectionMixTex[REFLECTION_MIXES];
 static bool s_reflectionMixTried[REFLECTION_MIXES];
 static bool s_reflectionMixReady[REFLECTION_MIXES];
+// The per-pixel version: how far from the level each pixel's water lies (0 real, 1 sky; reflection sized), and
+// the real and sky reflections blended by it, which then all the water draws.
+static CTexture* s_reflectionMaskTex;
+static CTexture* s_reflectionBlendTex;
+static bool s_reflectionMaskDrawing;
+static bool s_reflectionBlendReady;
+static float s_maskSavedVs[8 * 4];
+static float s_maskSavedPs[8 * 4];
+static CGxTex* s_maskSavedColor;
+static float s_maskSavedViewport[6];
 // Up to this far (yards) from the reflected level water shows the real reflection, from the far one on the sky's.
 static const float REFLECTION_BLEND_NEAR = 2.0f;
 static const float REFLECTION_BLEND_FAR = 10.0f;
@@ -206,6 +216,9 @@ static void DestroyTargets() {
         s_reflectionMixReady[i] = false;
     }
 
+    ReleaseTexture(s_reflectionMaskTex);
+    ReleaseTexture(s_reflectionBlendTex);
+    s_reflectionBlendReady = false;
     ReleaseTexture(s_blurredBackTex);
     ReleaseTexture(s_blurTempTex);
     s_screenWidth = 0;
@@ -413,7 +426,7 @@ void Liquid::Cata::BeginFrame() {
         // other water starts there.
         // The ease is slow (about two seconds to settle), so walking along a sloping river does not shift the whole
         // reflection with every step from one chunk's height to the next.
-        if (!s_planeValid || fabsf(s_nextPlaneHeight - s_planeHeight) > 3.0f) {
+        if (!s_planeValid || fabsf(s_nextPlaneHeight - s_planeHeight) > 15.0f) {
             s_planeHeight = s_nextPlaneHeight;
         } else {
             s_planeHeight += (s_nextPlaneHeight - s_planeHeight) * 0.03f;
@@ -1391,6 +1404,9 @@ void Liquid::Cata::BeginLiquidPass(bool cameraUnderwater) {
         s_reflectionMixReady[i] = false;
     }
 
+    s_reflectionBlendReady = false;
+    s_reflectionMaskDrawing = false;
+
     if (s_inPass) {
         SaveConstants();
     }
@@ -1404,6 +1420,164 @@ void Liquid::Cata::EndLiquidPass() {
     s_inPass = false;
     s_passPrepared = false;
     s_passReady = false;
+    s_reflectionBlendReady = false;
+}
+
+bool Liquid::Cata::BeginReflectionMask(const C3Vector& cameraPos) {
+    s_reflectionBlendReady = false;
+    s_reflectionMaskDrawing = false;
+
+    if (!s_inPass || s_cameraUnderwater || !s_realReady || !s_planeValid || !GxTexOf(s_realReflectionTex)) {
+        return false;
+    }
+
+    if (!PreparePass()) {
+        return false;
+    }
+
+    CGxTex* depth = DepthCache::GetDepthTex();
+    CGxShader* vertexShader = nullptr;
+    CGxShader* pixelShader = nullptr;
+
+    if (!depth || !PostEffects::WaterMaskShaders(vertexShader, pixelShader)) {
+        return false;
+    }
+
+    if (!s_reflectionMaskTex) {
+        s_reflectionMaskTex = CreateTarget(GxTex_NonPow2, s_reflectionWidth, s_reflectionHeight, "LiquidProc Reflection Mask");
+    }
+
+    if (!s_reflectionBlendTex) {
+        s_reflectionBlendTex = CreateTarget(GxTex_NonPow2, s_reflectionWidth, s_reflectionHeight, "LiquidProc Reflection Blend");
+    }
+
+    CGxTex* mask = GxTexOf(s_reflectionMaskTex);
+
+    if (!mask || !GxTexOf(s_reflectionBlendTex)) {
+        return false;
+    }
+
+    CGxDevice* device = g_theGxDevicePtr;
+    s_maskSavedColor = nullptr;
+    device->DeviceGetRenderTarget(GxBuffers_Color, s_maskSavedColor);
+    GxXformViewport(s_maskSavedViewport[0], s_maskSavedViewport[1], s_maskSavedViewport[2], s_maskSavedViewport[3], s_maskSavedViewport[4], s_maskSavedViewport[5]);
+    memcpy(s_maskSavedVs, CGxDevice::s_shadowConstants[1].constants, sizeof(s_maskSavedVs));
+    memcpy(s_maskSavedPs, CGxDevice::s_shadowConstants[0].constants, sizeof(s_maskSavedPs));
+
+    device->RsPush();
+    GxRsSet(GxRs_Culling, 0);
+    GxRsSet(GxRs_DepthTest, 0);
+    GxRsSet(GxRs_DepthWrite, 0);
+    GxRsSet(GxRs_Fog, 0);
+    GxRsSet(GxRs_Lighting, 0);
+    GxRsSet(GxRs_AlphaRef, 0);
+    GxRsSet(GxRs_BlendingMode, 0);
+
+    GxRenderTargetSet(GxBuffers_Color, mask, 0);
+    GxXformSetViewport(0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f);
+    CImVector clear = { 0, 0, 0, 0xFF };
+    GxSceneClear(GxBufferBit_Color, clear);
+
+    device->RsSet(GxRs_VertexShader, vertexShader);
+    device->RsSet(GxRs_PixelShader, pixelShader);
+    device->RsSet(GxRs_Texture0, depth);
+
+    float plane = s_planeHeight - (Liquid::UseCameraRelativeCoords() ? cameraPos.z : 0.0f);
+    C4Vector view = ViewSettings::Params(s_zNear, s_zFar, s_viewportFarClip);
+    float c[8] = { view.x, view.y, view.z, view.w, plane, REFLECTION_BLEND_NEAR, 1.0f / (REFLECTION_BLEND_FAR - REFLECTION_BLEND_NEAR), 0.0f };
+    device->ShaderConstantsSet(GxSh_Pixel, 0, c, 2);
+
+    s_reflectionMaskDrawing = true;
+    return true;
+}
+
+void Liquid::Cata::DrawReflectionMask(IGeomFactory* geomFactory, const C3Vector& cameraPos, const C44Matrix* transform, CMaterialSettings* settings) {
+    if (!s_reflectionMaskDrawing) {
+        return;
+    }
+
+    // Only the water RenderWater draws the 4.3.4 way.
+    if (!settings->m_textures[1].Count() || !settings->m_textures[2].Count() || !settings->m_textures[3].Count()) {
+        return;
+    }
+
+    C44Matrix world;
+    bool unchanged = geomFactory->SetTransform(const_cast<C44Matrix*>(transform));
+
+    if (!unchanged) {
+        world = *transform;
+    }
+
+    if (Liquid::UseCameraRelativeCoords()) {
+        world.d0 -= cameraPos.x;
+        world.d1 -= cameraPos.y;
+        world.d2 -= cameraPos.z;
+    }
+
+    C44Matrix view;
+    GxXformView(view);
+    C44Matrix projection = g_theGxDevicePtr->m_projNative;
+
+    if (g_theGxDevicePtr->DeviceApi() == GxApi_OpenGl) {
+        projection.c0 *= -1.0f;
+        projection.c1 *= -1.0f;
+        projection.c2 *= -1.0f;
+        projection.c3 *= -1.0f;
+    }
+
+    C44Matrix rows = world * view * projection;
+    float c[20];
+    memcpy(c, &rows, sizeof(float) * 16);
+    c[16] = world.a2;
+    c[17] = world.b2;
+    c[18] = world.c2;
+    c[19] = world.d2;
+    g_theGxDevicePtr->ShaderConstantsSet(GxSh_Vertex, 0, c, 5);
+
+    CGxBuf* vertexBuf = nullptr;
+    CGxBuf* indexBuf = nullptr;
+    CGxBatch batch;
+    batch.m_primType = GxPrims_Last;
+    batch.m_start = 0;
+    batch.m_count = 0;
+    batch.m_minIndex = 0;
+    batch.m_maxIndex = 0;
+    geomFactory->GetBuffers(GxVBF_PNCT2, &vertexBuf, &indexBuf, &batch);
+
+    if (!vertexBuf || !indexBuf || !batch.m_count) {
+        return;
+    }
+
+    GxPrimVertexPtr(vertexBuf, GxVBF_PNCT2);
+    g_theGxDevicePtr->PrimIndexPtr(indexBuf);
+    g_theGxDevicePtr->Draw(&batch, 1);
+}
+
+void Liquid::Cata::EndReflectionMask() {
+    if (!s_reflectionMaskDrawing) {
+        return;
+    }
+
+    s_reflectionMaskDrawing = false;
+    CGxDevice* device = g_theGxDevicePtr;
+    device->RsPop();
+    GxRenderTargetSet(GxBuffers_Color, s_maskSavedColor, 0);
+    GxXformSetViewport(s_maskSavedViewport[0], s_maskSavedViewport[1], s_maskSavedViewport[2], s_maskSavedViewport[3], s_maskSavedViewport[4], s_maskSavedViewport[5]);
+    device->ShaderConstantsSet(GxSh_Vertex, 0, s_maskSavedVs, 8);
+    device->ShaderConstantsSet(GxSh_Pixel, 0, s_maskSavedPs, 8);
+
+    CGxTex* real = GxTexOf(s_realReflectionTex);
+    CGxTex* sky = GxTexOf(s_fakeReflectionTex);
+    CGxTex* mask = GxTexOf(s_reflectionMaskTex);
+    CGxTex* blend = GxTexOf(s_reflectionBlendTex);
+
+    if (real && sky && mask && blend && sky->m_width == real->m_width && sky->m_height == real->m_height) {
+        s_reflectionBlendReady = PostEffects::Lerp(blend, real, sky, mask);
+    }
+
+    if (s_reflectionBlendReady) {
+        LogOnce(23, "blending real and sky reflections per pixel");
+    }
 }
 
 // 4.3.4's Liquid shader lighting (vertex c0-c4, pixel c0-c4).
@@ -1632,7 +1806,10 @@ bool Liquid::Cata::RenderWater(IEnvironment* environment, IGeomFactory* geomFact
     CGxTex* reflectionTex = reflection;
     bool real = false;
 
-    if (s_realReady && realReflection && !s_cameraUnderwater) {
+    if (s_reflectionBlendReady && realReflection && !s_cameraUnderwater) {
+        real = true;
+        reflectionTex = GxTexOf(s_reflectionBlendTex);
+    } else if (s_realReady && realReflection && !s_cameraUnderwater) {
         float offset = fabsf(bounds->c.z - s_planeHeight);
         float sky = (offset - REFLECTION_BLEND_NEAR) / (REFLECTION_BLEND_FAR - REFLECTION_BLEND_NEAR);
         int32_t level = static_cast<int32_t>(floorf((sky < 0.0f ? 0.0f : (sky > 1.0f ? 1.0f : sky)) * (REFLECTION_MIXES + 1) + 0.5f));

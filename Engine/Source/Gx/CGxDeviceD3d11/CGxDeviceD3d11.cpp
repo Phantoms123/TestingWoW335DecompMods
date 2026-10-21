@@ -1919,6 +1919,11 @@ void CGxDeviceD3d11::DeviceRestoreDepthSurface() {
         return;
     }
 
+    // As IBindTargets: what becomes the depth target must not stay bound for reading (Direct3D 11 would drop it
+    // from the shader slots behind the bound-texture cache's back).
+    ID3D11ShaderResourceView* none[24] = {};
+    this->m_ctx->PSSetShaderResources(0, 24, none);
+    this->m_texturesDirty = true;
     this->m_ctx->OMSetRenderTargets(this->m_curRtv ? 1 : 0, this->m_curRtv ? &this->m_curRtv : nullptr, this->m_savedDsv);
     this->m_curDsv = this->m_savedDsv;
 }
@@ -1935,6 +1940,9 @@ void CGxDeviceD3d11::DeviceResolveDepthBuffer(CGxTex* texture) {
     Texture* tex = static_cast<Texture*>(texture->m_apiSpecificData);
 
     if (tex && tex->m_dsv) {
+        ID3D11ShaderResourceView* none[24] = {};
+        this->m_ctx->PSSetShaderResources(0, 24, none);
+        this->m_texturesDirty = true;
         this->m_ctx->OMSetRenderTargets(this->m_curRtv ? 1 : 0, this->m_curRtv ? &this->m_curRtv : nullptr, tex->m_dsv);
         this->m_curDsv = tex->m_dsv;
     }

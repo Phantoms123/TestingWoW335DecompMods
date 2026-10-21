@@ -83,6 +83,12 @@ namespace Liquid {
         // reflection the first time 4.3.4 water is drawn in the pass; the end puts back shader constants.
         void BeginLiquidPass(bool cameraUnderwater);
         void EndLiquidPass();
+        // CHANGED: before the see-through liquids draw, the water's real and sky reflections are blended per pixel
+        // by the water's height from the reflected level: every water surface drawn through DrawReflectionMask
+        // between these two, then RenderWater takes the blend.
+        bool BeginReflectionMask(const C3Vector& cameraPos);
+        void DrawReflectionMask(IGeomFactory* geomFactory, const C3Vector& cameraPos, const C44Matrix* transform, CMaterialSettings* settings);
+        void EndReflectionMask();
 
         // Draws one water surface the 4.3.4 way. False (nothing drawn) when that is off or unavailable, so the
         // caller draws its own water.

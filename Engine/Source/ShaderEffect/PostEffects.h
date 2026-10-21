@@ -13,6 +13,7 @@
 class C3Vector;
 class CImVector;
 class CGxTex;
+class CGxShader;
 class C4Vector;
 
 namespace PostEffects {
@@ -52,6 +53,10 @@ namespace PostEffects {
     bool Tint(CGxTex* target, const CImVector& color, float amount);
     // Blends source over all of target (the same size) by amount (0-1).
     bool Blend(CGxTex* target, CGxTex* source, float amount);
+    // Draws a and b (the size of target) blended by amount's red into target.
+    bool Lerp(CGxTex* target, CGxTex* a, CGxTex* b, CGxTex* amount);
+    // The shaders that draw the water's reflection mask (watermask_vs/ps.hlsl).
+    bool WaterMaskShaders(CGxShader*& vertexShader, CGxShader*& pixelShader);
     // Softens target with a Gaussian blur of about radius texels, through temp (the same size).
     bool Soften(CGxTex* target, CGxTex* temp, float radius);
     // Fades target towards color by distance, read from depth (a GxTex_Intz texture drawn with view, see
