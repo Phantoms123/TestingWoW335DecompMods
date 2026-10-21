@@ -12,6 +12,7 @@
 
 class C3Vector;
 class CImVector;
+class CGxTex;
 
 namespace PostEffects {
     enum EParam {
@@ -46,6 +47,8 @@ namespace PostEffects {
     void RenderBloom();
     // Last, after the full screen effects: anti-aliasing and sharpening.
     void RenderAntiAliasing();
+    // Blends color over all of target by amount (0-1).
+    bool Tint(CGxTex* target, const CImVector& color, float amount);
 }
 
 #endif

@@ -18,6 +18,7 @@
 #include "Engine/Source/Os/TimeManager.h"
 #include "Engine/Source/Services/Texture.h"
 #include "Engine/Source/ShaderEffect/DepthCache.h"
+#include "Engine/Source/ShaderEffect/PostEffects.h"
 #include "Engine/Source/ShaderEffect/ShaderEffect.h"
 #include "Engine/Source/ShaderEffect/ViewSettings.h"
 #include "Engine/Source/Storm/H/storm.h"
@@ -57,6 +58,7 @@ static uint32_t s_requestedRipple = 1;
 static bool s_rippleFailed;
 static uint32_t s_reflectionMode;
 static uint32_t s_reflectionDownscale;
+static float s_reflectionStrength = 0.75f;
 static bool s_failed;
 
 static CGxShader* s_vertexShaders[VS_PERMUTATIONS];
@@ -323,6 +325,10 @@ void Liquid::Cata::SetRippleDetail(uint32_t detail) {
 
 void Liquid::Cata::SetReflectionMode(uint32_t mode) {
     s_reflectionMode = mode > 3 ? 3 : mode;
+}
+
+void Liquid::Cata::SetReflectionStrength(float strength) {
+    s_reflectionStrength = strength < 0.0f ? 0.0f : (strength > 1.0f ? 1.0f : strength);
 }
 
 void Liquid::Cata::SetReflectionDownscale(uint32_t downscale) {
@@ -1158,6 +1164,11 @@ void Liquid::Cata::EndReflection() {
     device->DeviceSetCullFlip(0);
     GxRsSet(GxRs_ClipPlaneMask, 0);
     device->XformSetView(s_reflectionSavedView);
+
+    // reflectionStrength below 1 fades the reflected world towards the fog colour, so the water mirrors it less.
+    if (s_reflectionStrength < 1.0f) {
+        PostEffects::Tint(GxTexOf(s_realReflectionTex), DayNight::GetInfo()->m_fog.m_color, 1.0f - s_reflectionStrength);
+    }
     device->RsPop();
 
     float* vp = s_reflectionSavedViewport;
@@ -1309,6 +1320,20 @@ static C44Matrix ScrollMatrix(uint32_t timeMs, float speedU, float speedV) {
     return matrix;
 }
 
+// The water's own textures filtered anisotropically, so its normal maps and foam keep their detail on distant
+// water seen at a low angle instead of blurring flat (they are loaded with plain trilinear filtering).
+static void SharpenAtDistance(CGxTex* texture) {
+    const CGxCaps& caps = g_theGxDevicePtr->Caps();
+
+    if (!texture || !caps.m_texFilterAnisotropic || texture->m_flags.m_filter == GxTex_Anisotropic) {
+        return;
+    }
+
+    uint32_t anisotropy = caps.m_maxTexAnisotropy < 16 ? caps.m_maxTexAnisotropy : 16;
+    texture->m_flags.m_filter = GxTex_Anisotropic;
+    texture->m_flags.m_maxAnisotropy = anisotropy ? anisotropy : 1;
+}
+
 bool Liquid::Cata::RenderWater(IEnvironment* environment, IGeomFactory* geomFactory, const C3Vector& cameraPos, const C44Matrix* transform, const CAaSphere* bounds, CMaterialSettings* settings) {
     if (s_detail < 2) {
         return false;
@@ -1328,6 +1353,10 @@ bool Liquid::Cata::RenderWater(IEnvironment* environment, IGeomFactory* geomFact
         LogOnce(6, "a water type has no 4.3.4 textures (depth tint %d, bump %d, foam %d); is patch-C.MPQ's LiquidType.dbc loaded?", depthTint ? 1 : 0, bump ? 1 : 0, foam ? 1 : 0);
         return false;
     }
+
+    SharpenAtDistance(depthTint);
+    SharpenAtDistance(bump);
+    SharpenAtDistance(foam);
 
     if (!PreparePass()) {
         return false;

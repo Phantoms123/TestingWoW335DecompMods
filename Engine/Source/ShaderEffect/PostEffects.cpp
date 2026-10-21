@@ -22,6 +22,7 @@
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/blur_ps.h"
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/bright_ps.h"
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/copy_ps.h"
+#include "Engine/Source/ShaderEffect/PostShaders/vkd3d/fill_ps.h"
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/fxaa_ps.h"
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/haze_ps.h"
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/post_vs.h"
@@ -47,7 +48,7 @@ static float s_params[PostEffects::Params_Last] = {
     1.05f,    // colorSaturation
     1.0f,     // colorContrast
     0.4f,     // sharpen
-    0.0005f,  // aerialFogDensity
+    0.0015f,  // aerialFogDensity (Waystone's 0.0005 hardly shows over 3.3.5's own distance fog)
     0.0067f,  // aerialFogFalloff
     80.0f,    // aerialFogStart
     0.7f,     // aerialFogMax
@@ -67,6 +68,7 @@ static CGxShader* s_blurPs;
 static CGxShader* s_bloomPs;
 static CGxShader* s_fxaaPs;
 static CGxShader* s_sharpenPs;
+static CGxShader* s_fillPs;
 
 static CTexture* s_sceneTex;
 static CTexture* s_aoTex[2];
@@ -149,6 +151,7 @@ static void Destroy() {
     ReleaseShader(s_bloomPs);
     ReleaseShader(s_fxaaPs);
     ReleaseShader(s_sharpenPs);
+    ReleaseShader(s_fillPs);
     DestroyTargets();
     s_created = false;
 }
@@ -616,4 +619,33 @@ void PostEffects::RenderAntiAliasing() {
     }
 
     state.End();
+}
+
+// Blends a flat colour over a whole texture (the water's reflection, faded towards the fog colour). The shaders
+// it needs are made on first use, apart from the other effects.
+bool PostEffects::Tint(CGxTex* target, const CImVector& color, float amount) {
+    if (!target || amount <= 0.0f) {
+        return false;
+    }
+
+    if (!s_vs) {
+        s_vs = CreateEmbedded(GxSh_Vertex, "PostEffects", g_post_vs, sizeof(g_post_vs));
+    }
+
+    if (!s_fillPs) {
+        s_fillPs = CreateEmbedded(GxSh_Pixel, "PostFill", g_post_fill_ps, sizeof(g_post_fill_ps));
+    }
+
+    if (!s_vs || !s_fillPs) {
+        return false;
+    }
+
+    CGxDevice* device = g_theGxDevicePtr;
+    PassState state;
+    state.Begin();
+    GxRsSet(GxRs_BlendingMode, GxBlend_Alpha);
+    SetPixel(0, color.r / 255.0f, color.g / 255.0f, color.b / 255.0f, amount > 1.0f ? 1.0f : amount);
+    Pass(state, target, s_fillPs, nullptr);
+    state.End();
+    return true;
 }

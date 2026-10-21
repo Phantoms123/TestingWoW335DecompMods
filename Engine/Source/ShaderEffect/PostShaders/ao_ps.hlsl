@@ -49,9 +49,11 @@ float4 main(float2 uv : TEXCOORD0, float3 ray : TEXCOORD1) : COLOR {
 
     float2 pixel = uv * Texel.zw;
     float angle = frac(52.9829189 * frac(dot(floor(pixel), float2(0.06711056, 0.00583715)))) * 6.2831853;
-    float bias = 0.002 * depth + 0.02;
     float sum = 0.0;
 
+    // Each sample occludes by how far above the surface's tangent plane it lies (the cosine of its angle to the
+    // normal, less a little to ignore near-flat ground), fading out towards the radius. Bounded per sample, so
+    // grass and other fine detail close to the camera cannot add up to black.
     [unroll]
     for (int i = 0; i < 12; i++) {
         float alpha = (i + 0.5) / 12.0;
@@ -59,14 +61,15 @@ float4 main(float2 uv : TEXCOORD0, float3 ray : TEXCOORD1) : COLOR {
         float2 offset = float2(cos(a), sin(a)) * (alpha * radiusPixels) * Texel.xy;
         float3 v = Position(uv + offset) - p;
         float vv = dot(v, v);
-        float vn = dot(v, n);
-        float f = max(radius2 - vv, 0.0);
-        sum += f * f * f * max((vn - bias) / (vv + 0.01), 0.0);
+        float cosine = dot(v, n) * rsqrt(vv + 0.0001);
+        float falloff = saturate(1.0 - vv / radius2);
+        sum += saturate(cosine - 0.15) * falloff;
     }
 
-    float ao = sum * 5.0 / (radius2 * radius2 * radius2 * 12.0);
+    float occlusion = sum / 12.0;
     // Fade it out with distance, where a pixel covers more than the radius anyway.
     float fade = saturate((400.0 - depth) / 200.0);
-    ao = saturate(1.0 - ao * Params.z * fade);
+    float ao = saturate(1.0 - occlusion * Params.z * 0.7 * fade);
+    ao = max(ao, 0.35);
     return float4(ao, ao, ao, 1.0);
 }

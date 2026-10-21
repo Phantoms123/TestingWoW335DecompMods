@@ -96,15 +96,17 @@ Every changed spot in the original sources is marked `// CHANGED:`.
   the view mirrored in the plane of the water nearest the camera (found while drawing the previous frame), with a
   clip plane at the water and the winding turned (CGxDevice::DeviceSetCullFlip); the render lists are kept for the
   real pass (CWorldScene::s_reflectionPass). The sky is drawn mirrored behind them. Water at that height samples
-  it with 4.3.4's real reflection shader permutation; other water keeps the sky reflection.
+  it with 4.3.4's real reflection shader permutation; other water keeps the sky reflection. `reflectionStrength`
+  (default 0.75) fades the reflected world towards the fog colour. The water's normal map, foam and depth tint
+  textures are filtered anisotropically so distant water keeps its detail.
 - Not ported yet: reflections of models (trees, characters), ripples from the collision meshes of moving objects
   (4.3.4's PerturbDisplMapMesh).
 
 ### Advanced video options (Engine/Source/ShaderEffect/PostEffects.cpp)
 - The settings behind Waystone's Advanced Effects panel, with its console variable names and defaults, as
   Direct3D 9 shaders compiled into the client (`PostShaders/*.hlsl`, headers made with Tools/VfHlsl by
-  `PostShaders/build.sh`): `ambientOcclusion` (depth-based ambient obscurance, half resolution, depth-aware blur;
-  `aoRadius`, `aoStrength`, `aoDebug`), `aerialFog` (exponential height haze in the zone fog colour;
+  `PostShaders/build.sh`): `ambientOcclusion` (depth-based ambient obscurance with a bounded per-sample term, half resolution, depth-aware blur;
+  `aoRadius`, `aoStrength`, `aoDebug`), `aerialFog` (exponential height haze in the zone fog colour, density default 0.0015;
   `aerialFogDensity`, `aerialFogFalloff`, `aerialFogStart`, `aerialFogMax`), both over the opaque world before
   the liquids; `postBloom` (quarter and eighth resolution bloom with highlight roll-off, exposure, saturation,
   contrast; `bloomIntensity`, `bloomThreshold`, `toneMapping`, `toneExposure`, `colorSaturation`,

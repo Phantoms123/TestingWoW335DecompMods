@@ -747,7 +747,7 @@ static void RegisterPostEffects() {
         { "colorSaturation", "Color saturation", "1.05", PostEffects::Param_ColorSaturation },
         { "colorContrast", "Contrast around mid grey (1 = unchanged)", "1.0", PostEffects::Param_ColorContrast },
         { "sharpen", "Contrast adaptive sharpening amount (0 off, up to 1)", "0.4", PostEffects::Param_Sharpen },
-        { "aerialFogDensity", "Distance haze density", "0.0005", PostEffects::Param_AerialFogDensity },
+        { "aerialFogDensity", "Distance haze density", "0.0015", PostEffects::Param_AerialFogDensity },
         { "aerialFogFalloff", "Distance haze height falloff (1/yards)", "0.0067", PostEffects::Param_AerialFogFalloff },
         { "aerialFogStart", "Distance haze start distance in yards", "80", PostEffects::Param_AerialFogStart },
         { "aerialFogMax", "Distance haze maximum opacity", "0.7", PostEffects::Param_AerialFogMax },
@@ -761,6 +761,11 @@ static void RegisterPostEffects() {
             PostParamCallback(var, nullptr, var->m_stringValue.m_str, arg);
         }
     }
+}
+
+static bool ReflectionStrengthCallback(CVar* var, const char* oldValue, const char* value, void* arg) {
+    Liquid::Cata::SetReflectionStrength(SStrToFloat(value));
+    return true;
 }
 
 static bool SunShaftsCallback(CVar* var, const char* oldValue, const char* value, void* arg) {
@@ -798,6 +803,8 @@ void CWorldParam::Initialize() {
     Liquid::Cata::SetRippleDetail(rippleDetail ? static_cast<uint32_t>(rippleDetail->m_intValue) : 1);
     CVar* reflectionMode = CVar::Register("reflectionMode", "Water reflections with waterDetail 3 (0, 1 sky; 2 sky and terrain; 3 sky, terrain and buildings)", 1, "3", ReflectionModeCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     Liquid::Cata::SetReflectionMode(reflectionMode ? static_cast<uint32_t>(reflectionMode->m_intValue) : 3);
+    CVar* reflectionStrength = CVar::Register("reflectionStrength", "How strongly the water's real reflections show (0-1)", 1, "0.75", ReflectionStrengthCallback, CATEGORY_GRAPHICS, false, nullptr, false);
+    Liquid::Cata::SetReflectionStrength(reflectionStrength ? reflectionStrength->m_floatValue : 0.75f);
     CVar* reflectionDownscale = CVar::Register("reflectionDownscale", "Water reflection texture downscale (0-4)", 1, "0", ReflectionDownscaleCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     Liquid::Cata::SetReflectionDownscale(reflectionDownscale ? static_cast<uint32_t>(reflectionDownscale->m_intValue) : 0);
     RegisterPostEffects();
