@@ -22,6 +22,7 @@
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/blur_ps.h"
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/bright_ps.h"
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/copy_ps.h"
+#include "Engine/Source/ShaderEffect/PostShaders/vkd3d/depthfade_ps.h"
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/fill_ps.h"
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/fxaa_ps.h"
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/haze_ps.h"
@@ -69,6 +70,7 @@ static CGxShader* s_bloomPs;
 static CGxShader* s_fxaaPs;
 static CGxShader* s_sharpenPs;
 static CGxShader* s_fillPs;
+static CGxShader* s_depthFadePs;
 
 static CTexture* s_sceneTex;
 static CTexture* s_aoTex[2];
@@ -152,6 +154,7 @@ static void Destroy() {
     ReleaseShader(s_fxaaPs);
     ReleaseShader(s_sharpenPs);
     ReleaseShader(s_fillPs);
+    ReleaseShader(s_depthFadePs);
     DestroyTargets();
     s_created = false;
 }
@@ -679,6 +682,37 @@ bool PostEffects::Soften(CGxTex* target, CGxTex* temp, float radius) {
     device->RsSet(GxRs_Texture0, temp);
     SetPixel(0, 0.0f, scale / target->m_height, 0.0f, 0.0f);
     Pass(state, target, s_blurPs, nullptr);
+    state.End();
+    return true;
+}
+
+// Fades target towards color by the distance in depth (drawn with view): nothing before start, all of it from end on.
+bool PostEffects::FadeByDepth(CGxTex* target, CGxTex* depth, const C4Vector& view, float skyDepth, float start, float end, const CImVector& color) {
+    if (!target || !depth || end <= start) {
+        return false;
+    }
+
+    if (!s_vs) {
+        s_vs = CreateEmbedded(GxSh_Vertex, "PostEffects", g_post_vs, sizeof(g_post_vs));
+    }
+
+    if (!s_depthFadePs) {
+        s_depthFadePs = CreateEmbedded(GxSh_Pixel, "PostDepthFade", g_post_depthfade_ps, sizeof(g_post_depthfade_ps));
+    }
+
+    if (!s_vs || !s_depthFadePs) {
+        return false;
+    }
+
+    CGxDevice* device = g_theGxDevicePtr;
+    PassState state;
+    state.Begin();
+    GxRsSet(GxRs_BlendingMode, GxBlend_Alpha);
+    device->RsSet(GxRs_Texture0, depth);
+    SetPixel(0, view);
+    SetPixel(1, start, 1.0f / (end - start), skyDepth, 0.0f);
+    SetPixel(2, color.r / 255.0f, color.g / 255.0f, color.b / 255.0f, 1.0f);
+    Pass(state, target, s_depthFadePs, nullptr);
     state.End();
     return true;
 }

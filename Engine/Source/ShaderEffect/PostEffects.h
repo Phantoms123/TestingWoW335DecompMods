@@ -13,6 +13,7 @@
 class C3Vector;
 class CImVector;
 class CGxTex;
+class C4Vector;
 
 namespace PostEffects {
     enum EParam {
@@ -51,6 +52,9 @@ namespace PostEffects {
     bool Tint(CGxTex* target, const CImVector& color, float amount);
     // Softens target with a Gaussian blur of about radius texels, through temp (the same size).
     bool Soften(CGxTex* target, CGxTex* temp, float radius);
+    // Fades target towards color by distance, read from depth (a GxTex_Intz texture drawn with view, see
+    // ViewSettings::Params): none before start yards, all of it from end on; sky (depth >= skyDepth) stays.
+    bool FadeByDepth(CGxTex* target, CGxTex* depth, const C4Vector& view, float skyDepth, float start, float end, const CImVector& color);
 }
 
 #endif

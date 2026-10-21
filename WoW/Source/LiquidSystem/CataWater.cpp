@@ -73,6 +73,8 @@ static CTexture* s_backBufferTex;
 static CTexture* s_fakeReflectionTex;
 static CTexture* s_realReflectionTex;
 static CTexture* s_realReflectionTemp;
+static CTexture* s_realReflectionDepth;
+static float s_reflectionDistance = 300.0f;
 static CTexture* s_blurredBackTex;
 static CTexture* s_blurTempTex;
 static uint32_t s_screenWidth;
@@ -182,6 +184,7 @@ static void DestroyTargets() {
     ReleaseTexture(s_fakeReflectionTex);
     ReleaseTexture(s_realReflectionTex);
     ReleaseTexture(s_realReflectionTemp);
+    ReleaseTexture(s_realReflectionDepth);
     ReleaseTexture(s_blurredBackTex);
     ReleaseTexture(s_blurTempTex);
     s_screenWidth = 0;
@@ -296,6 +299,16 @@ static bool EnsureTargets() {
         s_realReflectionTex = CreateTarget(GxTex_NonPow2, s_reflectionWidth, s_reflectionHeight, "LiquidProc Real Reflection");
     }
 
+    // Its depth as a texture, so the distance fade can read it ("LiquidProc Reflection Depth" in 4.3.4).
+    if (!s_realReflectionDepth && s_detail >= 3 && g_theGxDevicePtr->Caps().m_rttFormat[GxTex_Intz]) {
+        CGxTexFlags flags(GxTex_Nearest, 0, 0, 0, 0, 1);
+        s_realReflectionDepth = TextureCreate(GxTex_NonPow2, s_reflectionWidth, s_reflectionHeight, 0, GxTex_Intz, GxTex_Intz, flags, nullptr, GxTexNullUserFunc, "LiquidProc Reflection Depth", 0);
+
+        if (s_realReflectionDepth && !TextureGetGxTex(s_realReflectionDepth, 1, nullptr)) {
+            ReleaseTexture(s_realReflectionDepth);
+        }
+    }
+
     if (!s_realReflectionTemp && s_detail >= 3) {
         s_realReflectionTemp = CreateTarget(GxTex_NonPow2, s_reflectionWidth, s_reflectionHeight, "blurredReflection");
     }
@@ -341,6 +354,10 @@ void Liquid::Cata::SetRippleDetail(uint32_t detail) {
 
 void Liquid::Cata::SetReflectionMode(uint32_t mode) {
     s_reflectionMode = mode > 3 ? 3 : mode;
+}
+
+void Liquid::Cata::SetReflectionDistance(float distance) {
+    s_reflectionDistance = distance < 0.0f ? 0.0f : distance;
 }
 
 void Liquid::Cata::SetShorelineSoftness(float softness) {
@@ -1176,6 +1193,12 @@ bool Liquid::Cata::BeginReflection(const C3Vector& worldViewOrigin, uint32_t& mo
     GxXformView(s_reflectionSavedView);
 
     device->RsPush();
+    CGxTex* depth = GxTexOf(s_realReflectionDepth);
+
+    if (depth) {
+        GxRenderTargetSet(GxBuffers_Depth, depth, 0);
+    }
+
     GxRenderTargetSet(GxBuffers_Color, target, 0);
     GxXformSetViewport(0.0f, 1.0f, 0.0f, 1.0f, vp[4], vp[5]);
 
@@ -1272,15 +1295,31 @@ void Liquid::Cata::EndReflection() {
     GxRsSet(GxRs_ClipPlaneMask, 0);
     device->XformSetView(s_reflectionSavedView);
 
+    CGxTex* depth = GxTexOf(s_realReflectionDepth);
+    CGxTex* reflection = GxTexOf(s_realReflectionTex);
+    DayNight::DNInfo* info = DayNight::GetInfo();
+
+    // The depth texture stops being the depth buffer before it is read.
+    if (depth) {
+        GxRenderTargetSet(GxBuffers_Depth, nullptr, 0);
+
+        // What lies far off fades into the fog over the second half of reflectionDistance, so distant hills,
+        // buildings and trees do not stand out in the water or appear in it abruptly.
+        if (s_reflectionDistance > 0.0f) {
+            C4Vector view = ViewSettings::Params(s_zNear, s_zFar, s_viewportFarClip);
+            PostEffects::FadeByDepth(reflection, depth, view, s_viewportFarClip * 0.99999f, s_reflectionDistance * 0.5f, s_reflectionDistance, info->m_fog.m_color);
+        }
+    }
+
     // reflectionStrength below 1 fades the reflected world towards the fog colour, so the water mirrors it less;
     // so does the fade in and out.
     float shown = s_reflectionStrength * s_reflectionBlend;
 
     // A slight blur, as 4.3.4's blurredReflection: thin edges stop shimmering as the camera moves.
-    PostEffects::Soften(GxTexOf(s_realReflectionTex), GxTexOf(s_realReflectionTemp), 1.5f);
+    PostEffects::Soften(reflection, GxTexOf(s_realReflectionTemp), 1.5f);
 
     if (shown < 1.0f) {
-        PostEffects::Tint(GxTexOf(s_realReflectionTex), DayNight::GetInfo()->m_fog.m_color, 1.0f - shown);
+        PostEffects::Tint(reflection, info->m_fog.m_color, 1.0f - shown);
     }
     device->RsPop();
 

@@ -1,4 +1,5 @@
 #include <cfloat>
+#include <cstdio>
 #include "CWorldSceneRender.h"
 #include "WoW/Source/WorldClient/Map.h"
 #include "WoW/Source/WorldClient/World.h"
@@ -209,12 +210,6 @@ void CWorldScene::Render(const C3Vector& cameraPos, float time) {
     CWorldScene::RenderMapObjDefGroups();
     CWorldScene::RenderHorizon();
 
-    // The opaque models: trees, characters, creatures.
-    if (World::s_m2Scene && Liquid::Cata::BeginModelReflection()) {
-        World::s_m2Scene->Draw(M2PASS_0);
-        Liquid::Cata::EndModelReflection();
-    }
-
     if (CWorldScene::s_unk_ADF570.m_maxViewDepth >= 0.0f) {
         if (CWorldScene::s_exteriorPortalViews.Count()) {
             CWorldScene::CreateInversePortalList();
@@ -304,9 +299,19 @@ void CWorldScene::RenderReflection() {
         CWorldScene::RenderMapObjDefGroups();
     }
 
-    // The low-detail distant terrain too, so far hills and mountains do not appear in the water only once their
-    // full detail has loaded.
-    CWorldScene::RenderHorizon();
+    // Once, what the reflection takes in, for the terminal.
+    static bool s_reported;
+
+    if (!s_reported) {
+        s_reported = true;
+        fprintf(stderr, "Liquid (4.3.4 water): real reflections with reflectionMode %u (3 also reflects buildings and models), %u opaque models in view\n", mode, World::s_m2Scene ? World::s_m2Scene->m_passElements[0].m_count + World::s_m2Scene->m_doodadElements.m_count : 0u);
+    }
+
+    // The opaque models: trees, characters, creatures.
+    if (World::s_m2Scene && Liquid::Cata::BeginModelReflection()) {
+        World::s_m2Scene->Draw(M2PASS_0);
+        Liquid::Cata::EndModelReflection();
+    }
 
     CWorldScene::s_reflectionPass = false;
     Liquid::Cata::EndReflection();
