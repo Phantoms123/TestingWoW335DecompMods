@@ -1,3 +1,4 @@
+#include "Engine/Source/Gx/CGxDevice/SDL/Display.h"
 #include <SDL.h>
 #include "Engine/Source/Gx/CGxDeviceD3d/CGxDeviceD3d.h"
 #include "Engine/Source/Os/Window.h"
@@ -79,7 +80,18 @@ int32_t CGxDeviceD3d::ICreateWindow(CGxFormat& format) {
     else if (format.m_maximize == 1) flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
     else if (format.m_maximize == 2) flags |= SDL_WINDOW_BORDERLESS;
     else flags |= SDL_WINDOW_RESIZABLE;
-    SDL_Window* window = SDL_CreateWindow("World of Warcraft", format.m_pos.x, format.m_pos.y,
+    // CHANGED: opens on the chosen monitor (see GxSdlDisplay). Full screen goes to the monitor the window is on,
+    // so it is centred there; a windowed position the game remembered is kept relative to that monitor.
+    const int display = GxSdlDisplay();
+    SDL_Rect bounds = {0, 0, 0, 0};
+    SDL_GetDisplayBounds(display, &bounds);
+    int x = SDL_WINDOWPOS_CENTERED_DISPLAY(display);
+    int y = SDL_WINDOWPOS_CENTERED_DISPLAY(display);
+    if (format.m_window && !format.m_maximize && (format.m_pos.x > 0 || format.m_pos.y > 0)) {
+        x = bounds.x + format.m_pos.x;
+        y = bounds.y + format.m_pos.y;
+    }
+    SDL_Window* window = SDL_CreateWindow("World of Warcraft", x, y,
         format.m_size.x ? format.m_size.x : 1024, format.m_size.y ? format.m_size.y : 768, flags);
     if (!window) {
         CGxDevice::Log("SDL_CreateWindow: %s", SDL_GetError());

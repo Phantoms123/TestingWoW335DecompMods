@@ -7,10 +7,44 @@
 #include "Engine/Source/Gx/CGxDeviceD3d/CGxDeviceD3d.h"
 #endif
 #include "Engine/Source/Os/SDL/Window.h"
+#include "Engine/Source/Gx/CGxDevice/SDL/Display.h"
 #if defined(WOWDECOMP_VULKAN)
 #include "Engine/Source/Gx/CGxDeviceVulkan/CGxDeviceVulkan.h"
 #include "Engine/Source/Gx/Gx.h"
 #endif
+
+int GxSdlDisplay() {
+    const int count = SDL_GetNumVideoDisplays();
+
+    if (count <= 1) {
+        return 0;
+    }
+
+    if (const char* requested = SDL_getenv("WOW_DISPLAY")) {
+        int index = SDL_atoi(requested);
+
+        if (index >= 0 && index < count) {
+            return index;
+        }
+    }
+
+    auto landscape = [](int index) {
+        SDL_Rect bounds;
+        return SDL_GetDisplayBounds(index, &bounds) == 0 && bounds.w >= bounds.h;
+    };
+
+    if (landscape(0)) {
+        return 0;
+    }
+
+    for (int i = 1; i < count; i++) {
+        if (landscape(i)) {
+            return i;
+        }
+    }
+
+    return 0;
+}
 
 int32_t CGxDevice::AdapterFormats(EGxApi api, TSGrowableArray<CGxFormat>& formats) {
     formats.SetCount(0);
@@ -29,7 +63,7 @@ int32_t CGxDevice::AdapterFormats(EGxApi api, TSGrowableArray<CGxFormat>& format
 int32_t CGxDevice::AdjustWindowRectToWorkArea(float aspectRatio, C2iVector* adjust, tagRECT* rect) {
     if (!adjust || !rect) return 0;
     SDL_Rect work;
-    if (SDL_GetDisplayUsableBounds(0, &work) != 0) return 0;
+    if (SDL_GetDisplayUsableBounds(GxSdlDisplay(), &work) != 0) return 0;
     int width = rect->right - rect->left;
     int height = rect->bottom - rect->top;
     const int availableWidth = work.w - adjust->x;
@@ -107,7 +141,7 @@ int32_t CGxDevice::DeviceAdapterInfer(uint16_t& deviceID) {
 
 int32_t CGxDevice::AdapterDesktopMode(CGxMonitorMode& mode) {
     SDL_DisplayMode desktop;
-    if (SDL_GetDesktopDisplayMode(0, &desktop) != 0) return 0;
+    if (SDL_GetDesktopDisplayMode(GxSdlDisplay(), &desktop) != 0) return 0;
     mode.m_size = {desktop.w, desktop.h};
     mode.m_bpp = SDL_BITSPERPIXEL(desktop.format);
     mode.m_refreshRate = desktop.refresh_rate;
@@ -116,15 +150,16 @@ int32_t CGxDevice::AdapterDesktopMode(CGxMonitorMode& mode) {
 
 int32_t CGxDevice::AdapterMonitorModes(TSGrowableArray<CGxMonitorMode>& modes) {
     modes.SetCount(0);
-    const int count = SDL_GetNumDisplayModes(0);
+    const int display = GxSdlDisplay();
+    const int count = SDL_GetNumDisplayModes(display);
     for (int i = 0; i < count; ++i) {
-        SDL_DisplayMode display;
-        if (SDL_GetDisplayMode(0, i, &display) != 0 || display.w < 640 || display.h < 480 ||
-                SDL_BITSPERPIXEL(display.format) < 16) continue;
-        auto mode = modes.New();
-        mode->m_size = {display.w, display.h};
-        mode->m_bpp = SDL_BITSPERPIXEL(display.format);
-        mode->m_refreshRate = display.refresh_rate;
+        SDL_DisplayMode mode;
+        if (SDL_GetDisplayMode(display, i, &mode) != 0 || mode.w < 640 || mode.h < 480 ||
+                SDL_BITSPERPIXEL(mode.format) < 16) continue;
+        auto entry = modes.New();
+        entry->m_size = {mode.w, mode.h};
+        entry->m_bpp = SDL_BITSPERPIXEL(mode.format);
+        entry->m_refreshRate = mode.refresh_rate;
     }
     if (modes.Count() > 1) {
         std::sort(modes.Ptr(), modes.Ptr() + modes.Count(), [](const CGxMonitorMode& a, const CGxMonitorMode& b) {
