@@ -166,6 +166,11 @@ Every changed spot in the original sources is marked `// CHANGED:`.
   `build.sh` with `SM4` defined: every pixel shader takes `SV_Position` first so registers match the vertex
   shader's); no half-texel offset.
 - Not yet: point sprites (the client is told there are none), stereo. CoAVolFog needs Direct3D 9.
+- Open (2026-10-21): with real reflections (`reflectionMode` 2 or 3) the frame rate falls to about 10 fps on
+  Direct3D 11 while the draws themselves take about 1 ms a frame (the "D3D11 stats" lines); switching to
+  `reflectionMode 3` at run time crashed once (segmentation fault) right after the first reflection. The
+  reflection's clip plane reaches only fixed-function draws on Direct3D 11 (shader draws need an oblique
+  projection instead).
 
 ### Volumetric fog and water (WoW/Source/VolFog)
 - CoAVolFog's renderers, shaders, data and `CoAVolFog.ini` as upstream; its DLL loader, call-site patches and
