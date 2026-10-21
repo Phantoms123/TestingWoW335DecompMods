@@ -1,4 +1,5 @@
 #include <chrono>
+#include <cstdlib>
 #include <cfloat>
 #include <cstdio>
 #include "CWorldSceneRender.h"
@@ -350,10 +351,15 @@ void CWorldScene::RenderReflection() {
         s_reflectionPrinted = t;
     } else if (std::chrono::duration<double>(t - s_reflectionPrinted).count() >= 5.0) {
         double frames = s_reflectionFrames ? s_reflectionFrames : 1;
-        fprintf(stderr, "Terrain stats: chunk setup %.1f ms a frame (layer textures %.1f), both passes\n", g_chunkSetupMs / frames, g_chunkTexturesMs / frames);
+        static bool s_print = getenv("WOW_STATS") && getenv("WOW_STATS")[0] == '1';
+
+        if (s_print) {
+            fprintf(stderr, "Terrain stats: chunk setup %.1f ms a frame (layer textures %.1f), both passes\n", g_chunkSetupMs / frames, g_chunkTexturesMs / frames);
+            fprintf(stderr, "Reflection stats: %.1f ms a frame (begin %.1f, terrain %.1f, buildings %.1f, models %.1f, end %.1f), %u model elements\n", (s_reflectionMs[0] + s_reflectionMs[1] + s_reflectionMs[2] + s_reflectionMs[3] + s_reflectionMs[4]) / frames, s_reflectionMs[0] / frames, s_reflectionMs[1] / frames, s_reflectionMs[2] / frames, s_reflectionMs[3] / frames, s_reflectionMs[4] / frames, World::s_m2Scene ? World::s_m2Scene->m_passElements[0].m_count + World::s_m2Scene->m_doodadElements.m_count : 0u);
+        }
+
         g_chunkSetupMs = 0.0;
         g_chunkTexturesMs = 0.0;
-        fprintf(stderr, "Reflection stats: %.1f ms a frame (begin %.1f, terrain %.1f, buildings %.1f, models %.1f, end %.1f), %u model elements\n", (s_reflectionMs[0] + s_reflectionMs[1] + s_reflectionMs[2] + s_reflectionMs[3] + s_reflectionMs[4]) / frames, s_reflectionMs[0] / frames, s_reflectionMs[1] / frames, s_reflectionMs[2] / frames, s_reflectionMs[3] / frames, s_reflectionMs[4] / frames, World::s_m2Scene ? World::s_m2Scene->m_passElements[0].m_count + World::s_m2Scene->m_doodadElements.m_count : 0u);
 
         for (double& ms : s_reflectionMs) {
             ms = 0.0;

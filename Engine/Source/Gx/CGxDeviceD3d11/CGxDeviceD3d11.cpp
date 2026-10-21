@@ -2361,9 +2361,11 @@ void CGxDeviceD3d11::ScenePresent() {
         if (!this->m_statStartNs) {
             this->m_statStartNs = presentEnd;
         } else if (presentEnd - this->m_statStartNs >= 5000000000ull) {
-            // Every 5 seconds: where the frame time goes. A large present time means waiting for the GPU (or
-            // vsync); a large draw time means the CPU side of the draws.
-            {
+            // Every 5 seconds with WOW_STATS=1 in the environment: where the frame time goes. A large present
+            // time means waiting for the GPU (or vsync); a large draw time means the CPU side of the draws.
+            static bool s_print = SDL_getenv("WOW_STATS") && SDL_getenv("WOW_STATS")[0] == '1';
+
+            if (s_print) {
                 double frames = this->m_statFrames ? this->m_statFrames : 1;
                 double seconds = (presentEnd - this->m_statStartNs) / 1e9;
                 fprintf(stderr, "D3D11 stats: %.1f fps, %.0f draws a frame, %.1f ms a frame in draws, %.1f ms in present, %.1f ms a frame in all\n", this->m_statFrames / seconds, this->m_statDraws / frames, this->m_statDrawNs / 1e6 / frames, this->m_statPresentNs / 1e6 / frames, seconds * 1000.0 / frames);
