@@ -1030,7 +1030,7 @@ float LiftedFarClipClamp(float clientFarClip, float farClipSetting, int mapId)
 
 extern "C" float __cdecl vf_far_clip_clamp(float clientFarClip, float farClipSetting, int mapId)
 {
-    if (!g_farClipLifted)
+    if (!g_farClipLifted || !VolFogFrameActive())
         return clientFarClip;
     VF_TRY
     {
@@ -1044,7 +1044,8 @@ extern "C" float __cdecl vf_far_clip_clamp(float clientFarClip, float farClipSet
 
 extern "C" void __cdecl vf_on_frame_begin()
 {
-    if (!g_engineHooksInstalled)
+    VolFogBeginFrameSwitch();
+    if (!g_engineHooksInstalled || !VolFogFrameActive())
         return;
     VF_TRY
     {
@@ -1058,6 +1059,8 @@ extern "C" void __cdecl vf_on_frame_begin()
 
 extern "C" void __cdecl vf_on_frame_end()
 {
+    if (!VolFogFrameActive())
+        return;
     if (!g_engineHooksInstalled)
         return;
     EndWaterFrameGuarded();
@@ -1074,6 +1077,8 @@ extern "C" void __cdecl vf_on_frame_end()
 
 extern "C" void __cdecl vf_on_water_pass_begin(const void* liquidRenderer)
 {
+    if (!VolFogFrameActive())
+        return;
     if (!g_waterHooksInstalled)
         return;
     VF_TRY
@@ -1088,6 +1093,8 @@ extern "C" void __cdecl vf_on_water_pass_begin(const void* liquidRenderer)
 
 extern "C" void __cdecl vf_on_water_pass_end()
 {
+    if (!VolFogFrameActive())
+        return;
     if (!g_waterHooksInstalled)
         return;
     VF_TRY
@@ -1102,6 +1109,8 @@ extern "C" void __cdecl vf_on_water_pass_end()
 
 extern "C" void __cdecl vf_on_liquid_begin()
 {
+    if (!VolFogFrameActive())
+        return;
     if (!g_engineHooksInstalled)
         return;
     VF_TRY
@@ -1116,6 +1125,8 @@ extern "C" void __cdecl vf_on_liquid_begin()
 
 extern "C" void __cdecl vf_on_liquid_end()
 {
+    if (!VolFogFrameActive())
+        return;
     if (!g_engineHooksInstalled)
         return;
     VF_TRY
@@ -1130,6 +1141,8 @@ extern "C" void __cdecl vf_on_liquid_end()
 
 extern "C" void __cdecl vf_on_transparents_begin()
 {
+    if (!VolFogFrameActive())
+        return;
     if (!g_transparentFogHooksInstalled)
         return;
     VF_TRY
@@ -1145,6 +1158,8 @@ extern "C" void __cdecl vf_on_transparents_begin()
 
 extern "C" void __cdecl vf_on_m2_batch_fog(M2BatchFogArgs* args)
 {
+    if (!VolFogFrameActive())
+        return;
     if (!g_transparentFogHooksInstalled || !g_m2BatchFogObserved)
         return;
     VF_TRY
@@ -1159,6 +1174,8 @@ extern "C" void __cdecl vf_on_m2_batch_fog(M2BatchFogArgs* args)
 
 extern "C" void __cdecl vf_on_opaque_done()
 {
+    if (!VolFogFrameActive())
+        return;
     if (!g_engineHooksInstalled)
         return;
     VF_TRY
@@ -1173,6 +1190,8 @@ extern "C" void __cdecl vf_on_opaque_done()
 
 extern "C" void __cdecl vf_on_world_done()
 {
+    if (!VolFogFrameActive())
+        return;
     if (!g_engineHooksInstalled)
         return;
     ForeverLookAtWorldDone();
@@ -1188,7 +1207,7 @@ extern "C" void __cdecl vf_on_world_done()
 
 extern "C" void __cdecl vf_on_glare_pass()
 {
-    if (g_transparentFogHooksInstalled && g_transparentFog.glareDrawn)
+    if (VolFogFrameActive() && g_transparentFogHooksInstalled && g_transparentFog.glareDrawn)
     {
         ++g_transparentFogStats.glareCallsSkipped;
         return;
@@ -1199,7 +1218,7 @@ extern "C" void __cdecl vf_on_glare_pass()
 
 extern "C" int __cdecl vf_on_water_draw_begin(void* liquidSettings)
 {
-    return g_waterHooksInstalled && TagArmedWaterDraw(liquidSettings) ? 1 : 0;
+    return VolFogFrameActive() && g_waterHooksInstalled && TagArmedWaterDraw(liquidSettings) ? 1 : 0;
 }
 
 extern "C" void __cdecl vf_on_water_draw_end(int tagged)
@@ -1216,7 +1235,7 @@ FogDevice* g_worldTextDevice = nullptr;
 extern "C" void __cdecl vf_on_world_text_begin()
 {
     g_worldTextDevice = nullptr;
-    if (!g_engineHooksInstalled)
+    if (!g_engineHooksInstalled || !VolFogFrameActive())
         return;
     VF_TRY
     {

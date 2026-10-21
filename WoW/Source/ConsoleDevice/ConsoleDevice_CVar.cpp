@@ -12,6 +12,7 @@
 #include "Engine/Source/Storm/H/storm.h"
 #include "WoW/Source/Client.h"
 #include "WoW/Source/Hardware.h"
+#include "WoW/Source/VolFog/VolFog.h"
 
 // STATIC: 0x00CABA98
 static CVar* s_cvGxStereoEnabled;
@@ -156,6 +157,23 @@ static bool CVGxTripleBufferCallback(CVar* var, const char* oldValue, const char
 
 // VERIFY: 1b35a664 auto
 // OFFSET: 0x007693B0
+// CHANGED (wowdecomp): master switch for CoAVolFog (WoW/Source/VolFog). Off stops it from the next frame; it is
+// only loaded when the device is created, so on again after starting with it off needs a restart.
+static bool CVCoaVolFogCallback(CVar* var, const char* oldValue, const char* value, void* arg) {
+    const int32_t active = SStrToInt(value) != 0;
+    VolFog_SetActive(active);
+
+    if (!VOLFOG_ENABLED) {
+        ConsoleWrite("CoAVolFog is not built into this client", DEFAULT_COLOR);
+    } else if (active && !VolFog_IsLoaded()) {
+        ConsoleWrite("CoAVolFog on after a restart (it was off, or CoAVolFog.ini is missing, when the game started)", DEFAULT_COLOR);
+    } else {
+        ConsoleWrite(active ? "CoAVolFog on" : "CoAVolFog off", DEFAULT_COLOR);
+    }
+
+    return true;
+}
+
 static bool CVGxApiCallback(CVar* var, const char* oldValue, const char* value, void* arg) {
     for (int32_t api = GxApi_OpenGl; api < GxApis_Last; api++) {
         if (GxApiSupported(static_cast<EGxApi>(api)) && !SStrCmpI(value, g_gxApiNames[api], STORM_MAX_STR)) {
@@ -554,6 +572,8 @@ void RegisterGxCVars() {
 
     s_cvGxRefresh = CVar::Register("gxRefresh", "refresh rate", 3, "75", CVGxRefreshCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     s_cvGxTripleBuffer = CVar::Register("gxTripleBuffer", "triple buffer", 3, "0", CVGxTripleBufferCallback, CATEGORY_GRAPHICS, false, nullptr, false);
+    CVar* coaVolFog = CVar::Register("coaVolFog", "CoAVolFog volumetric fog and water (0 off, 1 on)", 1, "1", CVCoaVolFogCallback, CATEGORY_GRAPHICS, false, nullptr, false);
+    VolFog_SetActive(!coaVolFog || coaVolFog->m_intValue != 0);
     s_cvGxApi = CVar::Register("gxApi", "graphics api", 3, g_gxApiNames[GxDefaultApi()], CVGxApiCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     s_cvGxVSync = CVar::Register("gxVSync", "vsync on or off", 3, "1", CVGxVSyncCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     s_cvGxAspect = CVar::Register("gxAspect", "constrain window aspect", 3, "1", CVGxAspectCallback, CATEGORY_GRAPHICS, false, nullptr, false);

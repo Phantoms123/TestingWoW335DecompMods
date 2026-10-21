@@ -35,6 +35,12 @@ extern "C" void VolFog_Startup();
 extern "C" void VolFog_Shutdown();
 // Returns the client's Direct3D 9 object wrapped so the fog sees the device it creates.
 extern "C" IDirect3D9* VolFog_CreateDirect3D9(VolFogDirect3DCreate9Fn create, unsigned int sdkVersion);
+// CHANGED (wowdecomp): the master switch, driven by the coaVolFog CVar. Off: every effect stops from the next frame
+// and the client draws as unmodified. Off when the device is created (or with CoAVolFog.ini missing): CoAVolFog is
+// not loaded at all, so turning it back on needs a restart. VolFog_IsLoaded tells which.
+extern "C" void VolFog_SetActive(int active);
+extern "C" int VolFog_IsActive();
+extern "C" int VolFog_IsLoaded();
 
 extern "C" void __cdecl vf_on_frame_begin();
 extern "C" void __cdecl vf_on_frame_end();
@@ -66,6 +72,9 @@ extern "C" int vf_on_os_event(void* sdlEvent);
 
 inline void VolFog_Startup() {}
 inline void VolFog_Shutdown() {}
+inline void VolFog_SetActive(int) {}
+inline int VolFog_IsActive() { return 0; }
+inline int VolFog_IsLoaded() { return 0; }
 inline void vf_on_frame_begin() {}
 inline void vf_on_frame_end() {}
 inline void vf_on_opaque_done() {}

@@ -12,6 +12,9 @@ struct StockFog;
 }
 
 bool InstallEngineHooks();
+// The coaVolFog switch (native_main.cpp): whether this frame runs CoAVolFog, and where a frame picks it up.
+bool VolFogFrameActive();
+void VolFogBeginFrameSwitch();
 void EnableForeverLookOnHookedClient();
 bool InstallTransparentFogHooks();
 

@@ -18,6 +18,9 @@
 namespace
 {
 bool g_started = false;
+bool g_loaded = false;
+bool g_requestedActive = true;
+bool g_frameActive = true;
 
 std::string ClientDirectory()
 {
@@ -72,9 +75,48 @@ extern "C" void VolFog_Shutdown()
     GlobalClientRippleSprites().Restore();
 }
 
+bool VolFogFrameActive()
+{
+    return g_frameActive;
+}
+
+void VolFogBeginFrameSwitch()
+{
+    // The switch takes effect between frames, so a frame never runs half its hooks.
+    g_frameActive = g_requestedActive;
+}
+
+extern "C" void VolFog_SetActive(int active)
+{
+    if (g_requestedActive != (active != 0) && g_started)
+        VF_LOG_INFO("coaVolFog %d: CoAVolFog %s", active, active ? "on" : "off; the client renders unmodified");
+    g_requestedActive = active != 0;
+}
+
+extern "C" int VolFog_IsActive()
+{
+    return g_requestedActive ? 1 : 0;
+}
+
+extern "C" int VolFog_IsLoaded()
+{
+    return g_loaded ? 1 : 0;
+}
+
 extern "C" IDirect3D9* VolFog_CreateDirect3D9(Direct3DCreate9Fn create, UINT sdkVersion)
 {
+    // CHANGED (wowdecomp): with the switch off, or CoAVolFog's files removed, the client gets the real Direct3D 9
+    // object and CoAVolFog stays unloaded.
+    if (!g_started && !g_requestedActive)
+        return create(sdkVersion);
+    if (!g_started)
+    {
+        WIN32_FILE_ATTRIBUTE_DATA ini;
+        if (!GetFileAttributesExA((ClientDirectory() + "CoAVolFog.ini").c_str(), GetFileExInfoStandard, &ini))
+            return create(sdkVersion);
+    }
     VolFog_Startup();
+    g_loaded = true;
     SetRealDirect3DCreate9(create);
     return WrappedDirect3DCreate9(sdkVersion);
 }

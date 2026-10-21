@@ -73,6 +73,11 @@ Every changed spot in the original sources is marked `// CHANGED:`.
   address reads are replaced by calls from the client's world render and reads of the client's own globals.
   `WoW/Source/VolFog/NATIVE.md` maps every upstream patch site and address to the source that replaces it.
 - Direct3D 9 backend on Windows; DXVK backend on Linux. Settings window: Ctrl+F7 in game.
+- On and off: `/console coaVolFog 0` switches all of it off from the next frame (the client then draws as
+  unmodified) and `1` back on. The setting is saved; starting with it at 0 leaves CoAVolFog unloaded, so turning
+  it on again then needs a restart. To remove it, delete `CoAVolFog.ini`, `fogdata.bin` and `waterdata.bin` next
+  to the executable: without `CoAVolFog.ini` it is not loaded. `-DWOWDECOMP_VOLFOG=OFF` builds the client
+  without it.
 - Linux: the Win32-only parts have Linux equivalents (`src/platform.h`): INI reading and writing, timers, locks.
   The settings window reads SDL input (the client's event loop offers each event to it first, `vf_on_os_event`)
   and draws with ImGui's SDL2 backend. NVAPI depth copy is skipped (it is a Windows driver DLL); fault guards run

@@ -481,6 +481,12 @@ bool OverlayTakesMessage(HWND window, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     if (g_overlay.failed || !g_overlay.device)
         return false;
+    // CHANGED (wowdecomp): switched off with the coaVolFog CVar: no window, no keys taken.
+    if (!VolFogFrameActive())
+    {
+        SetVisible(false);
+        return false;
+    }
     return KeepsButtonWithItsDown(msg, wParam, PanelTakesMessage(window, msg, wParam, lParam));
 }
 
@@ -802,6 +808,8 @@ void DrawOverlay(IDirect3DDevice9* device)
 {
     if (!device || device != g_overlay.device)
         return;
+    if (!VolFogFrameActive())
+        SetVisible(false);
     if (g_overlay.visible && !g_overlay.failed)
         DrawOverlayGuarded(device);
     if (!g_overlay.visible || g_overlay.failed)
