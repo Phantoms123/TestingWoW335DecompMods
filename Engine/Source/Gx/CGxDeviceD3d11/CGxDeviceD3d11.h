@@ -160,12 +160,23 @@ class CGxDeviceD3d11 : public CGxDevice {
     ID3D11Texture2D* m_backDepth = nullptr;
     ID3D11DepthStencilView* m_backDsv = nullptr;
     ID3D11ShaderResourceView* m_backDepthSrv = nullptr;
+    // A single-sampled copy of the back buffer, kept for the copies that read it (IResolveBack).
+    ID3D11Texture2D* m_resolveColor = nullptr;
+    ID3D11ShaderResourceView* m_resolveSrv = nullptr;
+    ID3D11SamplerState* m_stretchSampler = nullptr;
     ID3D11PixelShader* m_depthCopyPs = nullptr;
     // A depth buffer for drawing into textures without their own.
-    ID3D11Texture2D* m_rtDepth = nullptr;
+    // Depth buffers for texture targets without one, one per size (the effects switch sizes many times a frame).
+    struct RtDepth {
+        ID3D11Texture2D* m_texture = nullptr;
+        ID3D11DepthStencilView* m_dsv = nullptr;
+        uint32_t m_width = 0;
+        uint32_t m_height = 0;
+        uint32_t m_used = 0;
+    };
+    RtDepth m_rtDepths[8];
+    uint32_t m_rtDepthClock = 0;
     ID3D11DepthStencilView* m_rtDsv = nullptr;
-    uint32_t m_rtDepthWidth = 0;
-    uint32_t m_rtDepthHeight = 0;
     // DeviceSetSampledDepth: stands in for the back buffer's depth buffer.
     CGxTex* m_sampledDepth = nullptr;
     ID3D11RenderTargetView* m_curRtv = nullptr;
@@ -255,6 +266,7 @@ class CGxDeviceD3d11 : public CGxDevice {
     ID3D11RenderTargetView* ITexRtv(CGxTex* texId, uint32_t plane);
     void IStateSync();
     void IStateInvalidate();
+    ID3D11Texture2D* IResolveBack();
     void IStateSyncStates();
     void IStateSyncShaders();
     void IStateSyncTextures();

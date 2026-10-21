@@ -740,6 +740,8 @@ void CGxDeviceD3d11::IReleaseBackBuffers() {
     SafeRelease(this->m_backColor);
     SafeRelease(this->m_backDsv);
     SafeRelease(this->m_backDepthSrv);
+    SafeRelease(this->m_resolveSrv);
+    SafeRelease(this->m_resolveColor);
     SafeRelease(this->m_backDepth);
 }
 
@@ -1023,12 +1025,16 @@ void CGxDeviceD3d11::IDestroyD3d() {
     SafeRelease(this->m_ffpPs);
     SafeRelease(this->m_blitVs);
     SafeRelease(this->m_blitPs);
+    SafeRelease(this->m_stretchSampler);
     SafeRelease(this->m_depthCopyPs);
     this->m_ffpVsInfo = Shader();
-    SafeRelease(this->m_rtDsv);
-    SafeRelease(this->m_rtDepth);
-    this->m_rtDepthWidth = 0;
-    this->m_rtDepthHeight = 0;
+    for (RtDepth& rtDepth : this->m_rtDepths) {
+        SafeRelease(rtDepth.m_dsv);
+        SafeRelease(rtDepth.m_texture);
+        rtDepth = RtDepth();
+    }
+
+    this->m_rtDsv = nullptr;
     this->IReleaseBackBuffers();
     SafeRelease(this->m_swapChain);
     SafeRelease(this->m_ctx1);
@@ -1690,27 +1696,43 @@ void CGxDeviceD3d11::TexDestroy(CGxTex* texId) {
 // Render targets.
 
 void CGxDeviceD3d11::ICreateRtDepth(uint32_t width, uint32_t height) {
-    if (this->m_rtDsv && this->m_rtDepthWidth == width && this->m_rtDepthHeight == height) {
-        return;
+    width = std::max(width, 1u);
+    height = std::max(height, 1u);
+    this->m_rtDepthClock++;
+    RtDepth* oldest = &this->m_rtDepths[0];
+
+    for (RtDepth& rtDepth : this->m_rtDepths) {
+        if (rtDepth.m_dsv && rtDepth.m_width == width && rtDepth.m_height == height) {
+            rtDepth.m_used = this->m_rtDepthClock;
+            this->m_rtDsv = rtDepth.m_dsv;
+            return;
+        }
+
+        if (rtDepth.m_used < oldest->m_used) {
+            oldest = &rtDepth;
+        }
     }
 
-    SafeRelease(this->m_rtDsv);
-    SafeRelease(this->m_rtDepth);
+    // A new size: replaces the one used longest ago.
+    SafeRelease(oldest->m_dsv);
+    SafeRelease(oldest->m_texture);
     D3D11_TEXTURE2D_DESC desc = {};
-    desc.Width = std::max(width, 1u);
-    desc.Height = std::max(height, 1u);
+    desc.Width = width;
+    desc.Height = height;
     desc.MipLevels = 1;
     desc.ArraySize = 1;
     desc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
     desc.SampleDesc.Count = 1;
     desc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
 
-    if (SUCCEEDED(this->m_device->CreateTexture2D(&desc, nullptr, &this->m_rtDepth))) {
-        this->m_device->CreateDepthStencilView(this->m_rtDepth, nullptr, &this->m_rtDsv);
+    if (SUCCEEDED(this->m_device->CreateTexture2D(&desc, nullptr, &oldest->m_texture))) {
+        this->m_device->CreateDepthStencilView(oldest->m_texture, nullptr, &oldest->m_dsv);
     }
 
-    this->m_rtDepthWidth = width;
-    this->m_rtDepthHeight = height;
+    oldest->m_width = width;
+    oldest->m_height = height;
+    oldest->m_used = this->m_rtDepthClock;
+    this->m_rtDsv = oldest->m_dsv;
 }
 
 void CGxDeviceD3d11::IBindTargets() {
@@ -2025,21 +2047,11 @@ int32_t CGxDeviceD3d11::TexCopy(CGxTex* dest, const C2iVector& destPos, const C2
         return 0;
     }
 
-    ID3D11Resource* source = this->m_backColor;
-    ID3D11Texture2D* resolved = nullptr;
+    // Multisampled: resolved first (into the kept copy), the rectangle copied from it.
+    ID3D11Resource* source = this->m_samples > 1 ? this->IResolveBack() : this->m_backColor;
 
-    if (this->m_samples > 1) {
-        D3D11_TEXTURE2D_DESC desc;
-        this->m_backColor->GetDesc(&desc);
-        desc.SampleDesc.Count = 1;
-        desc.BindFlags = 0;
-
-        if (FAILED(this->m_device->CreateTexture2D(&desc, nullptr, &resolved))) {
-            return 0;
-        }
-
-        this->m_ctx->ResolveSubresource(resolved, 0, this->m_backColor, 0, desc.Format);
-        source = resolved;
+    if (!source) {
+        return 0;
     }
 
     if (tex->m_dxgiFormat == DXGI_FORMAT_B8G8R8A8_UNORM) {
@@ -2047,8 +2059,42 @@ int32_t CGxDeviceD3d11::TexCopy(CGxTex* dest, const C2iVector& destPos, const C2
         this->m_ctx->CopySubresourceRegion(tex->m_texture, D3D11CalcSubresource(level, plane, tex->m_levels), destPos.x, destPos.y, 0, source, 0, &box);
     }
 
-    SafeRelease(resolved);
     return 1;
+}
+
+// The back buffer, resolved or copied into a single-sampled texture made once (not per copy: making a full-screen
+// texture for every copy is slow).
+ID3D11Texture2D* CGxDeviceD3d11::IResolveBack() {
+    if (!this->m_backColor) {
+        return nullptr;
+    }
+
+    D3D11_TEXTURE2D_DESC desc;
+    this->m_backColor->GetDesc(&desc);
+
+    if (!this->m_resolveColor) {
+        desc.SampleDesc.Count = 1;
+        desc.SampleDesc.Quality = 0;
+        desc.Usage = D3D11_USAGE_DEFAULT;
+        desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+        desc.CPUAccessFlags = 0;
+        desc.MiscFlags = 0;
+
+        if (FAILED(this->m_device->CreateTexture2D(&desc, nullptr, &this->m_resolveColor))) {
+            this->m_resolveColor = nullptr;
+            return nullptr;
+        }
+
+        this->m_device->CreateShaderResourceView(this->m_resolveColor, nullptr, &this->m_resolveSrv);
+    }
+
+    if (this->m_samples > 1) {
+        this->m_ctx->ResolveSubresource(this->m_resolveColor, 0, this->m_backColor, 0, desc.Format);
+    } else {
+        this->m_ctx->CopyResource(this->m_resolveColor, this->m_backColor);
+    }
+
+    return this->m_resolveColor;
 }
 
 // Draws the current colour target, scaled, into dest (the Direct3D 9 device's filtered StretchRect).
@@ -2069,24 +2115,12 @@ int32_t CGxDeviceD3d11::TexStretch(CGxTex* dest, const CiRect* destRect, const C
 
     D3D11_TEXTURE2D_DESC desc;
     this->m_backColor->GetDesc(&desc);
-    desc.SampleDesc.Count = 1;
-    desc.SampleDesc.Quality = 0;
-    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-    desc.MiscFlags = 0;
-    ID3D11Texture2D* copy = nullptr;
-    ID3D11ShaderResourceView* copyView = nullptr;
 
-    if (FAILED(this->m_device->CreateTexture2D(&desc, nullptr, &copy))) {
+    if (!this->IResolveBack()) {
         return 0;
     }
 
-    if (this->m_samples > 1) {
-        this->m_ctx->ResolveSubresource(copy, 0, this->m_backColor, 0, desc.Format);
-    } else {
-        this->m_ctx->CopyResource(copy, this->m_backColor);
-    }
-
-    this->m_device->CreateShaderResourceView(copy, nullptr, &copyView);
+    ID3D11ShaderResourceView* copyView = this->m_resolveSrv;
     ID3D11RenderTargetView* rtv = this->ITexRtv(dest, face);
 
     if (copyView && rtv) {
@@ -2114,12 +2148,15 @@ int32_t CGxDeviceD3d11::TexStretch(CGxTex* dest, const CiRect* destRect, const C
         viewport.MinDepth = 0.0f;
         viewport.MaxDepth = 1.0f;
 
-        D3D11_SAMPLER_DESC samplerDesc = {};
-        samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-        samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
-        samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
-        ID3D11SamplerState* sampler = nullptr;
-        this->m_device->CreateSamplerState(&samplerDesc, &sampler);
+        if (!this->m_stretchSampler) {
+            D3D11_SAMPLER_DESC samplerDesc = {};
+            samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+            samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+            samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
+            this->m_device->CreateSamplerState(&samplerDesc, &this->m_stretchSampler);
+        }
+
+        ID3D11SamplerState* sampler = this->m_stretchSampler;
 
         this->m_ctx->OMSetRenderTargets(1, &rtv, nullptr);
         this->m_ctx->RSSetViewports(1, &viewport);
@@ -2134,15 +2171,13 @@ int32_t CGxDeviceD3d11::TexStretch(CGxTex* dest, const CiRect* destRect, const C
         this->m_ctx->PSSetShaderResources(0, 1, &copyView);
         this->m_ctx->PSSetSamplers(0, 1, &sampler);
         this->m_ctx->Draw(3, 0);
-
-        SafeRelease(sampler);
+        ID3D11ShaderResourceView* none = nullptr;
+        this->m_ctx->PSSetShaderResources(0, 1, &none);
 
         this->IStateInvalidate();
         this->IBindTargets();
     }
 
-    SafeRelease(copyView);
-    SafeRelease(copy);
     return 1;
 }
 
@@ -2159,19 +2194,10 @@ void CGxDeviceD3d11::DeviceReadPixels(CiRect& rect, TSGrowableArray<CImVector>& 
 
     D3D11_TEXTURE2D_DESC desc;
     this->m_backColor->GetDesc(&desc);
-    ID3D11Texture2D* resolved = nullptr;
-    ID3D11Resource* source = this->m_backColor;
+    ID3D11Resource* source = desc.SampleDesc.Count > 1 ? this->IResolveBack() : this->m_backColor;
 
-    if (desc.SampleDesc.Count > 1) {
-        desc.SampleDesc.Count = 1;
-        desc.BindFlags = 0;
-
-        if (FAILED(this->m_device->CreateTexture2D(&desc, nullptr, &resolved))) {
-            return;
-        }
-
-        this->m_ctx->ResolveSubresource(resolved, 0, this->m_backColor, 0, desc.Format);
-        source = resolved;
+    if (!source) {
+        return;
     }
 
     D3D11_TEXTURE2D_DESC stagingDesc = desc;
@@ -2199,8 +2225,6 @@ void CGxDeviceD3d11::DeviceReadPixels(CiRect& rect, TSGrowableArray<CImVector>& 
 
         staging->Release();
     }
-
-    SafeRelease(resolved);
 }
 
 void CGxDeviceD3d11::DeviceReadDepths(CiRect& rect, TSGrowableArray<float>& depths) {
