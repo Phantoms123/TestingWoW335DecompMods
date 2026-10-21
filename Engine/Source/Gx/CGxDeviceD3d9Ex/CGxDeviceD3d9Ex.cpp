@@ -3527,7 +3527,10 @@ void CGxDeviceD3d9Ex::DeviceSetRenderTarget(EGxBuffer buffer, CGxTex* texture, u
         colorSurface = static_cast<LPDIRECT3DSURFACE9>(this->m_textureTarget[GxBuffers_Color].m_apiSpecific);
 
         if (!this->m_textureTarget[GxBuffers_Depth].m_apiSpecific) {
-            this->ICreateDepthStencilSurface(texture->m_width, texture->m_height);
+            // CHANGED: sized from the colour target; the original used the texture passed in, which is null
+            // when a depth texture target is being removed while a colour texture stays.
+            CGxTex* color = this->m_textureTarget[GxBuffers_Color].m_texture;
+            this->ICreateDepthStencilSurface(color->m_width, color->m_height);
 
             if (this->m_defDepthStencilSurface) {
                 depthSurface = this->m_defDepthStencilSurface;
