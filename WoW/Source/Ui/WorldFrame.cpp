@@ -33,6 +33,7 @@
 #include "Engine/Source/ShaderEffect/DepthCache.h"
 #include "Engine/Source/ShaderEffect/SunShafts.h"
 #include "WoW/Source/LiquidSystem/CataWater.h"
+#include "Engine/Source/ShaderEffect/PostEffects.h"
 #include "WoW/Common/TextureCache.h"
 #include "WoW/Source/Client.h"
 #include "WoW/Source/DB/DBClient/DBClient.h"
@@ -1683,6 +1684,8 @@ void CGWorldFrame::OnWorldRender() {
     SunShafts::BeginFrame();
     // CHANGED: the 4.3.4 water reads the scene depth too.
     Liquid::Cata::BeginFrame();
+    // CHANGED: the Advanced Effects (ambient occlusion and haze read the scene depth too).
+    PostEffects::BeginFrame();
     DepthCache::BeginFrame();
 
     CRect fullViewport = { 0.0f, 0.0f, 1.0f, 1.0f };
@@ -1770,6 +1773,8 @@ void CGWorldFrame::OnWorldRender() {
     // CHANGED: the 4.3.4 water turns the scene depth into distances with the camera's clip planes.
     if (CGCamera* camera = CGWorldFrame::GetActiveCamera()) {
         Liquid::Cata::SetView(camera->m_nearZ, camera->m_farZ, CWorld::s_unk_ADEEE4);
+        // CHANGED: ambient occlusion and aerial haze over the opaque world, before the liquids.
+        PostEffects::RenderOpaque(*World::GetCamPos(), DayNight::GetInfo()->m_fog.m_color, camera->m_nearZ, camera->m_farZ, CWorld::s_unk_ADEEE4);
     }
 
     // CHANGED: 4.3.4's water ripples step before the liquids draw.
@@ -1826,7 +1831,10 @@ void CGWorldFrame::OnWorldRender() {
     GxXformSetViewport(minX, maxX, minY, maxY, minZ, maxZ);
     // CHANGED: CoAVolFog draws the fog over the finished world, before the screen effects.
     vf_on_world_done();
+    // CHANGED: bloom and tone over the finished world, then the full screen effects, then anti-aliasing.
+    PostEffects::RenderBloom();
     FFX::Finish();
+    PostEffects::RenderAntiAliasing();
     CVehiclePassenger_C::PostRenderUpdateAll();
 }
 

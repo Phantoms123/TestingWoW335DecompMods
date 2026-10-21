@@ -6,6 +6,8 @@
 #include <cstring>
 #include <vector>
 #include "Engine/Source/Base/Handle.h"
+#include "Engine/Source/BlizzardCore/SFile2-Core.h"
+#include "Engine/Source/BlizzardCore/SFile2-IO.h"
 #include "Engine/Source/Gx/CGxDevice/CGxDevice.h"
 #include "Engine/Source/Gx/CGxDevice/CGxShader.h"
 #include "Engine/Source/Gx/CGxDevice/ShaderCompat.h"
@@ -1306,5 +1308,175 @@ bool Liquid::Cata::RenderWater(IEnvironment* environment, IGeomFactory* geomFact
 
     device->RsPop();
     LogOnce(7, "drawing");
+    return true;
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Magma and slime (and the other material 2 liquids), as 4.3.4 draws them with its liquid detail on: the
+// ProcMagma shaders blend three scrolling, turning layers (Tex1-3 of LiquidType.dbc) over a base colour (its
+// int 2), picked by a 3D noise volume (XTextures\FX\noise.blob, 128 x 128 x 16) that a slow wave slides through.
+
+static CGxShader* s_magmaVertexShader;
+static CGxShader* s_magmaPixelShader;
+static CTexture* s_noiseTex;
+static bool s_magmaTried;
+static bool s_magmaReady;
+
+static const uint32_t NOISE_SIZE = 128;
+static const uint32_t NOISE_DEPTH = 16;
+
+static bool LoadNoiseVolume() {
+    SFileImpl* file = nullptr;
+
+    if (!SFileOpenFile("XTextures\\FX\\noise.blob", &file) || !file) {
+        LogOnce(14, "magma off, XTextures\\FX\\noise.blob is missing (is the new patch-C.MPQ in Data?)");
+        return false;
+    }
+
+    std::vector<uint8_t> data(NOISE_SIZE * NOISE_SIZE * NOISE_DEPTH * 4);
+    uint32_t read = 0;
+    bool ok = SFileGetFileSize(file, nullptr) == data.size() && SFileReadFile(file, data.data(), static_cast<uint32_t>(data.size()), &read, nullptr, 0) && read == data.size();
+    SFileCloseFile(file);
+
+    if (!ok) {
+        LogOnce(15, "magma off, XTextures\\FX\\noise.blob is not a 128 x 128 x 16 volume");
+        return false;
+    }
+
+    CGxTexFlags flags(GxTex_Linear, 1, 1, 0, 0, 0);
+    s_noiseTex = TextureCreate(GxTex_2d, NOISE_SIZE, NOISE_SIZE, 0, GxTex_Argb8888, GxTex_Argb8888, flags, nullptr, GxTexNullUserFunc, "proceduralNoiseVolTex", 0);
+    CGxTex* gxTex = GxTexOf(s_noiseTex);
+
+    if (!gxTex || !g_theGxDevicePtr->DeviceTexSetVolume(gxTex, NOISE_SIZE, NOISE_SIZE, NOISE_DEPTH, data.data())) {
+        LogOnce(16, "magma off, the device cannot make the noise volume texture");
+        ReleaseTexture(s_noiseTex);
+        return false;
+    }
+
+    return true;
+}
+
+static bool MagmaReady() {
+    if (s_magmaTried) {
+        return s_magmaReady;
+    }
+
+    s_magmaTried = true;
+    CGxDevice* device = g_theGxDevicePtr;
+    device->ShaderCreate(&s_magmaVertexShader, GxSh_Vertex, SHADER_COMPAT_VERTEX_PATH, "ProcMagma", 1);
+    device->ShaderCreate(&s_magmaPixelShader, GxSh_Pixel, SHADER_COMPAT_PIXEL_PATH, "ProcMagma", 1);
+
+    if (!Valid(s_magmaVertexShader) || !Valid(s_magmaPixelShader)) {
+        LogOnce(17, "magma off, Shaders\\Cata\\...\\ProcMagma.bls did not load (is the new patch-C.MPQ in Data?)");
+    } else if (LoadNoiseVolume()) {
+        s_magmaReady = true;
+        LogOnce(18, "magma and slime on");
+    }
+
+    if (!s_magmaReady) {
+        ReleaseShader(s_magmaVertexShader);
+        ReleaseShader(s_magmaPixelShader);
+    }
+
+    return s_magmaReady;
+}
+
+static C44Matrix TurnScaleScroll(float angle, float scale, uint32_t timeMs, float speed) {
+    C44Matrix matrix = C44Matrix::RotationAroundZ(angle);
+    matrix.Scale(scale);
+    return matrix * ScrollMatrix(timeMs, speed, 0.0f);
+}
+
+bool Liquid::Cata::RenderMagma(IEnvironment* environment, IGeomFactory* geomFactory, const C3Vector& cameraPos, const C44Matrix* transform, const CAaSphere* bounds, CMaterialSettings* settings) {
+    if (s_detail < 2 || !MagmaReady()) {
+        return false;
+    }
+
+    CGxTex* layers[3] = { settings->GetTexture(1, 0), settings->GetTexture(2, 0), settings->GetTexture(3, 0) };
+    CGxTex* noise = GxTexOf(s_noiseTex);
+
+    // Liquid types without the 4.3.4 layers (an older LiquidType.dbc) draw the 3.3.5 way.
+    if (!layers[0] || !layers[1] || !layers[2] || !noise) {
+        LogOnce(19, "a magma type has no 4.3.4 layers; is patch-C.MPQ's LiquidType.dbc loaded?");
+        return false;
+    }
+
+    float savedVs[VS_REGISTERS * 4];
+    float savedPs[PS_REGISTERS * 4];
+    memcpy(savedVs, CGxDevice::s_shadowConstants[1].constants, sizeof(savedVs));
+    memcpy(savedPs, CGxDevice::s_shadowConstants[0].constants, sizeof(savedPs));
+
+    CGxDevice* device = g_theGxDevicePtr;
+    device->RsPush();
+    GxRsSet(GxRs_BlendingMode, GxBlend_Opaque);
+    GxRsSet(GxRs_Fog, 1);
+    GxRsSet(GxRs_DepthWrite, 1);
+    GxRsSet(GxRs_Culling, 0);
+
+    memset(s_vs, 0, sizeof(s_vs));
+    memset(s_ps, 0, sizeof(s_ps));
+
+    CM2Lighting lighting(*bounds);
+    environment->SelectLights(&lighting);
+    SetLighting(lighting);
+
+    C44Matrix identity;
+    bool unchanged = geomFactory->SetTransform(const_cast<C44Matrix*>(transform));
+    SetTransforms(cameraPos, unchanged ? identity : *transform);
+
+    float coordScale = Liquid::WorldCoordScale();
+    uint32_t timeMs = OsGetAsyncTimeMs();
+    const float toRadians = 0.017453292f;
+    float speed = settings->GetFloat(11);
+
+    // The slow wave that slides the noise lookup (texture coordinate 2's z).
+    C44Matrix wave;
+    wave.Scale(0.05f);
+    SetVs(26, wave * ScrollMatrix(timeMs, speed, 0.0f));
+
+    // Two noise lookups, turned by float 3 (degrees), at two sizes of float 2.
+    float angle = settings->GetFloat(3) * toRadians;
+    SetVs(30, TurnScaleScroll(angle, settings->GetFloat(2) * coordScale * 0.617f, timeMs, speed * 0.5f));
+    SetVs(34, TurnScaleScroll(angle, settings->GetFloat(2) * coordScale * 0.474f, timeMs, speed * 0.5f));
+
+    // The three layers: turned by floats 7-9, scaled by floats 4-6.
+    SetVs(38, TurnScaleScroll(settings->GetFloat(7) * toRadians, settings->GetFloat(4), timeMs, speed));
+    SetVs(42, TurnScaleScroll(settings->GetFloat(8) * toRadians, settings->GetFloat(5), timeMs, speed));
+    SetVs(46, TurnScaleScroll(settings->GetFloat(9) * toRadians, settings->GetFloat(6), timeMs, speed));
+
+    float phase = static_cast<float>(timeMs % 600000) * 1.6666667e-6f;
+    SetVs(50, settings->GetFloat(10), 0.0f, 0.0f, phase);
+
+    // The base colour (int 2, 0xRRGGBB) and the noise volume's depth.
+    uint32_t color = static_cast<uint32_t>(settings->GetInt(2));
+    SetPs(17, ((color >> 16) & 0xFF) / 255.0f, ((color >> 8) & 0xFF) / 255.0f, (color & 0xFF) / 255.0f, phase);
+
+    device->RsSet(GxRs_Texture0, noise);
+    device->RsSet(GxRs_Texture1, layers[0]);
+    device->RsSet(GxRs_Texture2, layers[1]);
+    device->RsSet(GxRs_Texture3, layers[2]);
+
+    device->ShaderConstantsSet(GxSh_Vertex, 0, s_vs, VS_REGISTERS);
+    device->ShaderConstantsSet(GxSh_Pixel, 0, s_ps, PS_REGISTERS);
+    device->RsSet(GxRs_VertexShader, s_magmaVertexShader);
+    device->RsSet(GxRs_PixelShader, s_magmaPixelShader);
+
+    CGxBuf* vertexBuf = nullptr;
+    CGxBuf* indexBuf = nullptr;
+    CGxBatch batch;
+    batch.m_primType = GxPrims_Last;
+    batch.m_start = 0;
+    batch.m_count = 0;
+    batch.m_minIndex = 0;
+    batch.m_maxIndex = 0;
+    geomFactory->GetBuffers(GxVBF_PCT, &vertexBuf, &indexBuf, &batch);
+    GxPrimVertexPtr(vertexBuf, GxVBF_PCT);
+    device->PrimIndexPtr(indexBuf);
+    device->Draw(&batch, 1);
+
+    device->RsPop();
+    device->ShaderConstantsSet(GxSh_Vertex, 0, savedVs, VS_REGISTERS);
+    device->ShaderConstantsSet(GxSh_Pixel, 0, savedPs, PS_REGISTERS);
+    LogOnce(20, "drawing magma");
     return true;
 }

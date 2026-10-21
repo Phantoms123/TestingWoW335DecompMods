@@ -573,18 +573,24 @@ void CDetailDoodad::UpdatePools() {
     s_vertexBufferSize = sizeof(CGxVertexPNCT) * vertexItems;
     s_indexBufferSize = sizeof(uint16_t) * indexItems;
 
-    CDetailDoodad::s_gxVertexPool = g_theGxDevicePtr->PoolCreate(GxPoolTarget_Vertex, GxPoolUsage_Dynamic, 128 * sizeof(CGxVertexPNCT) * vertexItems, GxPoolHintBit_Unk3, "CDetailDoodad_vtx");
-    CDetailDoodad::s_gxIndexPool = g_theGxDevicePtr->PoolCreate(GxPoolTarget_Index, GxPoolUsage_Dynamic, 128 * sizeof(uint16_t) * indexItems, GxPoolHintBit_Unk0, "CDetailDoodad_idx");
+    // CHANGED: one buffer pair per map chunk in reach, so ground clutter can reach 260 yards (the original kept
+    // 128 pairs, enough for its 140).
+    uint32_t chunksAcross = static_cast<uint32_t>(CWorld::detailDoodadDist * 2.0f / 33.333332f) + 3;
+    uint32_t pairs = chunksAcross * chunksAcross;
+    pairs = pairs < 128 ? 128 : (pairs > 1024 ? 1024 : pairs);
 
-    CDetailDoodad::s_freeGxBufs.Reserve(256, 0);
+    CDetailDoodad::s_gxVertexPool = g_theGxDevicePtr->PoolCreate(GxPoolTarget_Vertex, GxPoolUsage_Dynamic, pairs * sizeof(CGxVertexPNCT) * vertexItems, GxPoolHintBit_Unk3, "CDetailDoodad_vtx");
+    CDetailDoodad::s_gxIndexPool = g_theGxDevicePtr->PoolCreate(GxPoolTarget_Index, GxPoolUsage_Dynamic, pairs * sizeof(uint16_t) * indexItems, GxPoolHintBit_Unk0, "CDetailDoodad_idx");
 
-    for (uint32_t i = 0; i < 256; i += 2) {
+    CDetailDoodad::s_freeGxBufs.Reserve(pairs * 2, 0);
+
+    for (uint32_t i = 0; i < pairs * 2; i += 2) {
         *CDetailDoodad::s_freeGxBufs.New() = g_theGxDevicePtr->BufCreate(CDetailDoodad::s_gxVertexPool, sizeof(CGxVertexPNCT), CDetailDoodad::s_vtxBufItems, sizeof(CGxVertexPNCT) * CDetailDoodad::s_vtxBufItems * (i >> 1));
         *CDetailDoodad::s_freeGxBufs.New() = g_theGxDevicePtr->BufCreate(CDetailDoodad::s_gxIndexPool, sizeof(uint16_t), CDetailDoodad::s_idxBufItems, sizeof(uint16_t) * CDetailDoodad::s_idxBufItems * (i >> 1));
         unk_D1C4E8 += 2;
     }
 
-    unk_D1C4DC = 256;
+    unk_D1C4DC = pairs * 2;
     CDetailDoodad::s_bPoolsDirty = 0;
 }
 

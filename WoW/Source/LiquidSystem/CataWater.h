@@ -58,6 +58,9 @@ namespace Liquid {
         // Draws one water surface the 4.3.4 way. False (nothing drawn) when that is off or unavailable, so the
         // caller draws its own water.
         bool RenderWater(IEnvironment* environment, IGeomFactory* geomFactory, const C3Vector& cameraPos, const C44Matrix* transform, const CAaSphere* bounds, CMaterialSettings* settings);
+        // Draws one magma or slime surface with 4.3.4's ProcMagma (with the 4.3.4 water on); false when it is
+        // off or unavailable, so the caller draws its own.
+        bool RenderMagma(IEnvironment* environment, IGeomFactory* geomFactory, const C3Vector& cameraPos, const C44Matrix* transform, const CAaSphere* bounds, CMaterialSettings* settings);
     }
 }
 

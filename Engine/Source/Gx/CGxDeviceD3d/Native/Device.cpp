@@ -3214,6 +3214,53 @@ void CGxDeviceD3d::DeviceSetSampledDepth(CGxTex* texture) {
 static const D3DFORMAT s_reszFormat = static_cast<D3DFORMAT>(MAKEFOURCC('R', 'E', 'S', 'Z'));
 static const DWORD s_reszCopyCode = 0x7FA05000;
 
+// CHANGED: not in the original client. The texture keeps its CGxTex (binding, filtering, destruction) but its
+// Direct3D texture becomes a managed-pool volume texture; it has no texel callback, so nothing uploads over it.
+int32_t CGxDeviceD3d::DeviceTexSetVolume(CGxTex* texture, uint32_t width, uint32_t height, uint32_t depth, const void* argb) {
+    if (!this->m_context || !texture || !argb || !width || !height || !depth) {
+        return 0;
+    }
+
+    D3DCAPS9 caps;
+
+    if (FAILED(this->m_d3dDevice->GetDeviceCaps(&caps)) || !(caps.TextureCaps & D3DPTEXTURECAPS_VOLUMEMAP)) {
+        return 0;
+    }
+
+    IDirect3DVolumeTexture9* volume = nullptr;
+
+    if (FAILED(this->m_d3dDevice->CreateVolumeTexture(width, height, depth, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &volume, nullptr))) {
+        return 0;
+    }
+
+    D3DLOCKED_BOX box;
+
+    if (FAILED(volume->LockBox(0, &box, nullptr, 0))) {
+        volume->Release();
+        return 0;
+    }
+
+    const uint8_t* source = static_cast<const uint8_t*>(argb);
+
+    for (uint32_t z = 0; z < depth; z++) {
+        for (uint32_t y = 0; y < height; y++) {
+            uint8_t* row = static_cast<uint8_t*>(box.pBits) + z * box.SlicePitch + y * box.RowPitch;
+            memcpy(row, source + (static_cast<size_t>(z) * height + y) * width * 4, width * 4);
+        }
+    }
+
+    volume->UnlockBox(0);
+
+    if (!texture->m_needsCreation && texture->m_apiSpecificData) {
+        static_cast<IDirect3DBaseTexture9*>(texture->m_apiSpecificData)->Release();
+    }
+
+    texture->m_apiSpecificData = volume;
+    texture->m_needsCreation = 0;
+    texture->m_needsUpdate = 0;
+    return 1;
+}
+
 int32_t CGxDeviceD3d::DeviceCanCopySampledDepth() {
     if (!this->m_d3d || !this->m_context) {
         return 0;

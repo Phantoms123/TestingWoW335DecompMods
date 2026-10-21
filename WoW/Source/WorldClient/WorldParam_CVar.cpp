@@ -14,6 +14,7 @@
 #include "WoW/Source/WorldClient/Types.h"
 #include "WoW/Source/WorldClient/World.h"
 #include "Engine/Source/ConsoleBase/ConsoleVar.h"
+#include "Engine/Source/ShaderEffect/PostEffects.h"
 #include "Engine/Source/ConsoleBase/IConsole.h"
 #include "Engine/Source/Storm/H/storm.h"
 #include "WoW/Source/ConsoleDevice/ConsoleDevice.h"
@@ -254,8 +255,13 @@ bool CWorldParam::HorizonNearClipScaleCallback(CVar* var, const char* oldValue, 
 bool CWorldParam::ParticleDensityCallback(CVar* var, const char* oldValue, const char* value, void* arg) {
     float density = SStrToFloat(value);
 
-    if (density < 0.1f || density > 1.0f) {
-        ConsoleWrite("Value must be between 0.1 and 1.0.", DEFAULT_COLOR);
+    // CHANGED: also takes the percent 4.3.4's video options write (10-100).
+    if (density > 1.0f) {
+        density *= 0.01f;
+    }
+
+    if (density < 0.1f - 0.0001f || density > 1.0f + 0.0001f) {
+        ConsoleWrite("Value must be between 0.1 and 1.0 (or 10 and 100).", DEFAULT_COLOR);
 
         return false;
     }
@@ -379,9 +385,10 @@ bool CWorldParam::GroundEffectDensityCallback(CVar* var, const char* oldValue, c
 bool CWorldParam::GroundEffectDistCallback(CVar* var, const char* oldValue, const char* value, void* arg) {
     float dist = SStrToFloat(value);
 
-    if (dist < 0.0f || dist > 140.0f) {
+    // CHANGED: up to 260 yards, as 4.3.4's video options allow (was 140).
+    if (dist < 0.0f || dist > 260.0f) {
         char buffer[256];
-        sprintf(buffer, "Ground effect distance must be in range %0f to %0f.", 0.0, 140.0);
+        sprintf(buffer, "Ground effect distance must be in range %0f to %0f.", 0.0, 260.0);
         ConsoleWriteA(buffer, DEFAULT_COLOR);
 
         return false;
@@ -436,6 +443,11 @@ bool CWorldParam::FarClipOverrideCallback(CVar* var, const char* oldValue, const
 // OFFSET: 0x0078DC60
 bool CWorldParam::EnvironmentDetailCallback(CVar* var, const char* oldValue, const char* value, void* arg) {
     float detail = SStrToFloat(value);
+
+    // CHANGED: also takes the percent 4.3.4's video options write (50-150).
+    if (detail > 1.5f) {
+        detail *= 0.01f;
+    }
 
     if (detail < 0.5f) {
         detail = 0.5f;
@@ -668,6 +680,89 @@ static bool ReflectionDownscaleCallback(CVar* var, const char* oldValue, const c
     return true;
 }
 
+// CHANGED: the Advanced Effects settings (see Engine/Source/ShaderEffect/PostEffects.h), with Waystone's names.
+static bool PostToggleCallback(CVar* var, const char* oldValue, const char* value, void* arg) {
+    bool enable = SStrToInt(value) != 0;
+
+    switch (reinterpret_cast<uintptr_t>(arg)) {
+        case 0:
+            PostEffects::SetAmbientOcclusion(enable);
+            break;
+
+        case 1:
+            PostEffects::SetBloom(enable);
+            break;
+
+        case 2:
+            PostEffects::SetAntiAliasing(enable);
+            break;
+
+        case 3:
+            PostEffects::SetAerialFog(enable);
+            break;
+    }
+
+    return true;
+}
+
+static bool PostParamCallback(CVar* var, const char* oldValue, const char* value, void* arg) {
+    PostEffects::SetParam(static_cast<PostEffects::EParam>(reinterpret_cast<uintptr_t>(arg)), SStrToFloat(value));
+    return true;
+}
+
+static void RegisterPostEffects() {
+    static const struct {
+        const char* name;
+        const char* help;
+        uintptr_t which;
+    } toggles[] = {
+        { "ambientOcclusion", "Screen space ambient occlusion (0 off, 1 on)", 0 },
+        { "postBloom", "Bloom and filmic tone mapping (0 off, 1 on)", 1 },
+        { "postAA", "FXAA edge anti-aliasing with contrast adaptive sharpening (0 off, 1 on)", 2 },
+        { "aerialFog", "Height based distance haze (0 off, 1 on)", 3 },
+    };
+
+    for (const auto& toggle : toggles) {
+        void* arg = reinterpret_cast<void*>(toggle.which);
+        CVar* var = CVar::Register(toggle.name, toggle.help, 1, "0", PostToggleCallback, CATEGORY_GRAPHICS, false, arg, false);
+
+        if (var) {
+            PostToggleCallback(var, nullptr, var->m_stringValue.m_str, arg);
+        }
+    }
+
+    static const struct {
+        const char* name;
+        const char* help;
+        const char* value;
+        PostEffects::EParam param;
+    } params[] = {
+        { "aoRadius", "Ambient occlusion radius in yards", "4.0", PostEffects::Param_AoRadius },
+        { "aoStrength", "Ambient occlusion strength", "1.8", PostEffects::Param_AoStrength },
+        { "aoDebug", "Show the ambient occlusion buffer", "0", PostEffects::Param_AoDebug },
+        { "bloomIntensity", "Bloom intensity", "0.45", PostEffects::Param_BloomIntensity },
+        { "bloomThreshold", "Bloom brightness threshold", "0.6", PostEffects::Param_BloomThreshold },
+        { "toneMapping", "Highlight roll-off amount (0-1)", "1.0", PostEffects::Param_ToneMapping },
+        { "toneExposure", "Tone mapping exposure", "1.0", PostEffects::Param_ToneExposure },
+        { "colorSaturation", "Color saturation", "1.05", PostEffects::Param_ColorSaturation },
+        { "colorContrast", "Contrast around mid grey (1 = unchanged)", "1.0", PostEffects::Param_ColorContrast },
+        { "sharpen", "Contrast adaptive sharpening amount (0 off, up to 1)", "0.4", PostEffects::Param_Sharpen },
+        { "aerialFogDensity", "Distance haze density", "0.0005", PostEffects::Param_AerialFogDensity },
+        { "aerialFogFalloff", "Distance haze height falloff (1/yards)", "0.0067", PostEffects::Param_AerialFogFalloff },
+        { "aerialFogStart", "Distance haze start distance in yards", "80", PostEffects::Param_AerialFogStart },
+        { "aerialFogMax", "Distance haze maximum opacity", "0.7", PostEffects::Param_AerialFogMax },
+    };
+
+    for (const auto& param : params) {
+        void* arg = reinterpret_cast<void*>(static_cast<uintptr_t>(param.param));
+        CVar* var = CVar::Register(param.name, param.help, 1, param.value, PostParamCallback, CATEGORY_GRAPHICS, false, arg, false);
+
+        if (var) {
+            PostParamCallback(var, nullptr, var->m_stringValue.m_str, arg);
+        }
+    }
+}
+
 static bool SunShaftsCallback(CVar* var, const char* oldValue, const char* value, void* arg) {
     int32_t mode = SStrToInt(value);
     SunShafts::SetMode(mode > 0 ? static_cast<uint32_t>(mode) : 0);
@@ -705,6 +800,7 @@ void CWorldParam::Initialize() {
     Liquid::Cata::SetReflectionMode(reflectionMode ? static_cast<uint32_t>(reflectionMode->m_intValue) : 0);
     CVar* reflectionDownscale = CVar::Register("reflectionDownscale", "Water reflection texture downscale (0-4)", 1, "0", ReflectionDownscaleCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     Liquid::Cata::SetReflectionDownscale(reflectionDownscale ? static_cast<uint32_t>(reflectionDownscale->m_intValue) : 0);
+    RegisterPostEffects();
     CWorldParam::cvar_bspCache = CVar::Register("bspcache", "BSP node caching", 1, "1", CWorldParam::BspCacheCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     CWorldParam::cvar_footstepBias = CVar::Register("footstepBias", "Unit footstep depth bias", 1, "0.125", CWorldParam::FootstepBiasCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     CWorldParam::cvar_occlusion = CVar::Register("occlusion", "Use hardware occlusion test", 1, "1", CWorldParam::HardwareOcclusionCallback, CATEGORY_GRAPHICS, false, nullptr, false);

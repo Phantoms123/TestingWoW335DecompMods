@@ -1,4 +1,5 @@
 #include "Liquid.h"
+#include "WoW/Source/LiquidSystem/CataWater.h"
 #include "Engine/Source/Gx/CGxDevice/CGxDevice.h"
 #include "Engine/Source/Gx/Gx.h"
 #include "Engine/Source/Model2/M2Light.h"
@@ -73,6 +74,11 @@ Liquid::CMaterialMagmaFFP* Liquid::CMaterialMagmaFFP::Create() {
 // VERIFY: b5c1ce43 manual
 // OFFSET: 0x008A6090
 void Liquid::CMaterialMagma::Render(Liquid::IEnvironment* environment, Liquid::IGeomFactory* geomFactory, Liquid::IWaveManager* waveManager, const C3Vector& cameraPos, const C44Matrix* transform, const CAaSphere* bounds, Liquid::CMaterialSettings* settings) {
+    // CHANGED: 4.3.4's magma and slime when its liquids are on (see CataWater.h).
+    if (Liquid::Cata::RenderMagma(environment, geomFactory, cameraPos, transform, bounds, settings)) {
+        return;
+    }
+
     CGxTex* texture0 = settings->GetTexture(0, 1250);
 
     if (!texture0) {

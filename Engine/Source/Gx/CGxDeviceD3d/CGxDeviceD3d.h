@@ -276,6 +276,7 @@ class CGxDeviceD3d : public CGxDevice {
     virtual void DeviceSetSampledDepth(CGxTex* texture);
     virtual int32_t DeviceCanCopySampledDepth();
     virtual int32_t DeviceCopySampledDepth(CGxTex* texture);
+    virtual int32_t DeviceTexSetVolume(CGxTex* texture, uint32_t width, uint32_t height, uint32_t depth, const void* argb);
     virtual void DeviceCopyTex(CGxTex* source, uint32_t sourcePlane, CGxTex* dest, uint32_t destPlane);
     virtual void DeviceOverride(EGxOverride override, uint32_t value);
     virtual void CapsWindowSize(CRect& rect);

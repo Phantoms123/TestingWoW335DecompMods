@@ -127,6 +127,10 @@ int32_t CGxDevice::DeviceCopySampledDepth(CGxTex* texture) {
     return 0;
 }
 
+int32_t CGxDevice::DeviceTexSetVolume(CGxTex* texture, uint32_t width, uint32_t height, uint32_t depth, const void* argb) {
+    return 0;
+}
+
 void CGxDevice::DeviceCopyTex(CGxTex* source, uint32_t sourcePlane, CGxTex* dest, uint32_t destPlane) {
 }
 

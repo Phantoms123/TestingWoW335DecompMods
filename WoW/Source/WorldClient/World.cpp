@@ -1323,13 +1323,12 @@ void World::SetDetailDoodadDist(float dist) {
 // VERIFY: 5f5281b3 auto
 // OFFSET: 0x00780770
 float World::ValidateFarClip(float farClip, int32_t mapID) {
-    float maxFarClip = 4750.0f / 3.0f;
+    // CHANGED: the 64-bit client draws as far as 4.3.4's video options go (2500 yards) on every map; the original
+    // allowed 1583 on Outland and Northrend and 791 elsewhere unless farClipOverride was set.
+    float maxFarClip = 2500.0f;
+    (void)mapID;
 
-    if (mapID < 530 || mapID == 575 || mapID == 543) {
-        if (!CWorldParam::cvar_farClipOverride || CWorldParam::cvar_farClipOverride->m_intValue < 1) {
-            maxFarClip = 2375.0f / 3.0f;
-        }
-    } else if (OsGetPhysicalMemory() <= 0x40000000) {
+    if (OsGetPhysicalMemory() <= 0x40000000) {
         maxFarClip = 2375.0f / 3.0f;
     }
 

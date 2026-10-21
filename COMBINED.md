@@ -87,8 +87,28 @@ Every changed spot in the original sources is marked `// CHANGED:`.
   submerged, scaled by speed, pulsing every 800 ms) and by rain heavier than 0.2. The water shaders read them as
   4.3.4's do (vertex c51-c52, pixel c29-c31, textures 4 and 8). With it on, units make no 3.3.5 ripple sprites;
   `rippleDetail 0` brings those back. Needs the DisplMap shaders and perturbTex in the patch MPQ.
+- 4.3.4's magma and slime (material 2 liquids) with the 4.3.4 water on: the ProcMagma shaders, three scrolling
+  and turning layers (LiquidType Tex1-3) over a base colour (int 2), blended by a 128x128x16 noise volume
+  (`XTextures\FX\noise.blob`; the D3D9 device gained DeviceTexSetVolume for it). Needs the ProcMagma shaders,
+  the layer textures and noise.blob in the patch MPQ.
 - Not ported yet: real reflections of terrain and buildings (waterDetail 3), ripples from the collision meshes of
-  moving objects (4.3.4's PerturbDisplMapMesh), 4.3.4 magma.
+  moving objects (4.3.4's PerturbDisplMapMesh).
+
+### Advanced video options (Engine/Source/ShaderEffect/PostEffects.cpp)
+- The settings behind Waystone's Advanced Effects panel, with its console variable names and defaults, as
+  Direct3D 9 shaders compiled into the client (`PostShaders/*.hlsl`, headers made with Tools/VfHlsl by
+  `PostShaders/build.sh`): `ambientOcclusion` (depth-based ambient obscurance, half resolution, depth-aware blur;
+  `aoRadius`, `aoStrength`, `aoDebug`), `aerialFog` (exponential height haze in the zone fog colour;
+  `aerialFogDensity`, `aerialFogFalloff`, `aerialFogStart`, `aerialFogMax`), both over the opaque world before
+  the liquids; `postBloom` (quarter and eighth resolution bloom with highlight roll-off, exposure, saturation,
+  contrast; `bloomIntensity`, `bloomThreshold`, `toneMapping`, `toneExposure`, `colorSaturation`,
+  `colorContrast`) before the full screen effects; `postAA` (FXAA-style edge smoothing, then contrast adaptive
+  sharpening, `sharpen`) last.
+- Farther view: `farclip` up to 2500 yards on every map (was 1583, or 791 on the old continents);
+  `groundEffectDist` up to 260 (detail doodad buffers grow with it); `particleDensity` and `environmentDetail`
+  also take 4.3.4's percent values.
+- The panels themselves are Waystone's VideoOptionsPanels (FrameXML and GlueXML) and GraphicsQualityLevels.lua in
+  the patch MPQ, with shadow quality mapped onto 3.3.5's `extShadowQuality` and the view distance slider to 2500.
 
 ### Volumetric fog and water (WoW/Source/VolFog)
 - CoAVolFog's renderers, shaders, data and `CoAVolFog.ini` as upstream; its DLL loader, call-site patches and

@@ -192,6 +192,10 @@ class CGxDevice {
     // tell whether it can be copied into a single-sample GxTex_Intz texture (D3D9's RESZ), and do the copy.
     virtual int32_t DeviceCanCopySampledDepth();
     virtual int32_t DeviceCopySampledDepth(CGxTex* texture);
+    // CHANGED: not in the original client. Turns texture (an Argb8888 texture with no texel callback) into a
+    // width x height x depth volume texture holding argb (width * height * depth texels, slice after slice), for
+    // 4.3.4 shaders that sample one. False where the device has no volume textures.
+    virtual int32_t DeviceTexSetVolume(CGxTex* texture, uint32_t width, uint32_t height, uint32_t depth, const void* argb);
     virtual void DeviceCopyTex(CGxTex* source, uint32_t sourcePlane, CGxTex* dest, uint32_t destPlane);
     virtual void DeviceOverride(EGxOverride override, uint32_t value);
     virtual void AddDeviceRestoredCallback(GxDeviceCallback callback);
