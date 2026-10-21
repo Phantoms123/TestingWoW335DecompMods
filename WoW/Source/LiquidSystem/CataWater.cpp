@@ -1,5 +1,7 @@
 #include "WoW/Source/LiquidSystem/CataWater.h"
 #include <cmath>
+#include <cstdarg>
+#include <cstdio>
 #include <cstring>
 #include "Engine/Source/Base/Handle.h"
 #include "Engine/Source/Gx/CGxDevice/CGxDevice.h"
@@ -82,6 +84,24 @@ static float s_savedPs[PS_REGISTERS * 4];
 
 static const uint16_t s_quadIndices[4] = { 0, 3, 1, 2 };
 static const C3Vector s_quad[4] = { C3Vector(-1.0f, -1.0f, 0.0f), C3Vector(-1.0f, 1.0f, 0.0f), C3Vector(1.0f, 1.0f, 0.0f), C3Vector(1.0f, -1.0f, 0.0f) };
+
+// Logs each kind of event once (to the terminal and the debug log), so a water that stays 3.3.5 says why.
+static uint32_t s_logged;
+
+static void LogOnce(uint32_t bit, const char* format, ...) {
+    if (s_logged & (1u << bit)) {
+        return;
+    }
+
+    s_logged |= 1u << bit;
+    char message[512];
+    va_list args;
+    va_start(args, format);
+    vsnprintf(message, sizeof(message), format, args);
+    va_end(args);
+    fprintf(stderr, "Liquid (4.3.4 water): %s\n", message);
+    DebugLog("Liquid (4.3.4 water): %s\n", message);
+}
 
 static void SetVs(uint32_t reg, float x, float y, float z, float w) {
     float* c = &s_vs[reg * 4];
@@ -176,8 +196,26 @@ static bool CreateShaders() {
     device->ShaderCreate(&s_blurVertexShader, GxSh_Vertex, SHADER_COMPAT_VERTEX_PATH, "FourTapBlur", 1);
     device->ShaderCreate(&s_blurPixelShader, GxSh_Pixel, SHADER_COMPAT_PIXEL_PATH, "FourTapBlur", 1);
 
-    return Valid(s_vertexShaders[0]) && Valid(s_abovePixelShaders[AbovePermutation(0)]) && Valid(s_belowPixelShaders[BelowPermutation(0)]) &&
-           Valid(s_blurVertexShader) && Valid(s_blurPixelShader);
+    bool ok = true;
+    const struct {
+        CGxShader* shader;
+        const char* name;
+    } checks[] = {
+        { s_vertexShaders[0], "Vertex\\vs_3_0\\ProcWater" },
+        { s_abovePixelShaders[AbovePermutation(0)], "Pixel\\ps_3_0\\ProcWaterAbove" },
+        { s_belowPixelShaders[BelowPermutation(0)], "Pixel\\ps_3_0\\ProcWaterBelow" },
+        { s_blurVertexShader, "Vertex\\vs_3_0\\FourTapBlur" },
+        { s_blurPixelShader, "Pixel\\ps_3_0\\FourTapBlur" },
+    };
+
+    for (const auto& check : checks) {
+        if (!Valid(check.shader)) {
+            fprintf(stderr, "Liquid (4.3.4 water): Shaders\\Cata\\%s.bls did not load\n", check.name);
+            ok = false;
+        }
+    }
+
+    return ok;
 }
 
 static CTexture* CreateTarget(EGxTexTarget target, uint32_t width, uint32_t height, const char* name) {
@@ -233,8 +271,16 @@ static CGxTex* GxTexOf(CTexture* texture) {
 
 static bool Supported() {
     const CGxCaps& caps = g_theGxDevicePtr->Caps();
-    return Liquid::s_shadersEnabled && caps.m_shaderTargets[GxSh_Vertex] >= 1 && caps.m_shaderTargets[GxSh_Pixel] >= 3 && DepthCache::IsSupported() &&
-           caps.m_rttFormat[GxTex_Argb8888] && caps.m_texTarget[GxTex_NonPow2] == 1;
+    bool ok = Liquid::s_shadersEnabled && caps.m_shaderTargets[GxSh_Vertex] >= 1 && caps.m_shaderTargets[GxSh_Pixel] >= 3 && DepthCache::IsSupported() &&
+              caps.m_rttFormat[GxTex_Argb8888] && caps.m_texTarget[GxTex_NonPow2] == 1;
+
+    if (!ok) {
+        LogOnce(0, "off, the device cannot run it (liquid shaders %d, vs %d, ps %d, depth texture %d, render targets %d, non-power-of-two %d, multisample %u)",
+            Liquid::s_shadersEnabled, caps.m_shaderTargets[GxSh_Vertex], caps.m_shaderTargets[GxSh_Pixel], DepthCache::IsSupported() ? 1 : 0,
+            caps.m_rttFormat[GxTex_Argb8888], caps.m_texTarget[GxTex_NonPow2], g_theGxDevicePtr->m_format.m_multisampleCount);
+    }
+
+    return ok;
 }
 
 void Liquid::Cata::SetWaterDetail(uint32_t detail) {
@@ -282,7 +328,7 @@ void Liquid::Cata::BeginFrame() {
         if (!CreateShaders()) {
             Destroy();
             s_failed = true;
-            DebugLog("Liquid: 4.3.4 water off; ProcWater, ProcWaterAbove, ProcWaterBelow or FourTapBlur is missing from Shaders\\Cata\n");
+            LogOnce(1, "off, its shaders are missing from Shaders\\Cata (is patch-C.MPQ in Data?)");
             return;
         }
 
@@ -290,6 +336,7 @@ void Liquid::Cata::BeginFrame() {
     }
 
     s_detail = wanted;
+    LogOnce(2, "on (waterDetail %u)", wanted);
 }
 
 void Liquid::Cata::SetView(float zNear, float zFar, float viewportFarClip) {
@@ -423,7 +470,13 @@ static bool PreparePass() {
     s_passPrepared = true;
     s_passReady = false;
 
-    if (!DepthCache::Prepare() || !DepthCache::GetDepthTex() || !EnsureTargets()) {
+    if (!DepthCache::Prepare() || !DepthCache::GetDepthTex()) {
+        LogOnce(3, "skipped, the scene depth could not be read this frame");
+        return false;
+    }
+
+    if (!EnsureTargets()) {
+        LogOnce(4, "skipped, its render targets could not be created");
         return false;
     }
 
@@ -440,6 +493,7 @@ static bool PreparePass() {
     C2iVector size = { static_cast<int32_t>(s_screenWidth), static_cast<int32_t>(s_screenHeight) };
 
     if (!GxTexCopy(backBuffer, origin, origin, size, 0, 0)) {
+        LogOnce(5, "skipped, the frame could not be copied");
         return false;
     }
 
@@ -603,7 +657,12 @@ static C44Matrix ScrollMatrix(uint32_t timeMs, float speedU, float speedV) {
 }
 
 bool Liquid::Cata::RenderWater(IEnvironment* environment, IGeomFactory* geomFactory, const C3Vector& cameraPos, const C44Matrix* transform, const CAaSphere* bounds, CMaterialSettings* settings) {
-    if (s_detail < 2 || !s_inPass) {
+    if (s_detail < 2) {
+        return false;
+    }
+
+    if (!s_inPass) {
+        LogOnce(8, "skipped, water drawn outside the see-through liquid pass");
         return false;
     }
 
@@ -613,6 +672,7 @@ bool Liquid::Cata::RenderWater(IEnvironment* environment, IGeomFactory* geomFact
 
     // Water types without the 4.3.4 textures (an older LiquidType.dbc) draw the 3.3.5 way.
     if (!depthTint || !bump || !foam) {
+        LogOnce(6, "a water type has no 4.3.4 textures (depth tint %d, bump %d, foam %d); is patch-C.MPQ's LiquidType.dbc loaded?", depthTint ? 1 : 0, bump ? 1 : 0, foam ? 1 : 0);
         return false;
     }
 
@@ -716,5 +776,6 @@ bool Liquid::Cata::RenderWater(IEnvironment* environment, IGeomFactory* geomFact
     device->Draw(&batch, 1);
 
     device->RsPop();
+    LogOnce(7, "drawing");
     return true;
 }
