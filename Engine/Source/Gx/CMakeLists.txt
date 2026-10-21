@@ -35,6 +35,9 @@ target_include_directories(Gx
         ${CMAKE_SOURCE_DIR}
 )
 
+# CHANGED: ShaderCompat inflates 4.x shader files.
+target_link_libraries(Gx PRIVATE zlib)
+
 if (WOWDECOMP_POSIX)
     target_link_libraries(Gx PRIVATE PkgConfig::SDL2)
     if (WOWDECOMP_DXVK)

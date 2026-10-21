@@ -46,6 +46,13 @@ Every changed spot in the original sources is marked `// CHANGED:`.
   Liquid types this client has no record for become stock water, ocean, magma or slime by sound bank.
   Checked on real Lost Isles tiles: every height and depth this client reads equals what 4.3.4 reads.
 
+### Shaders (Engine/Source/Gx/CGxDevice)
+- `ShaderCompat.cpp`: the shader loader also reads 4.x shader files (GXSH 0x10004: permutations in one
+  stream cut into zlib-compressed 16 KB blocks), so 4.x render features can use 4.x's own shaders. 3.3.5a
+  files load exactly as before.
+- Checked on 209 4.3.4 `ps_3_0`/`vs_3_0` files (4,842 permutations): each decodes to a complete D3D9 shader,
+  byte-identical to an independent reader, and damaged copies are refused without reading out of bounds.
+
 ### Volumetric fog and water (WoW/Source/VolFog)
 - CoAVolFog's renderers, shaders, data and `CoAVolFog.ini` as upstream; its DLL loader, call-site patches and
   address reads are replaced by calls from the client's world render and reads of the client's own globals.

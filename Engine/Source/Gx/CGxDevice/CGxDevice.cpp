@@ -4,11 +4,14 @@
 #include <cstdint>
 #include <cstring>
 #include <new>
+#include <vector>
 #include "Engine/Source/Storm/H/storm.h"
+#include "Engine/Source/BlizzardCore/SFile2-Core.h"
 #include "Engine/Source/BlizzardCore/SFile2-IO.h"
 #include "Engine/Source/Gx/Buffer.h"
 #include "Engine/Source/Gx/CGxDevice/CGxDevice.h"
 #include "Engine/Source/Gx/CGxDevice/CGxShader.h"
+#include "Engine/Source/Gx/CGxDevice/ShaderCompat.h"
 #include "Engine/Source/Gx/CGxPool.h"
 #include "Engine/Source/Gx/Gx.h"
 #include "Engine/Source/Os/Input.h"
@@ -1668,6 +1671,58 @@ void CGxDevice::DeviceCreatePools() {
     this->m_indexPool = this->PoolCreate(GxPoolTarget_Index, GxPoolUsage_Stream, s_streamIndexPoolSize, GxPoolHintBit_Unk3, "Stream_idx");
 }
 
+// CHANGED: not in the original client. Loads the first permutations of a 4.x shader file (its magic and
+// version already read) into shaders, the same way the 0x10003 path above does.
+static bool ILoadShaderCompat(SFileImpl* file, CGxShader** shaders, uint32_t permutations) {
+    uint32_t size = SFileGetFileSize(file, nullptr);
+
+    if (size < 8) {
+        return false;
+    }
+
+    std::vector<uint8_t> data(size);
+    uint32_t header[2] = { SHADER_COMPAT_MAGIC, SHADER_COMPAT_VERSION_4X };
+    memcpy(data.data(), header, sizeof(header));
+
+    uint32_t read = 0;
+
+    if (!SFileReadFile(file, data.data() + 8, size - 8, &read, nullptr, 0) || read != size - 8) {
+        return false;
+    }
+
+    ShaderCompatFile compat;
+
+    if (!compat.Open(data.data(), size)) {
+        return false;
+    }
+
+    for (uint32_t i = 0; i < permutations; i++) {
+        ShaderCompatPermute permute;
+        CGxShader* shader = shaders[i];
+
+        // A permutation the file lacks or cannot be read stays without code, so the device reports it
+        // invalid and its caller falls back as it does for a missing file.
+        if (compat.ReadPermute(i, permute)) {
+            shader->unk_003C = static_cast<int32_t>(permute.header0);
+            shader->unk_0040 = static_cast<int32_t>(permute.header1);
+            shader->unk_0044 = static_cast<int16_t>(permute.header2);
+            shader->unk_0046 = static_cast<int16_t>(permute.header3);
+            shader->m_code.SetCount(static_cast<uint32_t>(permute.code.size()));
+
+            if (!permute.code.empty()) {
+                memcpy(shader->m_code.m_data, permute.code.data(), permute.code.size());
+            }
+        } else {
+            shader->m_code.SetCount(0);
+        }
+
+        shader->m_loaded = 0;
+        shader->unused_0034 = 0;
+    }
+
+    return true;
+}
+
 // VERIFY: 3ce50085 manual
 // OFFSET: 0x00684970
 void CGxDevice::IShaderLoad(CGxShader** shaders, EGxShTarget target, const char* path, const char* name, uint32_t permutations) {
@@ -1702,6 +1757,9 @@ void CGxDevice::IShaderLoad(CGxShader** shaders, EGxShTarget target, const char*
                         shaders[i]->unused_0034 = 0;
                     }
 
+                    profile = 0;
+                } else if (version == SHADER_COMPAT_VERSION_4X && ILoadShaderCompat(file, shaders, permutations)) {
+                    // CHANGED: shader files written for 4.x clients.
                     profile = 0;
                 }
             }
