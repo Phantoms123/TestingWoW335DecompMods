@@ -2860,7 +2860,7 @@ void CWorldScene::Update(C3Vector* camPos, C3Vector* camTarget) {
     CWorldScene::s_viewProjW.z = CWorldScene::s_viewProjMatrix.c3;
     CWorldScene::s_viewProjW.w = CWorldScene::s_viewProjMatrix.d3;
 
-    // CHANGED: with real water reflections the chunks considered reach a screen's height above the view too (see
+    // CHANGED: with real water reflections the chunks considered reach two screens' height above the view too (see
     // CWorldScene::Render), so distant hills seen only in the water are not left out.
     if (Liquid::Cata::ReflectionNeedsWideCulling() && !CWorldScene::s_viewerMapObjDef) {
         C3Vector corners[16];
@@ -2870,14 +2870,14 @@ void CWorldScene::Update(C3Vector* camPos, C3Vector* camTarget) {
             corners[i + 8] = CWorldScene::s_frustumCorners[i];
         }
 
-        // Top corners 1, 2 (near) and 5, 6 (far), raised by the screen's height (to the bottom corners 0, 3, 4, 7).
+        // Top corners 1, 2 (near) and 5, 6 (far), raised by two screens' height (from the bottom corners 0, 3, 4, 7).
         static const uint32_t top[4] = { 1, 2, 5, 6 };
         static const uint32_t bottom[4] = { 0, 3, 4, 7 };
 
         for (uint32_t i = 0; i < 4; i++) {
             const C3Vector& t = CWorldScene::s_frustumCorners[top[i]];
             const C3Vector& b = CWorldScene::s_frustumCorners[bottom[i]];
-            corners[8 + top[i]] = C3Vector(t.x * 2.0f - b.x, t.y * 2.0f - b.y, t.z * 2.0f - b.z);
+            corners[8 + top[i]] = C3Vector(t.x * 3.0f - b.x * 2.0f, t.y * 3.0f - b.y * 2.0f, t.z * 3.0f - b.z * 2.0f);
         }
 
         CWorldScene::boundingBox = CAaBox::Bounding(corners, 16);

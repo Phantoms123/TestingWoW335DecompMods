@@ -100,7 +100,7 @@ Every changed spot in the original sources is marked `// CHANGED:`.
   (default 0.75) fades the reflected world towards the fog colour. The water's normal map, foam and depth tint
   textures are filtered anisotropically so distant water keeps its detail. The reflection plane is held for 45
   frames after its water was last seen and eases between nearby heights, and the reflection fades in and out
-  (about a third of a second) instead of switching. Outdoors, the culling reaches a screen's height above the view
+  (about a third of a second) instead of switching. Outdoors, the culling reaches two screens' height above the view
   while reflections are on, so what the water mirrors does not pop as the camera turns, and the reflection is
   softened slightly (as 4.3.4's blurredReflection). The reflection draws into its own INTZ depth texture, and what lies
   beyond a third of `reflectionDistance` (default 200 yards) fades into the fog by that depth, so distant terrain,
