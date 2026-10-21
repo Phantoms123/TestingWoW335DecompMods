@@ -3208,6 +3208,114 @@ void CGxDeviceD3d::DeviceSetSampledDepth(CGxTex* texture) {
     }
 }
 
+// CHANGED: not in the original client. RESZ (an AMD extension D3D9 drivers and DXVK offer): a point drawn with an
+// INTZ texture bound, then a magic point size, resolves the bound multisampled depth buffer into that texture.
+// The raw device state it touches is put back, so Gx's state cache stays right.
+static const D3DFORMAT s_reszFormat = static_cast<D3DFORMAT>(MAKEFOURCC('R', 'E', 'S', 'Z'));
+static const DWORD s_reszCopyCode = 0x7FA05000;
+
+int32_t CGxDeviceD3d::DeviceCanCopySampledDepth() {
+    if (!this->m_d3d || !this->m_context) {
+        return 0;
+    }
+
+    D3DDISPLAYMODE mode;
+
+    if (FAILED(this->m_d3d->GetAdapterDisplayMode(D3DADAPTER_DEFAULT, &mode))) {
+        return 0;
+    }
+
+    return SUCCEEDED(this->m_d3d->CheckDeviceFormat(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, mode.Format, D3DUSAGE_RENDERTARGET, D3DRTYPE_SURFACE, s_reszFormat));
+}
+
+int32_t CGxDeviceD3d::DeviceCopySampledDepth(CGxTex* texture) {
+    if (!this->m_context || !texture || texture->m_format != GxTex_Intz) {
+        return 0;
+    }
+
+    if (texture->m_needsCreation || (!texture->m_apiSpecificData && !texture->m_apiSpecificData2)) {
+        this->ITexCreate(texture);
+    }
+
+    if (texture->m_needsCreation || !texture->m_apiSpecificData) {
+        return 0;
+    }
+
+    LPDIRECT3DDEVICE9 device = this->m_d3dDevice;
+    static const D3DRENDERSTATETYPE states[] = { D3DRS_ZENABLE, D3DRS_ZWRITEENABLE, D3DRS_COLORWRITEENABLE, D3DRS_POINTSIZE };
+    DWORD saved[4];
+
+    for (uint32_t i = 0; i < 4; i++) {
+        device->GetRenderState(states[i], &saved[i]);
+    }
+
+    IDirect3DBaseTexture9* savedTexture = nullptr;
+    IDirect3DVertexShader9* savedVertexShader = nullptr;
+    IDirect3DPixelShader9* savedPixelShader = nullptr;
+    IDirect3DVertexDeclaration9* savedDeclaration = nullptr;
+    IDirect3DVertexBuffer9* savedStream = nullptr;
+    UINT savedOffset = 0;
+    UINT savedStride = 0;
+    DWORD savedFvf = 0;
+    device->GetTexture(0, &savedTexture);
+    device->GetVertexShader(&savedVertexShader);
+    device->GetPixelShader(&savedPixelShader);
+    device->GetVertexDeclaration(&savedDeclaration);
+    device->GetFVF(&savedFvf);
+    device->GetStreamSource(0, &savedStream, &savedOffset, &savedStride);
+
+    device->SetVertexShader(nullptr);
+    device->SetPixelShader(nullptr);
+    device->SetFVF(D3DFVF_XYZ);
+    device->SetTexture(0, static_cast<IDirect3DTexture9*>(texture->m_apiSpecificData));
+    device->SetRenderState(D3DRS_ZENABLE, FALSE);
+    device->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
+    device->SetRenderState(D3DRS_COLORWRITEENABLE, 0);
+    const float point[3] = { 0.0f, 0.0f, 0.0f };
+    bool drawn = SUCCEEDED(device->DrawPrimitiveUP(D3DPT_POINTLIST, 1, point, sizeof(point)));
+    device->SetRenderState(D3DRS_ZWRITEENABLE, TRUE);
+    device->SetRenderState(D3DRS_ZENABLE, TRUE);
+    device->SetRenderState(D3DRS_COLORWRITEENABLE, 0x0F);
+    device->SetRenderState(D3DRS_POINTSIZE, s_reszCopyCode);
+
+    for (uint32_t i = 0; i < 4; i++) {
+        device->SetRenderState(states[i], saved[i]);
+    }
+
+    device->SetTexture(0, savedTexture);
+    device->SetVertexShader(savedVertexShader);
+    device->SetPixelShader(savedPixelShader);
+    device->SetVertexDeclaration(savedDeclaration);
+
+    if (savedFvf) {
+        device->SetFVF(savedFvf);
+    }
+
+    device->SetStreamSource(0, savedStream, savedOffset, savedStride);
+
+    if (savedTexture) {
+        savedTexture->Release();
+    }
+
+    if (savedVertexShader) {
+        savedVertexShader->Release();
+    }
+
+    if (savedPixelShader) {
+        savedPixelShader->Release();
+    }
+
+    if (savedDeclaration) {
+        savedDeclaration->Release();
+    }
+
+    if (savedStream) {
+        savedStream->Release();
+    }
+
+    return drawn;
+}
+
 // VERIFY: 956c292e manual
 // OFFSET: 0x0068F950
 void CGxDeviceD3d::DeviceCopyTex(CGxTex* source, uint32_t sourcePlane, CGxTex* dest, uint32_t destPlane) {

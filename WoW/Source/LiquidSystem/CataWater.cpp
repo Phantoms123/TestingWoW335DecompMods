@@ -423,7 +423,7 @@ static bool PreparePass() {
     s_passPrepared = true;
     s_passReady = false;
 
-    if (!DepthCache::GetDepthTex() || !EnsureTargets()) {
+    if (!DepthCache::Prepare() || !DepthCache::GetDepthTex() || !EnsureTargets()) {
         return false;
     }
 

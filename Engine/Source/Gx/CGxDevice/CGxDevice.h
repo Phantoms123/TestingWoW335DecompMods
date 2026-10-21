@@ -188,6 +188,10 @@ class CGxDevice {
     // CHANGED: not in the original client. Makes a GxTex_Intz texture the depth buffer of the back buffer, so
     // later passes can sample the scene depth; nullptr goes back to the device's own depth buffer.
     virtual void DeviceSetSampledDepth(CGxTex* texture);
+    // CHANGED: not in the original client. With multisampling, the back buffer's depth cannot be sampled; these
+    // tell whether it can be copied into a single-sample GxTex_Intz texture (D3D9's RESZ), and do the copy.
+    virtual int32_t DeviceCanCopySampledDepth();
+    virtual int32_t DeviceCopySampledDepth(CGxTex* texture);
     virtual void DeviceCopyTex(CGxTex* source, uint32_t sourcePlane, CGxTex* dest, uint32_t destPlane);
     virtual void DeviceOverride(EGxOverride override, uint32_t value);
     virtual void AddDeviceRestoredCallback(GxDeviceCallback callback);

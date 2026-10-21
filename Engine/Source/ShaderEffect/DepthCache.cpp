@@ -11,6 +11,8 @@ static CTexture* s_depthTex;
 static uint32_t s_width;
 static uint32_t s_height;
 static bool s_valid;
+// The texture is a copy made by Prepare (multisampling) rather than the depth buffer itself.
+static bool s_copied;
 
 static void DestroyTexture() {
     g_theGxDevicePtr->DeviceSetSampledDepth(nullptr);
@@ -25,9 +27,18 @@ static void DestroyTexture() {
     s_valid = false;
 }
 
+static bool Multisampled() {
+    return g_theGxDevicePtr->m_format.m_multisampleCount > 1;
+}
+
 bool DepthCache::IsSupported() {
     const CGxCaps& caps = g_theGxDevicePtr->Caps();
-    return caps.m_rttFormat[GxTex_Intz] && caps.m_texTarget[GxTex_NonPow2] == 1 && g_theGxDevicePtr->m_format.m_multisampleCount <= 1;
+
+    if (!caps.m_rttFormat[GxTex_Intz] || caps.m_texTarget[GxTex_NonPow2] != 1) {
+        return false;
+    }
+
+    return !Multisampled() || g_theGxDevicePtr->DeviceCanCopySampledDepth();
 }
 
 void DepthCache::AddRef() {
@@ -69,8 +80,10 @@ void DepthCache::BeginFrame() {
     }
 
     CGxTex* gxTex = s_depthTex ? TextureGetGxTex(s_depthTex, 1, nullptr) : nullptr;
-    // Set every frame: a device reset recreates the texture and drops the device's reference to it.
-    g_theGxDevicePtr->DeviceSetSampledDepth(gxTex);
+    s_copied = Multisampled();
+    // Set every frame: a device reset recreates the texture and drops the device's reference to it. With
+    // multisampling the device keeps its own depth buffer and Prepare copies it.
+    g_theGxDevicePtr->DeviceSetSampledDepth(s_copied ? nullptr : gxTex);
     s_valid = gxTex != nullptr;
 }
 
@@ -80,6 +93,19 @@ bool DepthCache::IsValid() {
 
 DepthCache::EDepthMode DepthCache::GetDepthMode() {
     return s_valid ? DM_Texture : DM_Unknown;
+}
+
+bool DepthCache::Prepare() {
+    if (!s_valid || !s_depthTex) {
+        return false;
+    }
+
+    if (!s_copied) {
+        return true;
+    }
+
+    CGxTex* gxTex = TextureGetGxTex(s_depthTex, 1, nullptr);
+    return gxTex && g_theGxDevicePtr->DeviceCopySampledDepth(gxTex);
 }
 
 CGxTex* DepthCache::GetDepthTex() {

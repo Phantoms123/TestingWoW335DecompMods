@@ -186,7 +186,7 @@ CGxTex* SunShafts::GetBuffer() {
 void SunShafts::Update(const C3Vector& eye, const C3Vector& sun, float zNear, float zFar, float viewportFarClip) {
     s_bufferReady = false;
 
-    CGxTex* depthTex = DepthCache::GetDepthTex();
+    CGxTex* depthTex = DepthCache::Prepare() ? DepthCache::GetDepthTex() : nullptr;
 
     if (!s_mode || !depthTex || !s_tex[0] || !s_tex[1] || zNear <= 0.0f || zFar <= zNear || viewportFarClip <= 0.0f) {
         return;

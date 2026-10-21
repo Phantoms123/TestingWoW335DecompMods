@@ -119,6 +119,14 @@ void CGxDevice::DeviceResolveDepthBuffer(CGxTex* texture) {
 void CGxDevice::DeviceSetSampledDepth(CGxTex* texture) {
 }
 
+int32_t CGxDevice::DeviceCanCopySampledDepth() {
+    return 0;
+}
+
+int32_t CGxDevice::DeviceCopySampledDepth(CGxTex* texture) {
+    return 0;
+}
+
 void CGxDevice::DeviceCopyTex(CGxTex* source, uint32_t sourcePlane, CGxTex* dest, uint32_t destPlane) {
 }
 
