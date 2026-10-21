@@ -9,6 +9,7 @@
 #include "Engine/Source/Services/Texture.h"
 #include "Engine/Source/Storm/H/storm.h"
 #include "Engine/Source/ShaderEffect/DepthCache.h"
+#include "Engine/Source/ShaderEffect/ViewSettings.h"
 #include "Engine/Source/Tempest/C3Vector.h"
 #include "Engine/Source/Tempest/C44Matrix.h"
 #include "Engine/Source/Tempest/C4Vector.h"
@@ -182,52 +183,6 @@ CGxTex* SunShafts::GetBuffer() {
     return s_tex[1] ? TextureGetGxTex(s_tex[1], 1, nullptr) : nullptr;
 }
 
-// 4.3.4 ViewSettings::CalculateParams.
-static C4Vector ViewParams(float zNear, float zFar, float viewportFarClip) {
-    C4Vector params;
-    params.x = zNear;
-    params.y = zFar;
-    params.z = (1.0f / zFar - 1.0f / zNear) / viewportFarClip;
-    params.w = 1.0f / zNear;
-    return params;
-}
-
-// 4.3.4 ViewSettings::CalculateHomToScreen, with the view extents taken from the current viewport the way
-// 4.3.4's CWorldScene::Render records them.
-static C4Vector HomToScreen(float offsetX, float offsetY) {
-    const CBoundingBox& viewport = g_theGxDevicePtr->m_viewport;
-    float extMinX = viewport.m_y.m_l;
-    float extMinY = viewport.m_x.m_l;
-    float extMaxX = viewport.m_y.m_h;
-    float extMaxY = viewport.m_x.m_h;
-
-    float x = ((extMinY + 1.0f) - (1.0f - extMaxY)) * 0.5f;
-    float scaleY;
-    float y;
-
-    if (g_theGxDevicePtr->Caps().m_texelCenterOnEdge) {
-        scaleY = (extMaxX - extMinX) * 0.5f;
-        y = (extMinX + 1.0f) - (1.0f - extMaxY);
-    } else {
-        scaleY = (extMaxX - extMinX) * -0.5f;
-        y = ((1.0f - extMaxX) + 1.0f) - extMinX;
-    }
-
-    y = y * 0.5f;
-
-    if (g_theGxDevicePtr->Caps().m_pixelCenterOnEdge) {
-        x = x + offsetX;
-        y = y + offsetY;
-    }
-
-    C4Vector result;
-    result.x = (extMaxY - extMinY) * 0.5f;
-    result.y = scaleY;
-    result.z = x;
-    result.w = y;
-    return result;
-}
-
 void SunShafts::Update(const C3Vector& eye, const C3Vector& sun, float zNear, float zFar, float viewportFarClip) {
     s_bufferReady = false;
 
@@ -275,8 +230,8 @@ void SunShafts::Update(const C3Vector& eye, const C3Vector& sun, float zNear, fl
     texel.z = texel.x * 0.5f;
     texel.w = texel.y * 0.5f;
 
-    C4Vector viewParams = ViewParams(zNear, zFar, viewportFarClip);
-    C4Vector homToScreen = HomToScreen(texel.z, texel.w);
+    C4Vector viewParams = ViewSettings::Params(zNear, zFar, viewportFarClip);
+    C4Vector homToScreen = ViewSettings::HomToScreen(texel.z, texel.w);
 
     CGxTex* savedColor = nullptr;
     device->DeviceGetRenderTarget(GxBuffers_Color, savedColor);

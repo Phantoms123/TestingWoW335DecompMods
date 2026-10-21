@@ -32,6 +32,7 @@
 #include "Engine/Source/lua-5.1/src/lua.h"
 #include "Engine/Source/ShaderEffect/DepthCache.h"
 #include "Engine/Source/ShaderEffect/SunShafts.h"
+#include "WoW/Source/LiquidSystem/CataWater.h"
 #include "WoW/Common/TextureCache.h"
 #include "WoW/Source/Client.h"
 #include "WoW/Source/DB/DBClient/DBClient.h"
@@ -1680,6 +1681,8 @@ void CGWorldFrame::OnWorldRender() {
     FFX::Start();
     // CHANGED: sun shafts from 4.3.4 read the scene depth, so the world draws its depth into a texture.
     SunShafts::BeginFrame();
+    // CHANGED: the 4.3.4 water reads the scene depth too.
+    Liquid::Cata::BeginFrame();
     DepthCache::BeginFrame();
 
     CRect fullViewport = { 0.0f, 0.0f, 1.0f, 1.0f };
@@ -1763,6 +1766,11 @@ void CGWorldFrame::OnWorldRender() {
     GxuSortDrawList(GxuCat_0, GxuSort_VtxStream, *World::GetCamPos());
     GxuFlushDrawList(GxuCat_0, *World::GetCamPos());
     CWorldScene::RenderDetailDoodads();
+
+    // CHANGED: the 4.3.4 water turns the scene depth into distances with the camera's clip planes.
+    if (CGCamera* camera = CGWorldFrame::GetActiveCamera()) {
+        Liquid::Cata::SetView(camera->m_nearZ, camera->m_farZ, CWorld::s_unk_ADEEE4);
+    }
 
     if (World::SceneCamLiquidStatus(nullptr)) {
         CWorldScene::RenderBarriers(this->m_elapsedSec);

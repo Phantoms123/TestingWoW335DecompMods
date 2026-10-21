@@ -68,6 +68,19 @@ Every changed spot in the original sources is marked `// CHANGED:`.
   - `Shaders\Cata\Vertex\vs_3_0\SunShaftsMask.bls`, `SunShaftsPropagate.bls`, `DNGlare.bls`
   If they are missing, or the device cannot sample depth, the setting stays off and the log says why.
 
+### 4.3.4 water (WoW/Source/LiquidSystem/CataWater.cpp)
+- 4.3.4's water surface (its Liquid::CMaterialWater at waterDetail 2), using 4.3.4's ProcWater, ProcWaterAbove,
+  ProcWaterBelow and FourTapBlur shaders with the constants and textures 4.3.4 gives them: refraction of the frame
+  drawn so far, depth tint and shoreline fade from the scene depth, animated normal maps, sun specular, foam, a
+  blurred screen-space reflection, and a sky reflection rendered from the mirrored camera.
+- `/console waterDetail 2` (default) is the 4.3.4 water, `0` the 3.3.5 water. `rippleDetail`, `reflectionMode`
+  and `reflectionDownscale` are registered too (downscale shrinks the sky reflection texture).
+- Needs, in a patch MPQ: the shaders above under `Shaders\Cata\...`, `XTextures\ocean\newoceanbump.blp`,
+  `XTextures\foam\waterchop7bw.blp` and a `DBFilesClient\LiquidType.dbc` with 4.3.4's water values (the 3.3.5
+  file with textures 2-3 and floats 3-15 filled in; classic fields unchanged). Water types without them draw the
+  3.3.5 way. Needs the depth texture, so multisampling off.
+- Not ported yet: real reflections of terrain and buildings (waterDetail 3), the ripple simulation, 4.3.4 magma.
+
 ### Volumetric fog and water (WoW/Source/VolFog)
 - CoAVolFog's renderers, shaders, data and `CoAVolFog.ini` as upstream; its DLL loader, call-site patches and
   address reads are replaced by calls from the client's world render and reads of the client's own globals.

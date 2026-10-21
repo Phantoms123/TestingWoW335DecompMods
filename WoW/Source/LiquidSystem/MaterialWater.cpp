@@ -1,5 +1,6 @@
 #include "Liquid.h"
 #include "WoW/Source/VolFog/VolFog.h"
+#include "WoW/Source/LiquidSystem/CataWater.h"
 #include "Engine/Source/Gx/CGxDevice/CGxDevice.h"
 #include "Engine/Source/Gx/Gx.h"
 #include "Engine/Source/Model2/M2Light.h"
@@ -127,6 +128,11 @@ Liquid::CMaterialWaterFFP* Liquid::CMaterialWaterFFP::Create() {
 // VERIFY: a882be97 manual
 // OFFSET: 0x008A5590
 void Liquid::CMaterialWater::Render(Liquid::IEnvironment* environment, Liquid::IGeomFactory* geomFactory, Liquid::IWaveManager* waveManager, const C3Vector& cameraPos, const C44Matrix* transform, const CAaSphere* bounds, Liquid::CMaterialSettings* settings) {
+    // CHANGED: the 4.3.4 water (waterDetail 2 and up) when it is available; otherwise the 3.3.5 water below.
+    if (Liquid::Cata::RenderWater(environment, geomFactory, cameraPos, transform, bounds, settings)) {
+        return;
+    }
+
     // CHANGED: CoAVolFog tags this water draw while it is drawn.
     VolFogWaterDrawScope waterDraw(settings);
 
@@ -209,6 +215,11 @@ void Liquid::CMaterialWater::Render(Liquid::IEnvironment* environment, Liquid::I
 // VERIFY: b899ce66 manual
 // OFFSET: 0x008A5900
 void Liquid::CMaterialWaterNoSpec::Render(Liquid::IEnvironment* environment, Liquid::IGeomFactory* geomFactory, Liquid::IWaveManager* waveManager, const C3Vector& cameraPos, const C44Matrix* transform, const CAaSphere* bounds, Liquid::CMaterialSettings* settings) {
+    // CHANGED: the 4.3.4 water (waterDetail 2 and up) when it is available; otherwise the 3.3.5 water below.
+    if (Liquid::Cata::RenderWater(environment, geomFactory, cameraPos, transform, bounds, settings)) {
+        return;
+    }
+
     // CHANGED: CoAVolFog tags this water draw while it is drawn.
     VolFogWaterDrawScope waterDraw(settings);
 

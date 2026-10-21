@@ -7,6 +7,7 @@
 #include "Engine/Source/ShaderEffect/ShaderEffect.h"
 #include "Engine/Source/ShaderEffect/ShadowCache.h"
 #include "Engine/Source/ShaderEffect/SunShafts.h"
+#include "WoW/Source/LiquidSystem/CataWater.h"
 #include "WoW/Common/AaBsp.h"
 #include "WoW/Source/UIUtil/PortraitButton.h"
 #include "WoW/Source/WorldClient/Map.h"
@@ -621,6 +622,52 @@ bool CWorldParam::GxTextureCacheSizeCallback(CVar* var, const char* oldValue, co
 }
 
 // CHANGED: not in the original client. 4.3.4's sunShafts setting: 0 off, 1 low, 2 high.
+// CHANGED: 4.3.4's water settings (see WoW/Source/LiquidSystem/CataWater.h).
+static bool WaterDetailCallback(CVar* var, const char* oldValue, const char* value, void* arg) {
+    int32_t detail = SStrToInt(value);
+
+    if (detail < 0 || detail > 3) {
+        ConsoleWrite("waterDetail: 0 and 1 the 3.3.5 water, 2 the 4.3.4 water, 3 the 4.3.4 water with real reflections (not ported yet, draws as 2)", DEFAULT_COLOR);
+        return false;
+    }
+
+    Liquid::Cata::SetWaterDetail(static_cast<uint32_t>(detail));
+    return true;
+}
+
+static bool RippleDetailCallback(CVar* var, const char* oldValue, const char* value, void* arg) {
+    int32_t detail = SStrToInt(value);
+
+    if (detail < 0 || detail > 2) {
+        return false;
+    }
+
+    Liquid::Cata::SetRippleDetail(static_cast<uint32_t>(detail));
+    return true;
+}
+
+static bool ReflectionModeCallback(CVar* var, const char* oldValue, const char* value, void* arg) {
+    int32_t mode = SStrToInt(value);
+
+    if (mode < 0 || mode > 3) {
+        return false;
+    }
+
+    Liquid::Cata::SetReflectionMode(static_cast<uint32_t>(mode));
+    return true;
+}
+
+static bool ReflectionDownscaleCallback(CVar* var, const char* oldValue, const char* value, void* arg) {
+    int32_t downscale = SStrToInt(value);
+
+    if (downscale < 0 || downscale > 4) {
+        return false;
+    }
+
+    Liquid::Cata::SetReflectionDownscale(static_cast<uint32_t>(downscale));
+    return true;
+}
+
 static bool SunShaftsCallback(CVar* var, const char* oldValue, const char* value, void* arg) {
     int32_t mode = SStrToInt(value);
     SunShafts::SetMode(mode > 0 ? static_cast<uint32_t>(mode) : 0);
@@ -649,6 +696,15 @@ void CWorldParam::Initialize() {
     // CHANGED: sun shafts from 4.3.4; needs its shaders in Shaders\\Cata (see COMBINED.md).
     CVar* sunShafts = CVar::Register("sunShafts", "Sun shafts (0 off, 1 low, 2 high); needs the 4.x shaders in Shaders\\Cata", 1, "0", SunShaftsCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     SunShafts::SetMode(sunShafts && sunShafts->m_intValue > 0 ? static_cast<uint32_t>(sunShafts->m_intValue) : 0);
+    // CHANGED: 4.3.4's water settings; needs the 4.x shaders in Shaders\Cata and 4.3.4's LiquidType.dbc values.
+    CVar* waterDetail = CVar::Register("waterDetail", "Water detail (0, 1 the 3.3.5 water; 2, 3 the 4.3.4 water)", 1, "2", WaterDetailCallback, CATEGORY_GRAPHICS, false, nullptr, false);
+    Liquid::Cata::SetWaterDetail(waterDetail ? static_cast<uint32_t>(waterDetail->m_intValue) : 2);
+    CVar* rippleDetail = CVar::Register("rippleDetail", "Water ripple detail (0-2, not ported yet)", 1, "0", RippleDetailCallback, CATEGORY_GRAPHICS, false, nullptr, false);
+    Liquid::Cata::SetRippleDetail(rippleDetail ? static_cast<uint32_t>(rippleDetail->m_intValue) : 0);
+    CVar* reflectionMode = CVar::Register("reflectionMode", "Water reflection mode (0-3)", 1, "0", ReflectionModeCallback, CATEGORY_GRAPHICS, false, nullptr, false);
+    Liquid::Cata::SetReflectionMode(reflectionMode ? static_cast<uint32_t>(reflectionMode->m_intValue) : 0);
+    CVar* reflectionDownscale = CVar::Register("reflectionDownscale", "Water reflection texture downscale (0-4)", 1, "0", ReflectionDownscaleCallback, CATEGORY_GRAPHICS, false, nullptr, false);
+    Liquid::Cata::SetReflectionDownscale(reflectionDownscale ? static_cast<uint32_t>(reflectionDownscale->m_intValue) : 0);
     CWorldParam::cvar_bspCache = CVar::Register("bspcache", "BSP node caching", 1, "1", CWorldParam::BspCacheCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     CWorldParam::cvar_footstepBias = CVar::Register("footstepBias", "Unit footstep depth bias", 1, "0.125", CWorldParam::FootstepBiasCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     CWorldParam::cvar_occlusion = CVar::Register("occlusion", "Use hardware occlusion test", 1, "1", CWorldParam::HardwareOcclusionCallback, CATEGORY_GRAPHICS, false, nullptr, false);

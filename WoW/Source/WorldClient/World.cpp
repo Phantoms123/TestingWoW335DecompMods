@@ -4,6 +4,7 @@
 #line 1
 #include "World.h"
 #include "WoW/Source/VolFog/VolFog.h"
+#include "WoW/Source/LiquidSystem/CataWater.h"
 #include <cstdlib>
 #include <new>
 #include <algorithm>
@@ -1938,7 +1939,10 @@ void CWorldScene::RenderLiquidPass() {
     if ((CWorld::enables & Enable_Water) && CWorldScene::s_liquidRenderer) {
         // CHANGED: CoAVolFog shades the transparent water drawn by this pass.
         vf_on_water_pass_begin(CWorldScene::s_liquidRenderer);
+        // CHANGED: the 4.3.4 water copies the frame drawn so far and renders its sky reflection here.
+        Liquid::Cata::BeginLiquidPass(World::SceneCamLiquidStatus(nullptr) != 0);
         CWorldScene::s_liquidRenderer->Flush(CWorldScene::s_activeWorldView, 1);
+        Liquid::Cata::EndLiquidPass();
         vf_on_water_pass_end();
     }
 
