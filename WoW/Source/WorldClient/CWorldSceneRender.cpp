@@ -146,6 +146,13 @@ void CWorldScene::Render(const C3Vector& cameraPos, float time) {
         CWorldScene::frustumPortalView.m_maxViewDepth = 0.0f;
         CWorldScene::s_occlusionNearDepth = -10000.0f;
         CWorldScene::frustumPortalView.m_vertCount = 0;
+
+        // CHANGED: with real water reflections, the culling reaches a screen's height above the top of the view,
+        // where what the water mirrors lies, so it does not pop in and out of the reflection as the camera turns.
+        if (Liquid::Cata::ReflectionNeedsWideCulling()) {
+            CWorldScene::frustumPortalView.m_rect.maxY = 2.0f;
+        }
+
         CWorldScene::CullSortTable(&CWorldScene::frustumPortalView.m_rect);
     }
 

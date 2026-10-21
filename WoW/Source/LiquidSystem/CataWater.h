@@ -58,6 +58,8 @@ namespace Liquid {
         // winding for the terrain (and map objects, mode 3) the caller then draws; End puts it all back.
         bool BeginReflection(const C3Vector& worldViewOrigin, uint32_t& mode);
         void EndReflection();
+        // Whether the world's culling should take in more above the view for the reflection.
+        bool ReflectionNeedsWideCulling();
 
         // Once a frame before the world draws (creates or frees what the current setting needs).
         void BeginFrame();

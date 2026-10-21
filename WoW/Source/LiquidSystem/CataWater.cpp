@@ -71,6 +71,7 @@ static CGxShader* s_blurPixelShader;
 static CTexture* s_backBufferTex;
 static CTexture* s_fakeReflectionTex;
 static CTexture* s_realReflectionTex;
+static CTexture* s_realReflectionTemp;
 static CTexture* s_blurredBackTex;
 static CTexture* s_blurTempTex;
 static uint32_t s_screenWidth;
@@ -179,6 +180,7 @@ static void DestroyTargets() {
     ReleaseTexture(s_backBufferTex);
     ReleaseTexture(s_fakeReflectionTex);
     ReleaseTexture(s_realReflectionTex);
+    ReleaseTexture(s_realReflectionTemp);
     ReleaseTexture(s_blurredBackTex);
     ReleaseTexture(s_blurTempTex);
     s_screenWidth = 0;
@@ -291,6 +293,10 @@ static bool EnsureTargets() {
 
     if (!s_realReflectionTex && s_detail >= 3) {
         s_realReflectionTex = CreateTarget(GxTex_NonPow2, s_reflectionWidth, s_reflectionHeight, "LiquidProc Real Reflection");
+    }
+
+    if (!s_realReflectionTemp && s_detail >= 3) {
+        s_realReflectionTemp = CreateTarget(GxTex_NonPow2, s_reflectionWidth, s_reflectionHeight, "blurredReflection");
     }
 
     if (!s_blurredBackTex) {
@@ -1195,6 +1201,10 @@ bool Liquid::Cata::BeginReflection(const C3Vector& worldViewOrigin, uint32_t& mo
     return true;
 }
 
+bool Liquid::Cata::ReflectionNeedsWideCulling() {
+    return s_detail >= 3 && s_reflectionMode >= 2 && s_planeValid && !s_cameraUnderwater;
+}
+
 void Liquid::Cata::EndReflection() {
     if (!s_inReflection) {
         return;
@@ -1208,6 +1218,9 @@ void Liquid::Cata::EndReflection() {
     // reflectionStrength below 1 fades the reflected world towards the fog colour, so the water mirrors it less;
     // so does the fade in and out.
     float shown = s_reflectionStrength * s_reflectionBlend;
+
+    // A slight blur, as 4.3.4's blurredReflection: thin edges stop shimmering as the camera moves.
+    PostEffects::Soften(GxTexOf(s_realReflectionTex), GxTexOf(s_realReflectionTemp), 1.5f);
 
     if (shown < 1.0f) {
         PostEffects::Tint(GxTexOf(s_realReflectionTex), DayNight::GetInfo()->m_fog.m_color, 1.0f - shown);

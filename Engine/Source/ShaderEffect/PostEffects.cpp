@@ -649,3 +649,36 @@ bool PostEffects::Tint(CGxTex* target, const CImVector& color, float amount) {
     state.End();
     return true;
 }
+
+// Softens target with a separable Gaussian through temp (the same size), radius in texels.
+bool PostEffects::Soften(CGxTex* target, CGxTex* temp, float radius) {
+    if (!target || !temp || radius <= 0.0f) {
+        return false;
+    }
+
+    if (!s_vs) {
+        s_vs = CreateEmbedded(GxSh_Vertex, "PostEffects", g_post_vs, sizeof(g_post_vs));
+    }
+
+    if (!s_blurPs) {
+        s_blurPs = CreateEmbedded(GxSh_Pixel, "PostBlur", g_post_blur_ps, sizeof(g_post_blur_ps));
+    }
+
+    if (!s_vs || !s_blurPs) {
+        return false;
+    }
+
+    CGxDevice* device = g_theGxDevicePtr;
+    PassState state;
+    state.Begin();
+    // The blur steps 1.4 and 3.2 texels out; scaled so its reach is about radius.
+    float scale = radius / 3.2f;
+    device->RsSet(GxRs_Texture0, target);
+    SetPixel(0, scale / target->m_width, 0.0f, 0.0f, 0.0f);
+    Pass(state, temp, s_blurPs, nullptr);
+    device->RsSet(GxRs_Texture0, temp);
+    SetPixel(0, 0.0f, scale / target->m_height, 0.0f, 0.0f);
+    Pass(state, target, s_blurPs, nullptr);
+    state.End();
+    return true;
+}
