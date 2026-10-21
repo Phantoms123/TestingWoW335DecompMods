@@ -9,6 +9,12 @@
 
 cbuffer FixedFunction : register(b1)
 {
+    // The first three registers are also what the shader model 4 builds of the client's pixel shaders read
+    // (the 4.3.4 port's "Classic" set): fog colour, fog on (shaders older than shader model 3 had Direct3D 9's
+    // fixed-function fog applied after them), alpha test on and its reference (0-255).
+    float4 g_fogColor;
+    float4 g_fogEnable;
+    float4 g_alphaTest;
     row_major float4x4 g_world;
     row_major float4x4 g_view;
     row_major float4x4 g_proj;
@@ -24,10 +30,9 @@ cbuffer FixedFunction : register(b1)
     float4 g_lightAmbient[4];
     float4 g_lightSpecular[4];
     float4 g_lightAtten[4];   // xyz constant, linear and quadratic attenuation; w 1 enabled
-    int4 g_flags;             // x lighting, y fog, z alpha reference (-1 no test), w normalize normals
+    int4 g_flags;             // x lighting, y fog, z unused, w normalize normals
     int4 g_flags2;            // x vertex colour 0 given, y colour 1 given, z material sources, w specular
     float4 g_fog;             // x start, y end
-    float4 g_fogColor;
     float4 g_clip[6];         // world space
     int4 g_clipMask;          // x mask, y stage is a cube map (bit per stage)
 };
@@ -61,7 +66,7 @@ struct VsOut
     float4 tc5 : TEXCOORD5;
     float4 tc6 : TEXCOORD6;
     float4 tc7 : TEXCOORD7;
-    float fog : FOG;
+    float4 fog : FOG;         // x; a whole register, the layout the client's shader model 4 shaders use
     float4 clip0 : SV_ClipDistance0;
     float2 clip1 : SV_ClipDistance1;
 };
@@ -190,11 +195,11 @@ VsOut VsMain(VsIn input)
     o.tc6 = StageCoord(6, raw, view.xyz, normal);
     o.tc7 = StageCoord(7, raw, view.xyz, normal);
 
-    o.fog = 1.0;
+    o.fog = float4(1.0, 0.0, 0.0, 0.0);
 
     if (g_flags.y != 0) {
         float range = g_fog.y - g_fog.x;
-        o.fog = range != 0.0 ? saturate((g_fog.y - abs(view.z)) / range) : 1.0;
+        o.fog.x = range != 0.0 ? saturate((g_fog.y - abs(view.z)) / range) : 1.0;
     }
 
     float c[6];
@@ -297,11 +302,12 @@ float4 PsMain(VsOut input) : SV_Target
         current.rgb = saturate(current.rgb + input.specular.rgb);
     }
 
-    if (g_flags.y != 0) {
-        current.rgb = lerp(g_fogColor.rgb, current.rgb, input.fog);
+    if (g_fogEnable.x != 0.0) {
+        current.rgb = lerp(g_fogColor.rgb, current.rgb, input.fog.x);
     }
 
-    if (g_flags.z >= 0 && current.a * 255.0 < (float)g_flags.z - 0.5) {
+    // As the client's shaders test: the alpha rounded to 0-255 against the reference (greater or equal passes).
+    if (g_alphaTest.x != 0.0 && floor(saturate(current.a) * 255.0 + 0.5) < g_alphaTest.y) {
         discard;
     }
 

@@ -149,7 +149,7 @@ Every changed spot in the original sources is marked `// CHANGED:`.
   for shader model 4, same permutations, the Direct3D 9 constant registers in constant buffer 0 of each stage),
   while the rest of the client still sees shader model 3 and takes its usual paths. Samplers a shader declares
   with comparison mode get comparison samplers (hardware PCF shadow lookups).
-- Alpha test is not a device state: `m_shaderAlphaRef` is 0, so the client picks the alpha-testing permutations.
+- Alpha test stays a device state (`m_shaderAlphaRef` 1), applied by every pixel shader from constant buffer 1.
 - Everything drawn without shaders goes through one fixed-function emulation shader (`Shaders/FixedFunction.hlsl`,
   headers made by `Shaders/build.sh` with Tools/VfHlsl, which now writes DXBC for `_4_`/`_5_` profiles and takes
   `SV_ClipDistance`): Direct3D 9's lighting with material sources, linear fog, texture coordinate generation and

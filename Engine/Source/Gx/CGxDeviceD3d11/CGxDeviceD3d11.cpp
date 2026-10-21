@@ -39,6 +39,9 @@ void SafeRelease(T*& object) {
 
 // The fixed-function constant buffer; the layout of cbuffer FixedFunction in Shaders/FixedFunction.hlsl.
 struct FfpConstants {
+    float fogColor[4];
+    float fogEnable[4];
+    float alphaTest[4];
     float world[16];
     float view[16];
     float proj[16];
@@ -56,12 +59,11 @@ struct FfpConstants {
     int32_t flags[4];
     int32_t flags2[4];
     float fog[4];
-    float fogColor[4];
     float clip[6][4];
     int32_t clipMask[4];
 };
 
-static_assert(sizeof(FfpConstants) == 87 * 16, "FfpConstants must match cbuffer FixedFunction");
+static_assert(sizeof(FfpConstants) == 89 * 16, "FfpConstants must match cbuffer FixedFunction");
 
 // Direct3D 9's blend factors for each Gx blending mode (CGxDeviceD3d::s_srcBlend, s_dstBlend), as Direct3D 11's.
 const D3D11_BLEND s_srcBlend[12] = { D3D11_BLEND_ONE, D3D11_BLEND_ONE, D3D11_BLEND_SRC_ALPHA, D3D11_BLEND_SRC_ALPHA, D3D11_BLEND_DEST_COLOR, D3D11_BLEND_DEST_COLOR, D3D11_BLEND_DEST_COLOR, D3D11_BLEND_INV_SRC_ALPHA, D3D11_BLEND_INV_SRC_ALPHA, D3D11_BLEND_SRC_ALPHA, D3D11_BLEND_ONE, D3D11_BLEND_BLEND_FACTOR };
@@ -849,8 +851,8 @@ void CGxDeviceD3d11::ISetCaps(const CGxFormat& format) {
     caps.m_pointScaleMax = 1.0f;
     caps.m_pointSprite = 0;
     caps.m_blendFactor = 1;
-    // Alpha test is not a device state: the client picks the shader permutations that test in the shader.
-    caps.m_shaderAlphaRef = 0;
+    // Alpha test is a device state, as on Direct3D 9: every pixel shader tests against constant buffer 1.
+    caps.m_shaderAlphaRef = 1;
 
     for (uint32_t i = 0; i < 5; i++) {
         caps.unused_0114[i] = 0;
@@ -2929,11 +2931,6 @@ void CGxDeviceD3d11::IShaderConstantsFlush() {
 }
 
 void CGxDeviceD3d11::IFfpSync() {
-    // Only the fixed-function shader reads these.
-    if (this->m_hwVs != this->m_ffpVs && this->m_hwPs != this->m_ffpPs) {
-        return;
-    }
-
     // The lights, as the Direct3D 9 device's IStateSyncLights would set them: lit draws use the lights, unlit
     // draws without vertex colours but with a material colour light it by an ambient of 1.
     int32_t lighting = 0;
@@ -3077,7 +3074,10 @@ void CGxDeviceD3d11::IFfpSync() {
 
     c.flags[0] = lighting;
     c.flags[1] = this->m_fog;
-    c.flags[2] = this->m_alphaRef > 0 ? std::min(this->m_alphaRef, 255) : -1;
+    c.flags[2] = 0;
+    c.fogEnable[0] = this->m_fog ? 1.0f : 0.0f;
+    c.alphaTest[0] = this->m_alphaRef > 0 ? 1.0f : 0.0f;
+    c.alphaTest[1] = static_cast<float>(std::min(std::max(this->m_alphaRef, 0), 255));
     c.flags[3] = this->m_normalizeNormals;
     c.flags2[0] = color0;
     c.flags2[1] = color1;
