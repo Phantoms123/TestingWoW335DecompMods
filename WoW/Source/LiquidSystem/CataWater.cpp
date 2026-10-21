@@ -871,7 +871,8 @@ static void DrawPerturbations(uint32_t levelIndex, const std::vector<RipplePertu
 
     float res = static_cast<float>(RIPPLE_RES);
     float texel = 1.0f / res;
-    bool halfTexel = g_theGxDevicePtr->DeviceApi() != GxApi_OpenGl;
+    // Direct3D 9 only: Direct3D 11 samples at texel centres.
+    bool halfTexel = g_theGxDevicePtr->DeviceApi() == GxApi_D3d9 || g_theGxDevicePtr->DeviceApi() == GxApi_D3d9Ex;
     uint32_t elapsed = now - s_rippleStartMs;
 
     for (const RipplePerturbation& perturbation : list) {

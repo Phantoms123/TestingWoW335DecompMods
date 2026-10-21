@@ -1,8 +1,10 @@
 // Nine-tap Gaussian blur in five bilinear fetches, one direction a pass.
+#include "post_common.hlsli"
+
 sampler2D Source : register(s0);
 float4 Step : register(c0);     // one texel along the blur direction
 
-float4 main(float2 uv : TEXCOORD0) : COLOR {
+float4 main(PS_POSITION float2 uv : TEXCOORD0) : COLOR {
     float3 c = tex2D(Source, uv).rgb * 0.2270270;
     c += tex2D(Source, uv + Step.xy * 1.3846154).rgb * 0.3162162;
     c += tex2D(Source, uv - Step.xy * 1.3846154).rgb * 0.3162162;

@@ -4,7 +4,7 @@
 sampler2D Scene : register(s0);
 float4 Params : register(c0);   // source texel size, threshold
 
-float4 main(float2 uv : TEXCOORD0) : COLOR {
+float4 main(PS_POSITION float2 uv : TEXCOORD0) : COLOR {
     float3 c = tex2D(Scene, uv + Params.xy * float2(-1.0, -1.0)).rgb;
     c += tex2D(Scene, uv + Params.xy * float2(1.0, -1.0)).rgb;
     c += tex2D(Scene, uv + Params.xy * float2(-1.0, 1.0)).rgb;

@@ -1,3 +1,5 @@
+#include "post_common.hlsli"
+
 // Full-screen quad for the post effects. c0.zw: half a texel of the target (Direct3D 9 pixel centres).
 // c1-c3: the view ray at the screen's top left and its change across the screen (u) and down it (v), scaled so
 // that its component along the view axis is 1 (the ray times the view depth is the camera-relative position).
@@ -7,7 +9,7 @@ float4 RayU : register(c2);
 float4 RayV : register(c3);
 
 struct VsOut {
-    float4 position : POSITION;
+    float4 position : VS_POSITION;
     float2 uv : TEXCOORD0;
     float3 ray : TEXCOORD1;
 };

@@ -6,7 +6,7 @@ sampler2D DepthTex : register(s1);
 float4 View : register(c0);
 float4 Step : register(c1);     // one texel along the blur direction, sky depth
 
-float4 main(float2 uv : TEXCOORD0) : COLOR {
+float4 main(PS_POSITION float2 uv : TEXCOORD0) : COLOR {
     float centre = ViewDepth(min(tex2D(DepthTex, uv).x, Step.z), View);
     float total = 0.0;
     float weights = 0.0;

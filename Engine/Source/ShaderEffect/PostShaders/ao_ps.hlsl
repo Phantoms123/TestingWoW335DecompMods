@@ -16,7 +16,7 @@ float3 Position(float2 uv) {
     return ray * ViewDepth(min(d, Params.w), View);
 }
 
-float4 main(float2 uv : TEXCOORD0, float3 ray : TEXCOORD1) : COLOR {
+float4 main(PS_POSITION float2 uv : TEXCOORD0, float3 ray : TEXCOORD1) : COLOR {
     float d = tex2D(DepthTex, uv).x;
 
     if (d >= Params.w) {

@@ -7,7 +7,7 @@ float4 Fog : register(c1);      // density (1/yard), height falloff (1/yard), st
 float4 FogColor : register(c2);
 float4 Camera : register(c3);   // camera height, depth beyond which is sky
 
-float4 main(float2 uv : TEXCOORD0, float3 ray : TEXCOORD1) : COLOR {
+float4 main(PS_POSITION float2 uv : TEXCOORD0, float3 ray : TEXCOORD1) : COLOR {
     float d = tex2D(DepthTex, uv).x;
 
     if (d >= Camera.y) {

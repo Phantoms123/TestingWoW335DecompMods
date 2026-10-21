@@ -156,9 +156,15 @@ Every changed spot in the original sources is marked `// CHANGED:`.
   stage transforms, the six texture operations the client uses, alpha test and world-space clip planes.
 - Vertex and index pools keep a copy of their contents (locks never wait; triangle fans become lists from it);
   16-bit textures are stored as 32-bit; the colour Direct3D 9 cleared by viewport is cleared by rectangle.
-- Not yet: point sprites (the client is told there are none), stereo, RESZ depth copies. DepthCache reports
-  itself unsupported on other devices than Direct3D 9, so the 4.3.4 water, sun shafts and the Advanced Effects
-  stay off there, and CoAVolFog needs Direct3D 9.
+- Scene depth: the back buffer's depth is a typeless texture; `DeviceCopySampledDepth` draws it into the INTZ
+  texture through `SV_Depth` (`Shaders/DepthCopy.hlsl`), so DepthCache always runs in copy mode here.
+  `DeviceTexSetVolume` makes a Texture3D (the magma noise).
+- The 4.3.4 water, ripples, magma, sun shafts and glare use the shader model 4 Cata shaders, packed in
+  patch-C.MPQ under `Shaders\Cata\{Pixel\ps_4_0,Vertex\vs_4_0}`.
+- The Advanced Effects (PostEffects) have shader model 4 builds of the same HLSL (`PostShaders/vkd3d/*_sm4.h`,
+  `build.sh` with `SM4` defined: every pixel shader takes `SV_Position` first so registers match the vertex
+  shader's); no half-texel offset.
+- Not yet: point sprites (the client is told there are none), stereo. CoAVolFog needs Direct3D 9.
 
 ### Volumetric fog and water (WoW/Source/VolFog)
 - CoAVolFog's renderers, shaders, data and `CoAVolFog.ini` as upstream; its DLL loader, call-site patches and

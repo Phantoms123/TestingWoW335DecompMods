@@ -7,7 +7,7 @@ float4 View : register(c0);
 float4 Fade : register(c1);     // start (yards), 1 / (end - start), depth beyond which is sky
 float4 Color : register(c2);
 
-float4 main(float2 uv : TEXCOORD0) : COLOR {
+float4 main(PS_POSITION float2 uv : TEXCOORD0) : COLOR {
     float d = tex2D(DepthTex, uv).x;
 
     if (d >= Fade.z) {

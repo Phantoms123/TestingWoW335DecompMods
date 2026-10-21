@@ -28,6 +28,18 @@
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/haze_ps.h"
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/post_vs.h"
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/sharpen_ps.h"
+#include "Engine/Source/ShaderEffect/PostShaders/vkd3d/ao_blur_ps_sm4.h"
+#include "Engine/Source/ShaderEffect/PostShaders/vkd3d/ao_ps_sm4.h"
+#include "Engine/Source/ShaderEffect/PostShaders/vkd3d/bloom_ps_sm4.h"
+#include "Engine/Source/ShaderEffect/PostShaders/vkd3d/blur_ps_sm4.h"
+#include "Engine/Source/ShaderEffect/PostShaders/vkd3d/bright_ps_sm4.h"
+#include "Engine/Source/ShaderEffect/PostShaders/vkd3d/copy_ps_sm4.h"
+#include "Engine/Source/ShaderEffect/PostShaders/vkd3d/depthfade_ps_sm4.h"
+#include "Engine/Source/ShaderEffect/PostShaders/vkd3d/fill_ps_sm4.h"
+#include "Engine/Source/ShaderEffect/PostShaders/vkd3d/fxaa_ps_sm4.h"
+#include "Engine/Source/ShaderEffect/PostShaders/vkd3d/haze_ps_sm4.h"
+#include "Engine/Source/ShaderEffect/PostShaders/vkd3d/post_vs_sm4.h"
+#include "Engine/Source/ShaderEffect/PostShaders/vkd3d/sharpen_ps_sm4.h"
 
 // What the passes overwrite in the client's own constants (some stay set for a whole frame).
 static const uint32_t SAVED_CONSTANTS = 8;
@@ -129,6 +141,13 @@ static CGxShader* CreateEmbedded(EGxShTarget target, const char* name, const uns
     return shader;
 }
 
+// CHANGED: the Direct3D 11 device takes the shader model 4 builds (vkd3d/*_sm4.h) of the same shaders.
+static bool Sm4() {
+    return g_theGxDevicePtr->DeviceApi() == GxApi_D3d11;
+}
+
+#define EMBEDDED(target, name, code) (Sm4() ? CreateEmbedded(target, name, code##_sm4, sizeof(code##_sm4)) : CreateEmbedded(target, name, code, sizeof(code)))
+
 static void DestroyTargets() {
     ReleaseTexture(s_sceneTex);
 
@@ -167,13 +186,13 @@ static bool Create() {
         return false;
     }
 
-    // Their shaders are Direct3D 9 ones.
-    if (g_theGxDevicePtr->DeviceApi() != GxApi_D3d9) {
-        LogOnce(0, "off, they need the Direct3D 9 device (gxApi D3D9)");
+    // Their shaders are built for Direct3D 9 and Direct3D 11.
+    if (g_theGxDevicePtr->DeviceApi() != GxApi_D3d9 && !Sm4()) {
+        LogOnce(0, "off, they need the Direct3D 9 or 11 device (gxApi D3D9 or D3D11)");
         return false;
     }
 
-#define POST_SHADER(var, target, name, code) var = CreateEmbedded(target, name, code, sizeof(code))
+#define POST_SHADER(var, target, name, code) var = EMBEDDED(target, name, code)
     POST_SHADER(s_vs, GxSh_Vertex, "PostEffects", g_post_vs);
     POST_SHADER(s_hazePs, GxSh_Pixel, "PostHaze", g_post_haze_ps);
     POST_SHADER(s_aoPs, GxSh_Pixel, "PostAO", g_post_ao_ps);
@@ -397,8 +416,8 @@ static void SetVertexConstants(float targetWidth, float targetHeight, const View
         0.0f, 0.0f, 0.0f, 0.0f,
     };
 
-    // OpenGL puts pixel centres on the texel centres already.
-    if (g_theGxDevicePtr->DeviceApi() == GxApi_OpenGl) {
+    // OpenGL and Direct3D 11 put pixel centres on the texel centres already.
+    if (g_theGxDevicePtr->DeviceApi() == GxApi_OpenGl || Sm4()) {
         c[2] = 0.0f;
         c[3] = 0.0f;
     }
@@ -638,11 +657,11 @@ bool PostEffects::Tint(CGxTex* target, const CImVector& color, float amount) {
     }
 
     if (!s_vs) {
-        s_vs = CreateEmbedded(GxSh_Vertex, "PostEffects", g_post_vs, sizeof(g_post_vs));
+        s_vs = EMBEDDED(GxSh_Vertex, "PostEffects", g_post_vs);
     }
 
     if (!s_fillPs) {
-        s_fillPs = CreateEmbedded(GxSh_Pixel, "PostFill", g_post_fill_ps, sizeof(g_post_fill_ps));
+        s_fillPs = EMBEDDED(GxSh_Pixel, "PostFill", g_post_fill_ps);
     }
 
     if (!s_vs || !s_fillPs) {
@@ -666,11 +685,11 @@ bool PostEffects::Soften(CGxTex* target, CGxTex* temp, float radius) {
     }
 
     if (!s_vs) {
-        s_vs = CreateEmbedded(GxSh_Vertex, "PostEffects", g_post_vs, sizeof(g_post_vs));
+        s_vs = EMBEDDED(GxSh_Vertex, "PostEffects", g_post_vs);
     }
 
     if (!s_blurPs) {
-        s_blurPs = CreateEmbedded(GxSh_Pixel, "PostBlur", g_post_blur_ps, sizeof(g_post_blur_ps));
+        s_blurPs = EMBEDDED(GxSh_Pixel, "PostBlur", g_post_blur_ps);
     }
 
     if (!s_vs || !s_blurPs) {
@@ -699,11 +718,11 @@ bool PostEffects::FadeByDepth(CGxTex* target, CGxTex* depth, const C4Vector& vie
     }
 
     if (!s_vs) {
-        s_vs = CreateEmbedded(GxSh_Vertex, "PostEffects", g_post_vs, sizeof(g_post_vs));
+        s_vs = EMBEDDED(GxSh_Vertex, "PostEffects", g_post_vs);
     }
 
     if (!s_depthFadePs) {
-        s_depthFadePs = CreateEmbedded(GxSh_Pixel, "PostDepthFade", g_post_depthfade_ps, sizeof(g_post_depthfade_ps));
+        s_depthFadePs = EMBEDDED(GxSh_Pixel, "PostDepthFade", g_post_depthfade_ps);
     }
 
     if (!s_vs || !s_depthFadePs) {

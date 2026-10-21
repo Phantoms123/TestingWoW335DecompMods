@@ -1,8 +1,10 @@
 // Contrast adaptive sharpening (after AMD FidelityFX CAS): sharpens less where the local contrast is high.
+#include "post_common.hlsli"
+
 sampler2D Scene : register(s0);
 float4 Params : register(c0);   // texel size, sharpness (0-1)
 
-float4 main(float2 uv : TEXCOORD0) : COLOR {
+float4 main(PS_POSITION float2 uv : TEXCOORD0) : COLOR {
     float3 e = tex2D(Scene, uv).rgb;
     float3 b = tex2D(Scene, uv + float2(0.0, -Params.y)).rgb;
     float3 d = tex2D(Scene, uv + float2(-Params.x, 0.0)).rgb;

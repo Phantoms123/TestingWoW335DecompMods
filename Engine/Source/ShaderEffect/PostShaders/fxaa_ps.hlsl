@@ -5,7 +5,7 @@
 sampler2D Scene : register(s0);
 float4 Texel : register(c0);    // texel size
 
-float4 main(float2 uv : TEXCOORD0) : COLOR {
+float4 main(PS_POSITION float2 uv : TEXCOORD0) : COLOR {
     float3 rgbM = tex2D(Scene, uv).rgb;
     float lumaNW = Luma(tex2D(Scene, uv + Texel.xy * float2(-0.5, -0.5)).rgb);
     float lumaNE = Luma(tex2D(Scene, uv + Texel.xy * float2(0.5, -0.5)).rgb);

@@ -14,7 +14,7 @@ float3 RollOff(float3 c) {
     return min(c, 0.6) + x / (1.0 + x / 0.4);
 }
 
-float4 main(float2 uv : TEXCOORD0) : COLOR {
+float4 main(PS_POSITION float2 uv : TEXCOORD0) : COLOR {
     float3 c = tex2D(Scene, uv).rgb;
     c += (tex2D(Bloom, uv).rgb * 0.6 + tex2D(BloomWide, uv).rgb * 0.4) * Params.x;
     c *= Params.z;

@@ -26,6 +26,7 @@
 namespace {
 #include "Engine/Source/Gx/CGxDeviceD3d11/Shaders/vkd3d/blit_ps.h"
 #include "Engine/Source/Gx/CGxDeviceD3d11/Shaders/vkd3d/blit_vs.h"
+#include "Engine/Source/Gx/CGxDeviceD3d11/Shaders/vkd3d/depthcopy_ps.h"
 #include "Engine/Source/Gx/CGxDeviceD3d11/Shaders/vkd3d/ffp_ps.h"
 #include "Engine/Source/Gx/CGxDeviceD3d11/Shaders/vkd3d/ffp_vs.h"
 
@@ -700,19 +701,30 @@ int32_t CGxDeviceD3d11::ICreateBackBuffers() {
         return 0;
     }
 
+    // Typeless, so DeviceCopySampledDepth can read it.
     D3D11_TEXTURE2D_DESC depth = {};
     depth.Width = desc.Width;
     depth.Height = desc.Height;
     depth.MipLevels = 1;
     depth.ArraySize = 1;
-    depth.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    depth.Format = DXGI_FORMAT_R24G8_TYPELESS;
     depth.SampleDesc.Count = this->m_samples;
     depth.Usage = D3D11_USAGE_DEFAULT;
-    depth.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+    depth.BindFlags = D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE;
 
-    if (FAILED(this->m_device->CreateTexture2D(&depth, nullptr, &this->m_backDepth)) || FAILED(this->m_device->CreateDepthStencilView(this->m_backDepth, nullptr, &this->m_backDsv))) {
+    D3D11_DEPTH_STENCIL_VIEW_DESC dsv = {};
+    dsv.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    dsv.ViewDimension = this->m_samples > 1 ? D3D11_DSV_DIMENSION_TEXTURE2DMS : D3D11_DSV_DIMENSION_TEXTURE2D;
+
+    if (FAILED(this->m_device->CreateTexture2D(&depth, nullptr, &this->m_backDepth)) || FAILED(this->m_device->CreateDepthStencilView(this->m_backDepth, &dsv, &this->m_backDsv))) {
         return 0;
     }
+
+    D3D11_SHADER_RESOURCE_VIEW_DESC srv = {};
+    srv.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+    srv.ViewDimension = this->m_samples > 1 ? D3D11_SRV_DIMENSION_TEXTURE2DMS : D3D11_SRV_DIMENSION_TEXTURE2D;
+    srv.Texture2D.MipLevels = 1;
+    this->m_device->CreateShaderResourceView(this->m_backDepth, &srv, &this->m_backDepthSrv);
 
     return 1;
 }
@@ -727,6 +739,7 @@ void CGxDeviceD3d11::IReleaseBackBuffers() {
     SafeRelease(this->m_backRtv);
     SafeRelease(this->m_backColor);
     SafeRelease(this->m_backDsv);
+    SafeRelease(this->m_backDepthSrv);
     SafeRelease(this->m_backDepth);
 }
 
@@ -818,6 +831,7 @@ int32_t CGxDeviceD3d11::ICreateD3dDevice(const CGxFormat& format) {
     this->m_device->CreatePixelShader(g_ffp_ps, sizeof(g_ffp_ps), nullptr, &this->m_ffpPs);
     this->m_device->CreateVertexShader(g_blit_vs, sizeof(g_blit_vs), nullptr, &this->m_blitVs);
     this->m_device->CreatePixelShader(g_blit_ps, sizeof(g_blit_ps), nullptr, &this->m_blitPs);
+    this->m_device->CreatePixelShader(g_depthcopy_ps, sizeof(g_depthcopy_ps), nullptr, &this->m_depthCopyPs);
     this->m_ffpVsInfo = Shader();
     this->m_ffpVsInfo.m_object = this->m_ffpVs;
     this->m_ffpVsInfo.m_code.assign(g_ffp_vs, g_ffp_vs + sizeof(g_ffp_vs));
@@ -1009,6 +1023,7 @@ void CGxDeviceD3d11::IDestroyD3d() {
     SafeRelease(this->m_ffpPs);
     SafeRelease(this->m_blitVs);
     SafeRelease(this->m_blitPs);
+    SafeRelease(this->m_depthCopyPs);
     this->m_ffpVsInfo = Shader();
     SafeRelease(this->m_rtDsv);
     SafeRelease(this->m_rtDepth);
@@ -1605,6 +1620,7 @@ static void ReleaseTexture(CGxTex* texId) {
 
         SafeRelease(tex->m_dsv);
         SafeRelease(tex->m_texture);
+        SafeRelease(tex->m_volume);
         delete tex;
     }
 
@@ -1829,11 +1845,136 @@ void CGxDeviceD3d11::DeviceSetSampledDepth(CGxTex* texture) {
 }
 
 int32_t CGxDeviceD3d11::DeviceCanCopySampledDepth() {
-    return 0;
+    return this->m_context && this->m_depthCopyPs && this->m_blitVs && this->m_backDepthSrv;
 }
 
+// Copies the back buffer's depth into texture (an INTZ one), for effects that read the scene depth: drawn into
+// its depth through SV_Depth. The back buffer's depth stays bound for the rest of the frame.
 int32_t CGxDeviceD3d11::DeviceCopySampledDepth(CGxTex* texture) {
-    return 0;
+    if (!this->DeviceCanCopySampledDepth() || !texture || texture->m_format != GxTex_Intz) {
+        return 0;
+    }
+
+    if (texture->m_needsCreation || !texture->m_apiSpecificData) {
+        this->ITexCreate(texture);
+    }
+
+    Texture* tex = static_cast<Texture*>(texture->m_apiSpecificData);
+
+    if (!tex || !tex->m_dsv) {
+        return 0;
+    }
+
+    D3D11_TEXTURE2D_DESC desc;
+    tex->m_texture->GetDesc(&desc);
+
+    if (desc.Width != this->m_backBufferWidth || desc.Height != this->m_backBufferHeight) {
+        return 0;
+    }
+
+    float info[4] = { this->m_samples > 1 ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f };
+    D3D11_MAPPED_SUBRESOURCE mapped;
+
+    if (SUCCEEDED(this->m_ctx->Map(this->m_blitConstants, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+        memcpy(mapped.pData, info, sizeof(info));
+        this->m_ctx->Unmap(this->m_blitConstants, 0);
+    }
+
+    // Always passes, always writes.
+    static ID3D11DepthStencilState* s_write = nullptr;
+
+    if (!s_write) {
+        D3D11_DEPTH_STENCIL_DESC depthDesc = {};
+        depthDesc.DepthEnable = TRUE;
+        depthDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+        depthDesc.DepthFunc = D3D11_COMPARISON_ALWAYS;
+        this->m_device->CreateDepthStencilState(&depthDesc, &s_write);
+    }
+
+    ID3D11ShaderResourceView* none[24] = {};
+    this->m_ctx->PSSetShaderResources(0, 24, none);
+    this->m_ctx->OMSetRenderTargets(0, nullptr, tex->m_dsv);
+
+    D3D11_VIEWPORT viewport = { 0.0f, 0.0f, static_cast<float>(desc.Width), static_cast<float>(desc.Height), 0.0f, 1.0f };
+    this->m_ctx->RSSetViewports(1, &viewport);
+    this->m_ctx->RSSetState(nullptr);
+    this->m_ctx->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
+    this->m_ctx->OMSetDepthStencilState(s_write, 0);
+    this->m_ctx->IASetInputLayout(nullptr);
+    this->m_ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    this->m_ctx->VSSetShader(this->m_blitVs, nullptr, 0);
+    this->m_ctx->PSSetShader(this->m_depthCopyPs, nullptr, 0);
+    this->m_ctx->PSSetConstantBuffers(0, 1, &this->m_blitConstants);
+    ID3D11ShaderResourceView* views[2] = { this->m_samples > 1 ? nullptr : this->m_backDepthSrv, this->m_samples > 1 ? this->m_backDepthSrv : nullptr };
+    this->m_ctx->PSSetShaderResources(0, 2, views);
+    // The blit vertex shader's rectangle (constant buffer 0) is ignored; its corners cover the target.
+    this->m_ctx->VSSetConstantBuffers(0, 1, &this->m_blitConstants);
+    this->m_ctx->Draw(3, 0);
+    this->m_ctx->PSSetShaderResources(0, 2, none);
+
+    this->IStateInvalidate();
+    this->IBindTargets();
+    return 1;
+}
+
+// After the device drew something of its own: everything is sent again before the next draw.
+void CGxDeviceD3d11::IStateInvalidate() {
+    this->m_hwBlend = this->m_hwDepth = this->m_hwRaster = ~0ull;
+    this->m_stateDirty = true;
+    this->m_hwVs = nullptr;
+    this->m_hwPs = nullptr;
+    this->m_vertexDirty = true;
+    this->m_texturesDirty = true;
+    this->m_ffpDirty = true;
+    this->m_viewportDirty = 1;
+    this->m_scissorRectDirty = 1;
+}
+
+// The texture's resource becomes a 3D texture (ARGB texels), for shaders that read a volume (4.3.4 magma noise).
+int32_t CGxDeviceD3d11::DeviceTexSetVolume(CGxTex* texture, uint32_t width, uint32_t height, uint32_t depth, const void* argb) {
+    if (!this->m_context || !texture || !argb || !width || !height || !depth) {
+        return 0;
+    }
+
+    D3D11_TEXTURE3D_DESC desc = {};
+    desc.Width = width;
+    desc.Height = height;
+    desc.Depth = depth;
+    desc.MipLevels = 1;
+    desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    desc.Usage = D3D11_USAGE_IMMUTABLE;
+    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+    D3D11_SUBRESOURCE_DATA data = { argb, width * 4, width * height * 4 };
+    ID3D11Texture3D* volume = nullptr;
+
+    if (FAILED(this->m_device->CreateTexture3D(&desc, &data, &volume))) {
+        return 0;
+    }
+
+    Texture* tex = new Texture();
+    tex->m_volume = volume;
+    tex->m_dxgiFormat = DXGI_FORMAT_B8G8R8A8_UNORM;
+    this->m_device->CreateShaderResourceView(volume, nullptr, &tex->m_srv);
+
+    if (texture->m_apiSpecificData) {
+        Texture* old = static_cast<Texture*>(texture->m_apiSpecificData);
+        SafeRelease(old->m_srv);
+
+        for (uint32_t i = 0; i < 6; i++) {
+            SafeRelease(old->m_rtv[i]);
+        }
+
+        SafeRelease(old->m_dsv);
+        SafeRelease(old->m_texture);
+        SafeRelease(old->m_volume);
+        delete old;
+    }
+
+    texture->m_apiSpecificData = tex;
+    texture->m_needsCreation = 0;
+    texture->m_needsUpdate = 0;
+    this->m_texturesDirty = true;
+    return 1;
 }
 
 void CGxDeviceD3d11::DeviceSetCullFlip(int32_t flip) {
@@ -1996,15 +2137,7 @@ int32_t CGxDeviceD3d11::TexStretch(CGxTex* dest, const CiRect* destRect, const C
 
         SafeRelease(sampler);
 
-        // Everything the blit changed is sent again before the next draw.
-        this->m_hwBlend = this->m_hwDepth = this->m_hwRaster = ~0ull;
-        this->m_stateDirty = true;
-        this->m_hwVs = nullptr;
-        this->m_hwPs = nullptr;
-        this->m_vertexDirty = true;
-        this->m_texturesDirty = true;
-        this->m_viewportDirty = 1;
-        this->m_scissorRectDirty = 1;
+        this->IStateInvalidate();
         this->IBindTargets();
     }
 
@@ -2262,7 +2395,8 @@ void CGxDeviceD3d11::ShaderCreate(CGxShader** shaders, EGxShTarget target, const
     this->m_caps.m_shaderTargets[GxSh_Pixel] = pixel;
 
     // Says once which shaders have no shader model 4 build (their draws fall back to the fixed-function shader).
-    if ((target == GxSh_Vertex ? vertex : pixel) && permutations && shaders[0] && !shaders[0]->m_code.Count()) {
+    // (Shaders\Post ones have no files: PostEffects gives them their code.)
+    if ((target == GxSh_Vertex ? vertex : pixel) && permutations && shaders[0] && !shaders[0]->m_code.Count() && SStrCmpI(path, "Shaders\\Post", STORM_MAX_STR)) {
         static char s_logged[64][64];
         static uint32_t s_loggedCount = 0;
         bool seen = false;

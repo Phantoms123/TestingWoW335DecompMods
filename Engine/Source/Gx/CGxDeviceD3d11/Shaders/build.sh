@@ -8,3 +8,4 @@ cd "$(dirname "$0")"
 "$VFHLSL" /T ps_4_0 /E PsMain /Vn g_ffp_ps /Fh vkd3d/ffp_ps.h FixedFunction.hlsl
 "$VFHLSL" /T vs_4_0 /E VsMain /Vn g_blit_vs /Fh vkd3d/blit_vs.h Blit.hlsl
 "$VFHLSL" /T ps_4_0 /E PsMain /Vn g_blit_ps /Fh vkd3d/blit_ps.h Blit.hlsl
+"$VFHLSL" /T ps_4_1 /E PsMain /Vn g_depthcopy_ps /Fh vkd3d/depthcopy_ps.h DepthCopy.hlsl

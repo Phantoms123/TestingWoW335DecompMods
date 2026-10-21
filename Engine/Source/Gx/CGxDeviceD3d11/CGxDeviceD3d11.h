@@ -40,6 +40,7 @@ class CGxDeviceD3d11 : public CGxDevice {
     // What a CGxTex's m_apiSpecificData points to.
     struct Texture {
         ID3D11Texture2D* m_texture = nullptr;
+        struct ID3D11Texture3D* m_volume = nullptr;   // DeviceTexSetVolume
         ID3D11ShaderResourceView* m_srv = nullptr;
         ID3D11RenderTargetView* m_rtv[6] = {};
         ID3D11DepthStencilView* m_dsv = nullptr;
@@ -95,6 +96,7 @@ class CGxDeviceD3d11 : public CGxDevice {
     virtual int32_t DeviceCanCopySampledDepth();
     virtual int32_t DeviceCopySampledDepth(CGxTex* texture);
     virtual void DeviceSetCullFlip(int32_t flip);
+    virtual int32_t DeviceTexSetVolume(CGxTex* texture, uint32_t width, uint32_t height, uint32_t depth, const void* argb);
     virtual void DeviceCopyTex(CGxTex* source, uint32_t sourcePlane, CGxTex* dest, uint32_t destPlane);
     virtual void DeviceOverride(EGxOverride override, uint32_t value);
     virtual void CapsWindowSize(CRect& rect);
@@ -157,6 +159,8 @@ class CGxDeviceD3d11 : public CGxDevice {
     ID3D11RenderTargetView* m_backRtv = nullptr;
     ID3D11Texture2D* m_backDepth = nullptr;
     ID3D11DepthStencilView* m_backDsv = nullptr;
+    ID3D11ShaderResourceView* m_backDepthSrv = nullptr;
+    ID3D11PixelShader* m_depthCopyPs = nullptr;
     // A depth buffer for drawing into textures without their own.
     ID3D11Texture2D* m_rtDepth = nullptr;
     ID3D11DepthStencilView* m_rtDsv = nullptr;
@@ -250,6 +254,7 @@ class CGxDeviceD3d11 : public CGxDevice {
     void IBindTargets();
     ID3D11RenderTargetView* ITexRtv(CGxTex* texId, uint32_t plane);
     void IStateSync();
+    void IStateInvalidate();
     void IStateSyncStates();
     void IStateSyncShaders();
     void IStateSyncTextures();
