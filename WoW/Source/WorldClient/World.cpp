@@ -4935,6 +4935,8 @@ void CWorldScene::RenderHorizon() {
     CWorldScene::BuildHorizonProjection(&projection);
     savedProjection = g_theGxDevicePtr->m_projection;
     g_theGxDevicePtr->XformSetProjection(projection);
+    // CHANGED: the horizon draws without shaders, so a reflection's clip plane is given in world space for it.
+    Liquid::Cata::SetReflectionClipForFixedFunction(true);
     float minX = g_theGxDevicePtr->m_viewport.m_x.m_l;
     float maxX = g_theGxDevicePtr->m_viewport.m_x.m_h;
     float minY = g_theGxDevicePtr->m_viewport.m_y.m_l;
@@ -4952,7 +4954,10 @@ void CWorldScene::RenderHorizon() {
     for (CMapAreaLow* area = CWorldScene::sortTable.m_horizonChunkList.Head(); area; area = nextArea) {
         nextArea = CWorldScene::sortTable.m_horizonChunkList.Next(area);
         CMap::RenderLowDetail(area);
-        area->m_horizonLink.Unlink();
+
+        if (!CWorldScene::s_reflectionPass) {
+            area->m_horizonLink.Unlink();
+        }
     }
 
     uint32_t count = 0;
@@ -4978,7 +4983,9 @@ void CWorldScene::RenderHorizon() {
             }
         }
 
-        def->m_horizonLink.Unlink();
+        if (!CWorldScene::s_reflectionPass) {
+            def->m_horizonLink.Unlink();
+        }
     }
 
     if (count) {
@@ -4996,6 +5003,7 @@ void CWorldScene::RenderHorizon() {
     g_theGxDevicePtr->RsPop();
     GxXformSetViewport(minX, maxX, minY, maxY, minZ, maxZ);
     g_theGxDevicePtr->XformSetProjection(savedProjection);
+    Liquid::Cata::SetReflectionClipForFixedFunction(false);
 }
 
 // VERIFY: 8f0548db manual

@@ -298,6 +298,10 @@ void CWorldScene::RenderReflection() {
         CWorldScene::RenderMapObjDefGroups();
     }
 
+    // The low-detail distant terrain too, so far hills and mountains do not appear in the water only once their
+    // full detail has loaded.
+    CWorldScene::RenderHorizon();
+
     CWorldScene::s_reflectionPass = false;
     Liquid::Cata::EndReflection();
 }

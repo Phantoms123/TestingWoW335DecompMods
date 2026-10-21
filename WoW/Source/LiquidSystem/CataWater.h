@@ -60,6 +60,9 @@ namespace Liquid {
         void EndReflection();
         // Whether the world's culling should take in more above the view for the reflection.
         bool ReflectionNeedsWideCulling();
+        // While a reflection draws: true gives its clip plane in world space (for drawing without shaders), false
+        // in clip space again.
+        void SetReflectionClipForFixedFunction(bool fixedFunction);
 
         // Once a frame before the world draws (creates or frees what the current setting needs).
         void BeginFrame();

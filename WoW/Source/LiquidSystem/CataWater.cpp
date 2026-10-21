@@ -1130,6 +1130,8 @@ static C44Matrix MirrorZ(float height) {
 static C44Matrix s_reflectionSavedView;
 static CGxTex* s_reflectionSavedColor;
 static float s_reflectionSavedViewport[6];
+static C4Plane s_reflectionClip;
+static float s_reflectionPlaneZ;
 
 bool Liquid::Cata::BeginReflection(const C3Vector& worldViewOrigin, uint32_t& mode) {
     mode = s_reflectionMode;
@@ -1193,12 +1195,32 @@ bool Liquid::Cata::BeginReflection(const C3Vector& worldViewOrigin, uint32_t& mo
     clip.n.y = inverse.b2 - height * inverse.b3;
     clip.n.z = inverse.c2 - height * inverse.c3;
     clip.d = inverse.d2 - height * inverse.d3;
+    s_reflectionClip = clip;
+    s_reflectionPlaneZ = height;
     device->ClipPlaneSet(0, clip);
     GxRsSet(GxRs_ClipPlaneMask, 1);
     device->DeviceSetCullFlip(1);
 
     s_inReflection = true;
     return true;
+}
+
+void Liquid::Cata::SetReflectionClipForFixedFunction(bool fixedFunction) {
+    if (!s_inReflection) {
+        return;
+    }
+
+    if (fixedFunction) {
+        // Without shaders Direct3D takes the plane in world space: keep z >= the water's (camera-relative) height.
+        C4Plane plane;
+        plane.n.x = 0.0f;
+        plane.n.y = 0.0f;
+        plane.n.z = 1.0f;
+        plane.d = -s_reflectionPlaneZ;
+        g_theGxDevicePtr->ClipPlaneSet(0, plane);
+    } else {
+        g_theGxDevicePtr->ClipPlaneSet(0, s_reflectionClip);
+    }
 }
 
 bool Liquid::Cata::ReflectionNeedsWideCulling() {
