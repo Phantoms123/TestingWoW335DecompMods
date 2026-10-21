@@ -22,7 +22,7 @@
 #include "WoW/Source/WorldClient/AdtCompat.h"
 #include "WoW/Source/DB/DBClient/DBClient.h"
 #include "WoW/Source/DB/Rec/LiquidTypeRec.h"
-#include "WoW/Source/LiquidSystem/Types.h"
+#include "WoW/Source/WorldClient/LiquidCompat.h"
 
 void CMapArea::Destroy() {
 }
@@ -309,46 +309,17 @@ void CMapArea::LoadTextures(char* fileNames, uint32_t fileNamesSize) {
     } while (offset < fileNamesSize);
 }
 
-// CHANGED: not in the original client. Makes liquid authored for 4.x safe for this client, in place:
-//  - a liquid type with no LiquidType record becomes plain water (id 1); every lookup of the type
-//    dereferences the record without a null check, so an unknown id would crash.
-//  - vertex format 3 (heights, texture coordinates, depths) becomes format 1: its data starts with
-//    exactly the format 1 layout, so only the depths are dropped. Formats past 3 keep no vertex data.
+// CHANGED: not in the original client. Resolves 4.x liquid formats and types in place (see LiquidCompat.h).
+static bool ClientHasLiquidType(uint32_t id) {
+    return g_liquidTypeDB.GetRecord(static_cast<int32_t>(id)) != nullptr;
+}
+
 static void NormalizeLiquid(uint8_t* data, uint32_t size) {
-    static const uint32_t CHUNK_COUNT = 256;
-    static const uint16_t FALLBACK_LIQUID_TYPE = 1;
+    static const LiquidCompatClient client = { &ClientHasLiquidType };
+    LiquidCompatReport report;
 
-    if (size < CHUNK_COUNT * sizeof(SMLiquidChunkDesc)) {
-        return;
-    }
-
-    for (uint32_t i = 0; i < CHUNK_COUNT; i++) {
-        SMLiquidChunkDesc chunk;
-        memcpy(&chunk, data + i * sizeof(SMLiquidChunkDesc), sizeof(chunk));
-
-        if (!chunk.m_layerCount || chunk.m_offsetInstances > size || chunk.m_layerCount > (size - chunk.m_offsetInstances) / sizeof(SMLiquidInstance)) {
-            continue;
-        }
-
-        for (uint32_t layer = 0; layer < chunk.m_layerCount; layer++) {
-            uint8_t* at = data + chunk.m_offsetInstances + layer * sizeof(SMLiquidInstance);
-            SMLiquidInstance instance;
-            memcpy(&instance, at, sizeof(instance));
-
-            if (!g_liquidTypeDB.GetRecord(instance.m_liquidType)) {
-                DebugLog("Unknown liquid type %u, drawn as water\n", instance.m_liquidType);
-                instance.m_liquidType = FALLBACK_LIQUID_TYPE;
-            }
-
-            if (instance.m_vertexFormat == 3) {
-                instance.m_vertexFormat = 1;
-            } else if (instance.m_vertexFormat > 3) {
-                instance.m_vertexFormat = 2;
-                instance.m_offsetVertexData = 0;
-            }
-
-            memcpy(at, &instance, sizeof(instance));
-        }
+    if (!LiquidCompatNormalize(data, size, client, &report)) {
+        DebugLog("Liquid data points outside its chunk; later layers left as they are\n");
     }
 }
 

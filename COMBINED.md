@@ -35,7 +35,11 @@ Every changed spot in the original sources is marked `// CHANGED:`.
 - `AdtCompat.cpp`: a tile with a `_tex0.adt` file is stored the 4.x way. Root, `_tex0` and `_obj0` are merged in
   memory into one tile laid out the way `CMapArea`/`CMapChunk::ProcessIffChunks` read it. Tiles without one
   load exactly as before.
-- Liquid: types with no `LiquidType` record are drawn as water instead of crashing; vertex format 3 maps to 1.
+- `LiquidCompat.cpp`: 4.x MH2O stores a LiquidObject id (42 and up) where this client expects the vertex
+  format. Each layer's real format is resolved the way 4.3.4's `Liquid::GetVertexFormat` does (ocean: depth
+  only; otherwise the 4.3.4 LiquidType's material decides), and 4.x layouts 3-5 are rewritten into 0 or 1.
+  Liquid types this client has no record for become stock water, ocean, magma or slime by sound bank.
+  Checked on real Lost Isles tiles: every height and depth this client reads equals what 4.3.4 reads.
 
 ### Volumetric fog and water (WoW/Source/VolFog)
 - CoAVolFog's renderers, shaders, data and `CoAVolFog.ini` as upstream; its DLL loader, call-site patches and
