@@ -33,7 +33,11 @@ namespace ViewSettings {
         float scaleY;
         float y;
 
-        if (g_theGxDevicePtr->Caps().m_texelCenterOnEdge) {
+        // 4.3.4 flips the screen's y into texture space except on OpenGL (its caps flag differs from this
+        // client's m_texelCenterOnEdge, which the Direct3D devices also set), and adds half a texel on Direct3D 9.
+        bool openGl = g_theGxDevicePtr->DeviceApi() == GxApi_OpenGl;
+
+        if (openGl) {
             scaleY = (extMaxX - extMinX) * 0.5f;
             y = (extMinX + 1.0f) - (1.0f - extMaxY);
         } else {
@@ -43,7 +47,7 @@ namespace ViewSettings {
 
         y = y * 0.5f;
 
-        if (g_theGxDevicePtr->Caps().m_pixelCenterOnEdge) {
+        if (!openGl) {
             x = x + offsetX;
             y = y + offsetY;
         }
