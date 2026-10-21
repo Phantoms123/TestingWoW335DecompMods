@@ -1,5 +1,5 @@
 #!/bin/sh
-# Builds vfhlsl: Wine 11.9's bundled vkd3d-shader (1.19) with the two patches in patches/, linked to vfhlsl.c.
+# Builds vfhlsl: Wine 11.9's bundled vkd3d-shader (1.19) with the patches in patches/, linked to vfhlsl.c.
 # Needs git, a C compiler, bison and flex. Usage: Tools/VfHlsl/build.sh [work directory]   (default: ./vfhlsl-build)
 # The result is <work directory>/vfhlsl; pass it to CMake as -DVFHLSL=<path> to rebuild the CoAVolFog shader headers.
 set -eu

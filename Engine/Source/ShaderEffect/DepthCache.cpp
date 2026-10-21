@@ -34,6 +34,11 @@ static bool Multisampled() {
 bool DepthCache::IsSupported() {
     const CGxCaps& caps = g_theGxDevicePtr->Caps();
 
+    // The effects that read it (4.3.4 water, sun shafts, the advanced effects) have Direct3D 9 shaders only.
+    if (g_theGxDevicePtr->DeviceApi() != GxApi_D3d9) {
+        return false;
+    }
+
     if (!caps.m_rttFormat[GxTex_Intz] || caps.m_texTarget[GxTex_NonPow2] != 1) {
         return false;
     }

@@ -12,6 +12,11 @@ writes the same kind of C header fxc's `/Fh` does.
 - `patches/0001-hlsl-add-tex3Dlod.patch`: adds the `tex3Dlod` intrinsic (the fog volume lookups use it).
 - `patches/0002-d3dbc-shader-model-3-loops.patch`: emits shader model 3 loops. A loop that is not unrolled
   becomes `rep i15` with `defi i15, 255, 0, 1, 0` and leaves through `break`; `continue` is still unsupported.
+- `patches/0003-tpf-clip-distance.patch`: accepts `SV_ClipDistance` (vertex shader outputs, pixel shader inputs)
+  in shader model 4 and 5 shaders; the Direct3D 11 device's fixed-function shader uses it for clip planes.
+
+`vfhlsl` writes DXBC (Direct3D 10 and 11) for `_4_` and `_5_` profiles (`vs_4_0`, `ps_5_0`, ...) and Direct3D 9
+byte code for the rest.
 
 `vfhlsl` also defines `VF_VKD3D=1` for every shader. `vf_common.hlsli` uses it to unroll the three fixed-count loops
 (`VF_FIXED_LOOP`) that vkd3d-shader would otherwise have to keep as loops; the result is the same.

@@ -6,6 +6,9 @@
 #if defined(WOWDECOMP_DXVK)
 #include "Engine/Source/Gx/CGxDeviceD3d/CGxDeviceD3d.h"
 #endif
+#if defined(WOWDECOMP_D3D11)
+#include "Engine/Source/Gx/CGxDeviceD3d11/CGxDeviceD3d11.h"
+#endif
 #include "Engine/Source/Os/SDL/Window.h"
 #include "Engine/Source/Gx/CGxDevice/SDL/Display.h"
 #if defined(WOWDECOMP_VULKAN)
@@ -52,6 +55,9 @@ int32_t CGxDevice::AdapterFormats(EGxApi api, TSGrowableArray<CGxFormat>& format
     formats.Reserve(256, 0);
 #if defined(WOWDECOMP_VULKAN)
     if (api == GxApi_Vulkan) return VulkanAdapterFormats(formats);
+#endif
+#if defined(WOWDECOMP_D3D11)
+    if (api == GxApi_D3d11) return D3d11AdapterFormats(formats);
 #endif
 #if defined(WOWDECOMP_DXVK)
     return api == GxApi_D3d9 ? CGxDevice::D3dAdapterFormats(formats) : 0;

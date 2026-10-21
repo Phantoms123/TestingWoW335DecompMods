@@ -115,7 +115,8 @@ int main(int argc, char** argv) {
     info.next = &hlsl;
     info.source = code;
     info.source_type = VKD3D_SHADER_SOURCE_HLSL;
-    info.target_type = VKD3D_SHADER_TARGET_D3D_BYTECODE;
+    // Shader model 4 and 5 profiles (vs_4_0, ps_5_0, ...) come out as DXBC for Direct3D 10/11, older ones as D3D9 bytecode.
+    info.target_type = (strstr(profile, "_4_") || strstr(profile, "_5_")) ? VKD3D_SHADER_TARGET_DXBC_TPF : VKD3D_SHADER_TARGET_D3D_BYTECODE;
     info.log_level = VKD3D_SHADER_LOG_WARNING;
     info.source_name = source;
 

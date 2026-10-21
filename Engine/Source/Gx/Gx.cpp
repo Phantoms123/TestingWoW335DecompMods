@@ -12,6 +12,9 @@
 #if defined(WOWDECOMP_VULKAN)
 #include "Engine/Source/Gx/CGxDeviceVulkan/CGxDeviceVulkan.h"
 #endif
+#if defined(WOWDECOMP_D3D11)
+#include "Engine/Source/Gx/CGxDeviceD3d11/CGxDeviceD3d11.h"
+#endif
 #if !defined(_WIN32)
 #include <cstring>
 #include <stdexcept>
@@ -168,6 +171,10 @@ int32_t GxApiSupported(EGxApi api) {
 #if defined(WOWDECOMP_VULKAN)
     if (api == GxApi_Vulkan) return 1;
 #endif
+#if defined(WOWDECOMP_D3D11)
+    // CHANGED: the Direct3D 11 device (gxApi D3D11).
+    if (api == GxApi_D3d11) return 1;
+#endif
 #if defined(WOWDECOMP_DXVK)
     return api == GxApi_D3d9;
 #else
@@ -251,6 +258,9 @@ CGxDevice* CreateGxDevice(EGxApi api, GxWindowProc windowProc, const CGxFormat& 
 #endif
 #if defined(WOWDECOMP_DXVK)
     if (api == GxApi_D3d9) device = CreateCGxDeviceD3d();
+#endif
+#if defined(WOWDECOMP_D3D11)
+    if (api == GxApi_D3d11) device = CreateCGxDeviceD3d11();
 #endif
     if (!device) return nullptr;
     g_theGxDevicePtr = device;

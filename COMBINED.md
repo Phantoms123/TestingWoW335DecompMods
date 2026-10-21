@@ -141,6 +141,25 @@ Every changed spot in the original sources is marked `// CHANGED:`.
   fixed direction (Waystone's steps: light kept at least 0.2 below level, shadows only rebuilt once it has
   turned about half a degree). 0, the default, is 3.3.5's direction.
 
+### Direct3D 11 device (Engine/Source/Gx/CGxDeviceD3d11)
+- 4.3.4 added a Direct3D 11 Gx device; this tree has its own, on DXVK's native Direct3D 11 and DXGI (linked
+  as `DXVKNative::D3D11`/`DXGI` when the DXVK prefix has them). `gxApi D3D11` picks it; Direct3D 9 stays the
+  default, and ConsoleDeviceInitialize falls back to it when Direct3D 11 cannot start (as 4.3.4 does).
+- It loads the client's shaders from `Shaders\Vertex\vs_4_0` and `Shaders\Pixel\ps_4_0` (the 3.3.5 shaders built
+  for shader model 4, same permutations, the Direct3D 9 constant registers in constant buffer 0 of each stage),
+  while the rest of the client still sees shader model 3 and takes its usual paths. Samplers a shader declares
+  with comparison mode get comparison samplers (hardware PCF shadow lookups).
+- Alpha test is not a device state: `m_shaderAlphaRef` is 0, so the client picks the alpha-testing permutations.
+- Everything drawn without shaders goes through one fixed-function emulation shader (`Shaders/FixedFunction.hlsl`,
+  headers made by `Shaders/build.sh` with Tools/VfHlsl, which now writes DXBC for `_4_`/`_5_` profiles and takes
+  `SV_ClipDistance`): Direct3D 9's lighting with material sources, linear fog, texture coordinate generation and
+  stage transforms, the six texture operations the client uses, alpha test and world-space clip planes.
+- Vertex and index pools keep a copy of their contents (locks never wait; triangle fans become lists from it);
+  16-bit textures are stored as 32-bit; the colour Direct3D 9 cleared by viewport is cleared by rectangle.
+- Not yet: point sprites (the client is told there are none), stereo, RESZ depth copies. DepthCache reports
+  itself unsupported on other devices than Direct3D 9, so the 4.3.4 water, sun shafts and the Advanced Effects
+  stay off there, and CoAVolFog needs Direct3D 9.
+
 ### Volumetric fog and water (WoW/Source/VolFog)
 - CoAVolFog's renderers, shaders, data and `CoAVolFog.ini` as upstream; its DLL loader, call-site patches and
   address reads are replaced by calls from the client's world render and reads of the client's own globals.

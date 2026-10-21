@@ -419,7 +419,16 @@ void ConsoleDeviceInitialize(const char* title, bool unused_a2, bool unused_a3) 
     CGxFormat format = s_requestedFormat;
     ValidateFormatMonitor(format);
 
-    for (s_device = CreateGxDevice(api, OsWindowProc, format); !s_device; s_device = CreateGxDevice(api, OsWindowProc, format)) {
+    s_device = CreateGxDevice(api, OsWindowProc, format);
+
+    // CHANGED: as 4.3.4 does, Direct3D 11 falls back to Direct3D 9 when it cannot start.
+    if (!s_device && api == GxApi_D3d11 && GxApiSupported(GxApi_D3d9)) {
+        GxLog("ConsoleDeviceInitialize(): D3D11 unavailable, falling back to D3D9");
+        api = GxApi_D3d9;
+        s_device = CreateGxDevice(api, OsWindowProc, format);
+    }
+
+    for (; !s_device; s_device = CreateGxDevice(api, OsWindowProc, format)) {
         if (format.m_multisampleCount > 1) {
             if (format.m_multisampleCount - 2 <= 1) {
                 format.m_multisampleCount = 1;
@@ -480,6 +489,7 @@ void ConsoleDeviceInitialize(const char* title, bool unused_a2, bool unused_a3) 
 
             case GxApi_D3d9:
             case GxApi_D3d9Ex:
+            case GxApi_D3d11:
                 ConsoleGxOverride(s_hardware.m_videoHw->m_d3DOverrides);
                 break;
 

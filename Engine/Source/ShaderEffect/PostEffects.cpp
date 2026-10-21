@@ -167,6 +167,12 @@ static bool Create() {
         return false;
     }
 
+    // Their shaders are Direct3D 9 ones.
+    if (g_theGxDevicePtr->DeviceApi() != GxApi_D3d9) {
+        LogOnce(0, "off, they need the Direct3D 9 device (gxApi D3D9)");
+        return false;
+    }
+
 #define POST_SHADER(var, target, name, code) var = CreateEmbedded(target, name, code, sizeof(code))
     POST_SHADER(s_vs, GxSh_Vertex, "PostEffects", g_post_vs);
     POST_SHADER(s_hazePs, GxSh_Pixel, "PostHaze", g_post_haze_ps);
