@@ -1407,7 +1407,34 @@ void CGxDeviceD3d11::BufData(CGxBuf* buf, const void* data, uint32_t size, uint3
 
 // Textures.
 
+static void ReleaseTexture(CGxTex* texId);
+
 void CGxDeviceD3d11::ITexCreate(CGxTex* texId) {
+    // Made again (m_needsCreation set while it still has one): the old one goes first, unbound everywhere.
+    if (texId->m_apiSpecificData && this->m_ctx) {
+        ID3D11ShaderResourceView* none[24] = {};
+        this->m_ctx->PSSetShaderResources(0, 24, none);
+        this->m_ctx->VSSetShaderResources(0, 16, none);
+        this->m_texturesDirty = true;
+        Texture* old = static_cast<Texture*>(texId->m_apiSpecificData);
+
+        for (uint32_t i = 0; i < 6; i++) {
+            if (old->m_rtv[i] && this->m_curRtv == old->m_rtv[i]) {
+                this->m_ctx->OMSetRenderTargets(0, nullptr, nullptr);
+                this->m_curRtv = nullptr;
+                this->m_curDsv = nullptr;
+            }
+        }
+
+        if (old->m_dsv && this->m_curDsv == old->m_dsv) {
+            this->m_ctx->OMSetRenderTargets(0, nullptr, nullptr);
+            this->m_curRtv = nullptr;
+            this->m_curDsv = nullptr;
+        }
+
+        ReleaseTexture(texId);
+    }
+
     uint32_t width;
     uint32_t height;
     uint32_t baseMip;

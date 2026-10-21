@@ -1009,13 +1009,29 @@ void CM2SceneRender::Draw(M2PASS pass, M2Element* elements, uint32_t* indices, u
 
         // CHANGED: a water reflection leaves out the models it would barely show (see ReflectionCulled).
         if (CM2Scene::s_keepClipPlane) {
-            if (element->m_model != cullModel) {
-                cullModel = element->m_model;
-                culled = ReflectionCulled(cullModel);
-            }
+            if (element->m_type == 2) {
+                // A doodad batch draws its first element and the m_count - 1 after it, copies of one model each
+                // placed on its own: it goes only when every copy would, and then all of its elements.
+                uint32_t groupCount = element->m_count ? element->m_count : 1;
+                bool allCulled = true;
 
-            if (culled) {
-                continue;
+                for (uint32_t j = 0; j < groupCount && i + j < count && allCulled; j++) {
+                    allCulled = ReflectionCulled(elements[indices[i + j]].m_model);
+                }
+
+                if (allCulled) {
+                    i += groupCount - 1;
+                    continue;
+                }
+            } else {
+                if (element->m_model != cullModel) {
+                    cullModel = element->m_model;
+                    culled = ReflectionCulled(cullModel);
+                }
+
+                if (culled) {
+                    continue;
+                }
             }
         }
 
