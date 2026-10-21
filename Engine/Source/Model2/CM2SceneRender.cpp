@@ -979,7 +979,8 @@ void CM2SceneRender::Draw(M2PASS pass, M2Element* elements, uint32_t* indices, u
     for (uint32_t i = 0; i < count; i++) {
         M2Element* element = &elements[indices[i]];
 
-        if (element->m_type != 2 && (element->m_model->m_fFlags & 0x2000) && element->m_type != 4) {
+        // CHANGED: a water reflection also draws models outside the view (0x2000), which it may mirror.
+        if (!CM2Scene::s_keepClipPlane && element->m_type != 2 && (element->m_model->m_fFlags & 0x2000) && element->m_type != 4) {
             continue;
         }
 

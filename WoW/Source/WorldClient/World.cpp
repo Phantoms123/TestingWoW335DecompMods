@@ -1960,6 +1960,29 @@ void CWorldScene::MergeIntoFrustumRect(CPortalView* portalView) {
     CWorldScene::frustumPortalView.Merge(*portalView);
 }
 
+// CHANGED: not in the original client. The view's frustum corners, with the top ones raised by two screens'
+// height while real water reflections need what lies above the view (outdoors only: portals map screen rectangles
+// onto the real corners). Used for the culling frustum; s_frustumCorners stays the view's own.
+void CWorldScene::GetCullCorners(C3Vector* corners) {
+    for (uint32_t i = 0; i < 8; i++) {
+        corners[i] = CWorldScene::s_frustumCorners[i];
+    }
+
+    if (!Liquid::Cata::ReflectionNeedsWideCulling() || CWorldScene::s_viewerMapObjDef) {
+        return;
+    }
+
+    // Top corners 1, 2 (near) and 5, 6 (far), raised from the bottom corners 0, 3, 4, 7.
+    static const uint32_t top[4] = { 1, 2, 5, 6 };
+    static const uint32_t bottom[4] = { 0, 3, 4, 7 };
+
+    for (uint32_t i = 0; i < 4; i++) {
+        const C3Vector& t = CWorldScene::s_frustumCorners[top[i]];
+        const C3Vector& b = CWorldScene::s_frustumCorners[bottom[i]];
+        corners[top[i]] = C3Vector(t.x * 3.0f - b.x * 2.0f, t.y * 3.0f - b.y * 2.0f, t.z * 3.0f - b.z * 2.0f);
+    }
+}
+
 // VERIFY: d2772b54 manual
 // OFFSET: 0x00790AF0
 void CWorldScene::FrustumSet(CRect* rect) {
@@ -2860,37 +2883,25 @@ void CWorldScene::Update(C3Vector* camPos, C3Vector* camTarget) {
     CWorldScene::s_viewProjW.z = CWorldScene::s_viewProjMatrix.c3;
     CWorldScene::s_viewProjW.w = CWorldScene::s_viewProjMatrix.d3;
 
-    // CHANGED: with real water reflections the chunks considered reach two screens' height above the view too (see
-    // CWorldScene::Render), so distant hills seen only in the water are not left out.
-    if (Liquid::Cata::ReflectionNeedsWideCulling() && !CWorldScene::s_viewerMapObjDef) {
-        C3Vector corners[16];
+    // CHANGED: with real water reflections, what is considered at all reaches two screens' height above the view
+    // (see CWorldScene::GetCullCorners), so what the water mirrors is not left out as the camera tilts down.
+    C3Vector cullCorners[8];
+    CWorldScene::GetCullCorners(cullCorners);
+    C3Vector boundCorners[16];
 
-        for (uint32_t i = 0; i < 8; i++) {
-            corners[i] = CWorldScene::s_frustumCorners[i];
-            corners[i + 8] = CWorldScene::s_frustumCorners[i];
-        }
-
-        // Top corners 1, 2 (near) and 5, 6 (far), raised by two screens' height (from the bottom corners 0, 3, 4, 7).
-        static const uint32_t top[4] = { 1, 2, 5, 6 };
-        static const uint32_t bottom[4] = { 0, 3, 4, 7 };
-
-        for (uint32_t i = 0; i < 4; i++) {
-            const C3Vector& t = CWorldScene::s_frustumCorners[top[i]];
-            const C3Vector& b = CWorldScene::s_frustumCorners[bottom[i]];
-            corners[8 + top[i]] = C3Vector(t.x * 3.0f - b.x * 2.0f, t.y * 3.0f - b.y * 2.0f, t.z * 3.0f - b.z * 2.0f);
-        }
-
-        CWorldScene::boundingBox = CAaBox::Bounding(corners, 16);
-    } else {
-        CWorldScene::boundingBox = CAaBox::Bounding(CWorldScene::s_frustumCorners, 8);
+    for (uint32_t i = 0; i < 8; i++) {
+        boundCorners[i] = CWorldScene::s_frustumCorners[i];
+        boundCorners[i + 8] = cullCorners[i];
     }
+
+    CWorldScene::boundingBox = CAaBox::Bounding(boundCorners, 16);
     CWorldScene::s_frustumChunkRect.minX = CMath::fint_(-(CWorldScene::boundingBox.t.y - 17066.666f) * 0.029999999f - 0.5f);
     CWorldScene::s_frustumChunkRect.minY = CMath::fint_(-(CWorldScene::boundingBox.t.x - 17066.666f) * 0.029999999f - 0.5f);
     CWorldScene::s_frustumChunkRect.maxX = CMath::fint_(-(CWorldScene::boundingBox.b.y - 17066.666f) * 0.029999999f - 0.5f);
     CWorldScene::s_frustumChunkRect.maxY = CMath::fint_(-(CWorldScene::boundingBox.b.x - 17066.666f) * 0.029999999f - 0.5f);
 
     CWorldScene::frustumIndex = 0;
-    CWorldScene::frustumStack[0].CalcPlanesFromCorners(CWorldScene::s_frustumCorners);
+    CWorldScene::frustumStack[0].CalcPlanesFromCorners(cullCorners);
 
     CMapChunk::farCornerIndex = 0;
 

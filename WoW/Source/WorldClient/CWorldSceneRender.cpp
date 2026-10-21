@@ -83,7 +83,10 @@ void CWorldScene::Render(const C3Vector& cameraPos, float time) {
     CWorldScene::s_chunksRendered = 0;
     CWorldScene::nDoodadsRendered = 0;
     CWorldScene::s_unused_CD8624 = 0;
-    CWorldScene::frustumStack[CWorldScene::frustumIndex].CalcPlanesFromCorners(CWorldScene::s_frustumCorners);
+    // CHANGED: the culling frustum, raised above the view while real reflections need it (GetCullCorners).
+    C3Vector cullCorners[8];
+    CWorldScene::GetCullCorners(cullCorners);
+    CWorldScene::frustumStack[CWorldScene::frustumIndex].CalcPlanesFromCorners(cullCorners);
     CWorldScene::s_occlusionFarDepth = World::s_farClip - 33.333332f;
     CWorldScene::s_hasPendingExteriorGroups = CWorldScene::sortTable.m_pendingExteriorGroupList.Head() != nullptr;
 
