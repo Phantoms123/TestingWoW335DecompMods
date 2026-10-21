@@ -59,6 +59,7 @@ static bool s_rippleFailed;
 static uint32_t s_reflectionMode;
 static uint32_t s_reflectionDownscale;
 static float s_reflectionStrength = 0.75f;
+static float s_shorelineSoftness = 1.0f;
 static bool s_failed;
 
 static CGxShader* s_vertexShaders[VS_PERMUTATIONS];
@@ -89,6 +90,14 @@ static bool s_nextPlaneValid;
 static float s_nextPlaneHeight;
 static float s_nextPlaneDistance;
 static bool s_realReady;
+// Smoothing: the plane is kept for a while after its water was last seen, eases between nearby heights, and the
+// reflection fades in and out instead of switching at once.
+static const uint32_t PLANE_HOLD_FRAMES = 45;
+static const float REFLECTION_FADE_PER_SECOND = 3.0f;
+static uint32_t s_planeHold;
+static bool s_planeSeen;
+static float s_reflectionBlend;
+static uint32_t s_lastBlendMs;
 static bool s_inReflection;
 
 // Per liquid pass: whether the frame copy, blur and sky reflection were made, and whether they could be.
@@ -327,6 +336,10 @@ void Liquid::Cata::SetReflectionMode(uint32_t mode) {
     s_reflectionMode = mode > 3 ? 3 : mode;
 }
 
+void Liquid::Cata::SetShorelineSoftness(float softness) {
+    s_shorelineSoftness = softness < 0.0f ? 0.0f : (softness > 4.0f ? 4.0f : softness);
+}
+
 void Liquid::Cata::SetReflectionStrength(float strength) {
     s_reflectionStrength = strength < 0.0f ? 0.0f : (strength > 1.0f ? 1.0f : strength);
 }
@@ -340,8 +353,25 @@ uint32_t Liquid::Cata::GetWaterDetail() {
 }
 
 void Liquid::Cata::BeginFrame() {
-    s_planeValid = s_nextPlaneValid;
-    s_planeHeight = s_nextPlaneHeight;
+    s_planeSeen = s_nextPlaneValid;
+
+    if (s_nextPlaneValid) {
+        // A small change of height (the next chunk of a river, the water level settling) eases over; a jump to
+        // other water starts there.
+        if (!s_planeValid || fabsf(s_nextPlaneHeight - s_planeHeight) > 3.0f) {
+            s_planeHeight = s_nextPlaneHeight;
+        } else {
+            s_planeHeight += (s_nextPlaneHeight - s_planeHeight) * 0.2f;
+        }
+
+        s_planeValid = true;
+        s_planeHold = PLANE_HOLD_FRAMES;
+    } else if (s_planeHold) {
+        s_planeHold--;
+    } else {
+        s_planeValid = false;
+    }
+
     s_nextPlaneValid = false;
     s_nextPlaneDistance = 0.0f;
     s_realReady = false;
@@ -1098,14 +1128,24 @@ static float s_reflectionSavedViewport[6];
 bool Liquid::Cata::BeginReflection(const C3Vector& worldViewOrigin, uint32_t& mode) {
     mode = s_reflectionMode;
 
-    if (s_detail < 3 || s_reflectionMode < 2 || !s_planeValid || s_cameraUnderwater || s_inReflection) {
+    if (s_inReflection) {
         return false;
     }
 
     // Camera-relative height of the water; nothing to see in it from below or right at it.
     float height = s_planeHeight - worldViewOrigin.z;
+    bool possible = s_detail >= 3 && s_reflectionMode >= 2 && s_planeValid && !s_cameraUnderwater && height <= -0.05f;
+    bool wanted = possible && s_planeSeen;
 
-    if (height > -0.05f || !EnsureTargets()) {
+    // Fade towards on while the water is in view, towards off otherwise.
+    uint32_t now = OsGetAsyncTimeMs();
+    float elapsed = s_lastBlendMs ? (now - s_lastBlendMs) * 0.001f : 0.0f;
+    s_lastBlendMs = now;
+    elapsed = elapsed > 0.25f ? 0.25f : elapsed;
+    s_reflectionBlend += (wanted ? 1.0f : -1.0f) * elapsed * REFLECTION_FADE_PER_SECOND;
+    s_reflectionBlend = s_reflectionBlend < 0.0f ? 0.0f : (s_reflectionBlend > 1.0f ? 1.0f : s_reflectionBlend);
+
+    if (!possible || s_reflectionBlend <= 0.0f || !EnsureTargets()) {
         return false;
     }
 
@@ -1165,9 +1205,12 @@ void Liquid::Cata::EndReflection() {
     GxRsSet(GxRs_ClipPlaneMask, 0);
     device->XformSetView(s_reflectionSavedView);
 
-    // reflectionStrength below 1 fades the reflected world towards the fog colour, so the water mirrors it less.
-    if (s_reflectionStrength < 1.0f) {
-        PostEffects::Tint(GxTexOf(s_realReflectionTex), DayNight::GetInfo()->m_fog.m_color, 1.0f - s_reflectionStrength);
+    // reflectionStrength below 1 fades the reflected world towards the fog colour, so the water mirrors it less;
+    // so does the fade in and out.
+    float shown = s_reflectionStrength * s_reflectionBlend;
+
+    if (shown < 1.0f) {
+        PostEffects::Tint(GxTexOf(s_realReflectionTex), DayNight::GetInfo()->m_fog.m_color, 1.0f - shown);
     }
     device->RsPop();
 
@@ -1436,6 +1479,25 @@ bool Liquid::Cata::RenderWater(IEnvironment* environment, IGeomFactory* geomFact
     SetPs(17, cameraPos.x, cameraPos.y, cameraPos.z, 1.0f);
     SetWaterFog();
     SetPs(22, ViewSettings::Params(s_zNear, s_zFar, s_viewportFarClip));
+
+    // CHANGED: softer shorelines with distance. 4.3.4 fades the water out over the first few centimetres of its
+    // depth, which far away is less than a pixel, so the water looks cut off where it meets the shore. The depths
+    // the shader compares (its own, through the view matrix's z column in c5-c8, and the scene's, through c22) are
+    // both scaled down for distant water: the fade and the shore foam then cover more of the shallows, while the
+    // depth ratios and comparisons it also makes stay the same.
+    {
+        C3Vector toWater = bounds->c - cameraPos;
+        float distance = sqrtf(toWater.x * toWater.x + toWater.y * toWater.y + toWater.z * toWater.z) - bounds->r;
+        distance = distance > 0.0f ? distance : 0.0f;
+        float scale = s_shorelineSoftness > 0.0f ? 1.0f / (1.0f + s_shorelineSoftness * (0.4f + distance / 80.0f)) : 1.0f;
+
+        for (uint32_t reg = 5; reg <= 8; reg++) {
+            s_ps[reg * 4 + 2] *= scale;
+        }
+
+        s_ps[22 * 4 + 2] /= scale;
+        s_ps[22 * 4 + 3] /= scale;
+    }
     SetPs(23, settings->GetFloat(13), settings->GetFloat(14), settings->GetFloat(15), settings->GetFloat(6));
 
     float width = static_cast<float>(s_screenWidth);

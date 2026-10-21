@@ -98,7 +98,11 @@ Every changed spot in the original sources is marked `// CHANGED:`.
   real pass (CWorldScene::s_reflectionPass). The sky is drawn mirrored behind them. Water at that height samples
   it with 4.3.4's real reflection shader permutation; other water keeps the sky reflection. `reflectionStrength`
   (default 0.75) fades the reflected world towards the fog colour. The water's normal map, foam and depth tint
-  textures are filtered anisotropically so distant water keeps its detail.
+  textures are filtered anisotropically so distant water keeps its detail. The reflection plane is held for 45
+  frames after its water was last seen and eases between nearby heights, and the reflection fades in and out
+  (about a third of a second) instead of switching.
+- `shorelineSoftness` (default 1): the depths the water shader compares are scaled down for distant water (PS
+  c5-c8 z and c22), so its shoreline fade and foam cover more of the shallows instead of ending within a pixel.
 - Not ported yet: reflections of models (trees, characters), ripples from the collision meshes of moving objects
   (4.3.4's PerturbDisplMapMesh).
 

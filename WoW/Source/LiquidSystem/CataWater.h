@@ -40,6 +40,8 @@ namespace Liquid {
         void SetReflectionDownscale(uint32_t downscale);
         // How strongly the real reflection shows (0-1; below 1 it fades towards the fog colour).
         void SetReflectionStrength(float strength);
+        // How much softer shorelines get with distance (0 = as 4.3.4, 1 = default, up to 4).
+        void SetShorelineSoftness(float softness);
         uint32_t GetWaterDetail();
 
         // Whether the ripple simulation runs (water 4.3.4, rippleDetail 1 or 2, and its maps and shaders made).
