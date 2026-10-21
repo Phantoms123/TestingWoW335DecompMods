@@ -24,6 +24,7 @@
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/copy_ps.h"
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/depthfade_ps.h"
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/fill_ps.h"
+#include "Engine/Source/ShaderEffect/PostShaders/vkd3d/mix_ps.h"
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/fxaa_ps.h"
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/haze_ps.h"
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/post_vs.h"
@@ -36,6 +37,7 @@
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/copy_ps_sm4.h"
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/depthfade_ps_sm4.h"
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/fill_ps_sm4.h"
+#include "Engine/Source/ShaderEffect/PostShaders/vkd3d/mix_ps_sm4.h"
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/fxaa_ps_sm4.h"
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/haze_ps_sm4.h"
 #include "Engine/Source/ShaderEffect/PostShaders/vkd3d/post_vs_sm4.h"
@@ -83,6 +85,7 @@ static CGxShader* s_fxaaPs;
 static CGxShader* s_sharpenPs;
 static CGxShader* s_fillPs;
 static CGxShader* s_depthFadePs;
+static CGxShader* s_mixPs;
 
 static CTexture* s_sceneTex;
 static CTexture* s_aoTex[2];
@@ -174,6 +177,7 @@ static void Destroy() {
     ReleaseShader(s_sharpenPs);
     ReleaseShader(s_fillPs);
     ReleaseShader(s_depthFadePs);
+    ReleaseShader(s_mixPs);
     DestroyTargets();
     s_created = false;
 }
@@ -674,6 +678,35 @@ bool PostEffects::Tint(CGxTex* target, const CImVector& color, float amount) {
     GxRsSet(GxRs_BlendingMode, GxBlend_Alpha);
     SetPixel(0, color.r / 255.0f, color.g / 255.0f, color.b / 255.0f, amount > 1.0f ? 1.0f : amount);
     Pass(state, target, s_fillPs, nullptr);
+    state.End();
+    return true;
+}
+
+// Blends source over all of target (the same size) by amount.
+bool PostEffects::Blend(CGxTex* target, CGxTex* source, float amount) {
+    if (!target || !source || amount <= 0.0f) {
+        return false;
+    }
+
+    if (!s_vs) {
+        s_vs = EMBEDDED(GxSh_Vertex, "PostEffects", g_post_vs);
+    }
+
+    if (!s_mixPs) {
+        s_mixPs = EMBEDDED(GxSh_Pixel, "PostMix", g_post_mix_ps);
+    }
+
+    if (!s_vs || !s_mixPs) {
+        return false;
+    }
+
+    CGxDevice* device = g_theGxDevicePtr;
+    PassState state;
+    state.Begin();
+    GxRsSet(GxRs_BlendingMode, GxBlend_Alpha);
+    device->RsSet(GxRs_Texture0, source);
+    SetPixel(0, 0.0f, 0.0f, 0.0f, amount > 1.0f ? 1.0f : amount);
+    Pass(state, target, s_mixPs, nullptr);
     state.End();
     return true;
 }

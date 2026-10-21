@@ -74,6 +74,15 @@ static CTexture* s_fakeReflectionTex;
 static CTexture* s_realReflectionTex;
 static CTexture* s_realReflectionTemp;
 static CTexture* s_realReflectionDepth;
+// The real reflection eased into the sky one (a quarter, half and three quarters sky), for water a little away
+// from the reflected level; made once a pass, when water first needs one.
+static const uint32_t REFLECTION_MIXES = 3;
+static CTexture* s_reflectionMixTex[REFLECTION_MIXES];
+static bool s_reflectionMixTried[REFLECTION_MIXES];
+static bool s_reflectionMixReady[REFLECTION_MIXES];
+// Up to this far (yards) from the reflected level water shows the real reflection, from the far one on the sky's.
+static const float REFLECTION_BLEND_NEAR = 2.0f;
+static const float REFLECTION_BLEND_FAR = 10.0f;
 static float s_reflectionDistance = 200.0f;
 // Models smaller than this part of their distance are left out of the reflection (reflectionModelSize).
 static float s_reflectionModelSize = 0.004f;
@@ -190,6 +199,13 @@ static void DestroyTargets() {
     ReleaseTexture(s_realReflectionTex);
     ReleaseTexture(s_realReflectionTemp);
     ReleaseTexture(s_realReflectionDepth);
+
+    for (uint32_t i = 0; i < REFLECTION_MIXES; i++) {
+        ReleaseTexture(s_reflectionMixTex[i]);
+        s_reflectionMixTried[i] = false;
+        s_reflectionMixReady[i] = false;
+    }
+
     ReleaseTexture(s_blurredBackTex);
     ReleaseTexture(s_blurTempTex);
     s_screenWidth = 0;
@@ -1370,6 +1386,11 @@ void Liquid::Cata::BeginLiquidPass(bool cameraUnderwater) {
     s_passPrepared = false;
     s_passReady = false;
 
+    for (uint32_t i = 0; i < REFLECTION_MIXES; i++) {
+        s_reflectionMixTried[i] = false;
+        s_reflectionMixReady[i] = false;
+    }
+
     if (s_inPass) {
         SaveConstants();
     }
@@ -1517,6 +1538,38 @@ static void SharpenAtDistance(CGxTex* texture) {
     texture->m_flags.m_maxAnisotropy = anisotropy ? anisotropy : 1;
 }
 
+// The real reflection with a quarter (index 0), half (1) or three quarters (2) of the sky one over it.
+static CGxTex* ReflectionMix(uint32_t index, CGxTex* real, CGxTex* sky) {
+    if (s_reflectionMixReady[index]) {
+        return GxTexOf(s_reflectionMixTex[index]);
+    }
+
+    if (s_reflectionMixTried[index]) {
+        return nullptr;
+    }
+
+    s_reflectionMixTried[index] = true;
+
+    if (!s_reflectionMixTex[index]) {
+        s_reflectionMixTex[index] = CreateTarget(GxTex_NonPow2, s_reflectionWidth, s_reflectionHeight, "LiquidProc Reflection Mix");
+    }
+
+    CGxTex* mix = GxTexOf(s_reflectionMixTex[index]);
+
+    if (!mix || mix->m_width != real->m_width || mix->m_height != real->m_height || sky->m_width != real->m_width || sky->m_height != real->m_height) {
+        return nullptr;
+    }
+
+    float amount = static_cast<float>(index + 1) / static_cast<float>(REFLECTION_MIXES + 1);
+
+    if (!PostEffects::Blend(mix, real, 1.0f) || !PostEffects::Blend(mix, sky, amount)) {
+        return nullptr;
+    }
+
+    s_reflectionMixReady[index] = true;
+    return mix;
+}
+
 bool Liquid::Cata::RenderWater(IEnvironment* environment, IGeomFactory* geomFactory, const C3Vector& cameraPos, const C44Matrix* transform, const CAaSphere* bounds, CMaterialSettings* settings) {
     if (s_detail < 2) {
         return false;
@@ -1573,9 +1626,33 @@ bool Liquid::Cata::RenderWater(IEnvironment* environment, IGeomFactory* geomFact
     // A real reflection when one was drawn this frame for water at this height, else the sky reflection;
     // underwater 4.3.4 draws the surface from below without one.
     CGxTex* realReflection = GxTexOf(s_realReflectionTex);
-    // Within a few yards of the reflected level (the chunks of a sloping river): the small offset shows far less
-    // than a chunk switching to the sky reflection beside its neighbours.
-    bool real = s_realReady && realReflection && fabsf(bounds->c.z - s_planeHeight) < 6.0f;
+    // CHANGED: eased with the height from the reflected level, rather than switched at a few yards: the real
+    // reflection is only right for water at that level, and the chunks of a sloping river (or a nearer lake
+    // taking over the plane) otherwise flipped between the two beside their neighbours.
+    CGxTex* reflectionTex = reflection;
+    bool real = false;
+
+    if (s_realReady && realReflection && !s_cameraUnderwater) {
+        float offset = fabsf(bounds->c.z - s_planeHeight);
+        float sky = (offset - REFLECTION_BLEND_NEAR) / (REFLECTION_BLEND_FAR - REFLECTION_BLEND_NEAR);
+        int32_t level = static_cast<int32_t>(floorf((sky < 0.0f ? 0.0f : (sky > 1.0f ? 1.0f : sky)) * (REFLECTION_MIXES + 1) + 0.5f));
+
+        if (level == 0) {
+            real = true;
+            reflectionTex = realReflection;
+        } else if (level <= static_cast<int32_t>(REFLECTION_MIXES)) {
+            CGxTex* mix = ReflectionMix(level - 1, realReflection, reflection);
+
+            if (mix) {
+                // The real reflection's shader (its depth fade and distortion) draws the mix too.
+                real = true;
+                reflectionTex = mix;
+            } else if (level <= static_cast<int32_t>(REFLECTION_MIXES) / 2 + 1) {
+                real = true;
+                reflectionTex = realReflection;
+            }
+        }
+    }
     uint32_t reflectionKind = real ? 1 : 0;
     CGxShader* pixelShader = s_cameraUnderwater ? s_belowPixelShaders[BelowPermutation(reflectionKind)] : s_abovePixelShaders[AbovePermutation(reflectionKind)];
     CGxShader* vertexShader = s_vertexShaders[s_rippleDetail * 4];
@@ -1656,7 +1733,7 @@ bool Liquid::Cata::RenderWater(IEnvironment* environment, IGeomFactory* geomFact
     SetPs(28, phase, wave, 1.0f, 1.0f);
 
     device->RsSet(GxRs_Texture0, backBuffer);
-    device->RsSet(GxRs_Texture1, real ? realReflection : reflection);
+    device->RsSet(GxRs_Texture1, reflectionTex);
     device->RsSet(GxRs_Texture2, depthTint);
     device->RsSet(GxRs_Texture3, blurred);
     device->RsSet(GxRs_Texture5, bump);

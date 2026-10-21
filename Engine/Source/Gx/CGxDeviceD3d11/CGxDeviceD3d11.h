@@ -185,6 +185,9 @@ class CGxDeviceD3d11 : public CGxDevice {
     };
     RtDepth m_rtDepths[8];
     // Frame statistics: draws and the time spent in them and in presenting, printed every 5 s.
+    // The registers as the GPU has them (constant buffer 0 of each stage): only the dirty ones are copied in from
+    // CGxDevice::s_shadowConstants, which ShaderConstantsClear fills with FLT_MAX after every frame.
+    float m_gpuConstants[2][256 * 4] = {};
     uint64_t m_statDraws = 0;
     uint64_t m_statDrawNs = 0;
     uint64_t m_statPresentNs = 0;

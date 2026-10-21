@@ -50,6 +50,8 @@ namespace PostEffects {
     void RenderAntiAliasing();
     // Blends color over all of target by amount (0-1).
     bool Tint(CGxTex* target, const CImVector& color, float amount);
+    // Blends source over all of target (the same size) by amount (0-1).
+    bool Blend(CGxTex* target, CGxTex* source, float amount);
     // Softens target with a Gaussian blur of about radius texels, through temp (the same size).
     bool Soften(CGxTex* target, CGxTex* temp, float radius);
     // Fades target towards color by distance, read from depth (a GxTex_Intz texture drawn with view, see

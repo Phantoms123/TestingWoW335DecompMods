@@ -10,6 +10,7 @@
 #include <d3d11_1.h>
 #include <dxgi1_2.h>
 #include <algorithm>
+#include <cfloat>
 #include <chrono>
 #include <cstdio>
 #include <cmath>
@@ -3271,10 +3272,19 @@ void CGxDeviceD3d11::IShaderConstantsFlush() {
         ShadowConstants& shadow = CGxDevice::s_shadowConstants[stage == 0 ? 1 : 0];
 
         if (shadow.dirtyMin <= shadow.dirtyMax) {
+            // As Direct3D 9 keeps registers: only those set since the last flush change. The shadow copy is
+            // FLT_MAX (ShaderConstantsClear's "unknown") wherever nothing was set this frame; uploading it whole
+            // replaced constants set once (a portrait's lighting, the shadow matrices) and drew models black.
+            float* gpu = this->m_gpuConstants[stage];
+            uint32_t last = std::min<uint32_t>(shadow.dirtyMax, 255);
+
+            // The dirty range copied as it is, like CGxDeviceD3d's SetVertexShaderConstantF(dirtyMin, ...).
+            memcpy(&gpu[shadow.dirtyMin * 4], &shadow.constants[shadow.dirtyMin * 4], sizeof(float) * 4 * (last - shadow.dirtyMin + 1));
+
             D3D11_MAPPED_SUBRESOURCE mapped;
 
             if (SUCCEEDED(this->m_ctx->Map(this->m_constants[stage], 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
-                memcpy(mapped.pData, shadow.constants, sizeof(shadow.constants));
+                memcpy(mapped.pData, gpu, sizeof(this->m_gpuConstants[stage]));
                 this->m_ctx->Unmap(this->m_constants[stage], 0);
             }
         }
