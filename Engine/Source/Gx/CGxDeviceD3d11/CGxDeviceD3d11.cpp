@@ -1540,6 +1540,11 @@ void CGxDeviceD3d11::ITexCreate(CGxTex* texId) {
         dsv.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
         dsv.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
         this->m_device->CreateDepthStencilView(tex->m_texture, &dsv, &tex->m_dsv);
+
+        // Far, as nothing drawn yet: a shadow map read before it is first drawn into is lit, not wholly shadowed.
+        if (tex->m_dsv && this->m_ctx) {
+            this->m_ctx->ClearDepthStencilView(tex->m_dsv, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+        }
     }
 
     texId->m_apiSpecificData = tex;
@@ -3092,6 +3097,14 @@ ID3D11SamplerState* CGxDeviceD3d11::ISampler(CGxTex* texId, bool comparison) {
     desc.AddressV = texId->m_flags.m_wrapV ? D3D11_TEXTURE_ADDRESS_WRAP : D3D11_TEXTURE_ADDRESS_CLAMP;
     // As the Direct3D 9 device sets it for every sampler.
     desc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+
+    // Shadow map lookups outside the map are lit (a border at the far depth), not the map's edge repeated: models
+    // drawn away from the world (unit portraits, the character select scene) look up the world's shadow maps
+    // with coordinates far outside them, and came out wholly shadowed, black.
+    if (comparison) {
+        desc.AddressU = desc.AddressV = desc.AddressW = D3D11_TEXTURE_ADDRESS_BORDER;
+        desc.BorderColor[0] = desc.BorderColor[1] = desc.BorderColor[2] = desc.BorderColor[3] = 1.0f;
+    }
     desc.MaxAnisotropy = std::min<uint32_t>(anisotropy, 16);
     desc.MinLOD = 0.0f;
     desc.MaxLOD = mips ? D3D11_FLOAT32_MAX : 0.0f;
