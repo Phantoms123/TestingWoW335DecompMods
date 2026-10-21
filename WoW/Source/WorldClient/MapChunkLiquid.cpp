@@ -1,4 +1,5 @@
 #include "MapChunkLiquid.h"
+#include "WoW/Source/LiquidSystem/CataWater.h"
 #include <cmath>
 #include "Engine/Source/Gx/CGxBuf.h"
 #include "Engine/Source/Gx/CGxDevice/CGxDevice.h"
@@ -207,7 +208,10 @@ void CChunkLiquid::BuildIndices(uint16_t* indices, uint16_t baseVertex, CGxBatch
 // OFFSET: 0x007CE390
 void CChunkLiquid::BuildVertices(const C44Matrix* transform, uint32_t stride, C3Vector** position, C3Vector** normal, uint32_t** color, C2Vector** texCoord1, C2Vector** texCoord0) const {
     DepthCoordTable* depthCoords = CMap::GetDepthCoordTable(this->m_type);
-    bool customTexCoords = this->m_vertexFormat == 1;
+    // CHANGED: the 4.3.4 magma and slime turn and scale their coordinates themselves; the map's own (16-bit, and
+    // wrapping from 65535 to 0 in places, which squeezes the whole texture into the one row of quads there: a band
+    // of thin lines) are replaced by the world-position ones the other liquids use.
+    bool customTexCoords = this->m_vertexFormat == 1 && !Liquid::Cata::MagmaUsesWorldCoords();
     uint32_t index = 0;
     int32_t rows = this->m_tileEnd.x - this->m_tileBegin.x + 1;
     const C3Vector* vert = this->m_verts;

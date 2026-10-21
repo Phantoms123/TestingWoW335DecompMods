@@ -3090,8 +3090,8 @@ ID3D11SamplerState* CGxDeviceD3d11::ISampler(CGxTex* texId, bool comparison) {
 
     desc.AddressU = texId->m_flags.m_wrapU ? D3D11_TEXTURE_ADDRESS_WRAP : D3D11_TEXTURE_ADDRESS_CLAMP;
     desc.AddressV = texId->m_flags.m_wrapV ? D3D11_TEXTURE_ADDRESS_WRAP : D3D11_TEXTURE_ADDRESS_CLAMP;
-    // Direct3D 9's default (Gx sets only U and V): volume textures (the magma noise) repeat in depth too.
-    desc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+    // As the Direct3D 9 device sets it for every sampler.
+    desc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
     desc.MaxAnisotropy = std::min<uint32_t>(anisotropy, 16);
     desc.MinLOD = 0.0f;
     desc.MaxLOD = mips ? D3D11_FLOAT32_MAX : 0.0f;
@@ -3129,9 +3129,9 @@ void CGxDeviceD3d11::IStateSyncStates() {
         rt.SrcBlendAlpha = AlphaBlend(s_srcBlend[mode]);
         rt.DestBlendAlpha = AlphaBlend(s_dstBlend[mode]);
         rt.BlendOpAlpha = D3D11_BLEND_OP_ADD;
-        // Gx colour write bits: 1 red, 2 blue, 4 green, 8 alpha (the Direct3D 9 device's mapping).
-        uint32_t mask = this->m_colorMask;
-        rt.RenderTargetWriteMask = ((mask & 1) ? D3D11_COLOR_WRITE_ENABLE_RED : 0) | ((mask & 4) ? D3D11_COLOR_WRITE_ENABLE_GREEN : 0) | ((mask & 2) ? D3D11_COLOR_WRITE_ENABLE_BLUE : 0) | ((mask & 8) ? D3D11_COLOR_WRITE_ENABLE_ALPHA : 0);
+        // Gx colour write bits are Direct3D 9's D3DCOLORWRITEENABLE (the Direct3D 9 device passes them on as they
+        // are): 1 red, 2 green, 4 blue, 8 alpha, as Direct3D 11's.
+        rt.RenderTargetWriteMask = static_cast<UINT8>(this->m_colorMask & 0xF);
         this->m_device->CreateBlendState(&desc, &blendState);
         this->m_blendStates[blendKey] = blendState;
     }

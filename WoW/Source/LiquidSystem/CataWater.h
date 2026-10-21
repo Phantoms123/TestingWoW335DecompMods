@@ -46,6 +46,8 @@ namespace Liquid {
         void SetReflectionDistance(float distance);
         void SetReflectionModelSize(float size);
         uint32_t GetWaterDetail();
+        // Whether magma and slime geometry is built with world-position texture coordinates (4.3.4 magma on).
+        bool MagmaUsesWorldCoords();
 
         // Whether the ripple simulation runs (water 4.3.4, rippleDetail 1 or 2, and its maps and shaders made).
         bool RipplesActive();

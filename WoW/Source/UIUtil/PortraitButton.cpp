@@ -77,6 +77,13 @@ int32_t RTAlphaSupported() {
         return 0;
     }
 
+    // CHANGED: Direct3D 10 and 11 always draw portraits into their textures (RenderPortraitTexture has no
+    // read-back path for them), and their render targets keep alpha; the test below read back a back buffer that
+    // had already been drawn over, so it could answer no and leave every portrait made after it black.
+    if (g_theGxDevicePtr->DeviceApi() == GxApi_D3d10 || g_theGxDevicePtr->DeviceApi() == GxApi_D3d11) {
+        return 1;
+    }
+
     int32_t supported = 0;
     GxSceneClear(GxBufferBit_Color | GxBufferBit_Depth, CImVector());
 

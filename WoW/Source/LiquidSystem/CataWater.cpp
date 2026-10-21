@@ -381,6 +381,10 @@ void Liquid::Cata::SetReflectionDownscale(uint32_t downscale) {
     s_reflectionDownscale = downscale > 4 ? 4 : downscale;
 }
 
+bool Liquid::Cata::MagmaUsesWorldCoords() {
+    return s_requestedDetail >= 2;
+}
+
 uint32_t Liquid::Cata::GetWaterDetail() {
     return s_detail;
 }
@@ -391,10 +395,12 @@ void Liquid::Cata::BeginFrame() {
     if (s_nextPlaneValid) {
         // A small change of height (the next chunk of a river, the water level settling) eases over; a jump to
         // other water starts there.
+        // The ease is slow (about two seconds to settle), so walking along a sloping river does not shift the whole
+        // reflection with every step from one chunk's height to the next.
         if (!s_planeValid || fabsf(s_nextPlaneHeight - s_planeHeight) > 3.0f) {
             s_planeHeight = s_nextPlaneHeight;
         } else {
-            s_planeHeight += (s_nextPlaneHeight - s_planeHeight) * 0.2f;
+            s_planeHeight += (s_nextPlaneHeight - s_planeHeight) * 0.03f;
         }
 
         s_planeValid = true;
