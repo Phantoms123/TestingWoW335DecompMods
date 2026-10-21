@@ -2397,6 +2397,12 @@ void CGxDeviceD3d::IReleaseD3dResources(int32_t freeTextures) {
         this->m_defDepthSurface = nullptr;
     }
 
+    // CHANGED: a reset recreates the texture; the next DeviceSetSampledDepth takes its new surface.
+    if (this->m_sampledDepthSurface) {
+        this->m_sampledDepthSurface->Release();
+        this->m_sampledDepthSurface = nullptr;
+    }
+
     if (this->m_defDepthStencilSurface) {
         this->m_defDepthStencilSurface->Release();
         this->m_defDepthStencilSurface = nullptr;
@@ -3118,7 +3124,8 @@ void CGxDeviceD3d::DeviceSetRenderTarget(EGxBuffer buffer, CGxTex* texture, uint
         }
     }
 
-    LPDIRECT3DSURFACE9 depthSurface = this->m_defDepthSurface;
+    // CHANGED: the sampled depth texture, when one is set, stands in for the back buffer's depth buffer.
+    LPDIRECT3DSURFACE9 depthSurface = this->m_sampledDepthSurface ? this->m_sampledDepthSurface : this->m_defDepthSurface;
     LPDIRECT3DSURFACE9 colorSurface = this->m_defColorSurface;
 
     if (this->m_textureTarget[GxBuffers_Color].m_apiSpecific) {
@@ -3158,6 +3165,47 @@ void CGxDeviceD3d::DeviceResolveDepthBuffer(CGxTex* texture) {
     }
 
     this->m_d3dDevice->SetDepthStencilSurface(static_cast<LPDIRECT3DSURFACE9>(texture->m_apiSpecificData));
+}
+
+// CHANGED: not in the original client. The back buffer's depth buffer becomes level 0 of an INTZ texture, which
+// the world then renders into and clears exactly as it did the device's own. Passes that draw into a texture
+// keep getting their own depth buffer (see DeviceSetRenderTarget), so the INTZ texture is never bound while a
+// shader reads it.
+void CGxDeviceD3d::DeviceSetSampledDepth(CGxTex* texture) {
+    if (!this->m_context) {
+        return;
+    }
+
+    LPDIRECT3DSURFACE9 surface = nullptr;
+
+    if (texture && texture->m_format == GxTex_Intz) {
+        if (texture->m_needsCreation || (!texture->m_apiSpecificData && !texture->m_apiSpecificData2)) {
+            this->ITexCreate(texture);
+        }
+
+        if (!texture->m_needsCreation && texture->m_apiSpecificData) {
+            static_cast<IDirect3DTexture9*>(texture->m_apiSpecificData)->GetSurfaceLevel(0, &surface);
+        }
+    }
+
+    if (surface == this->m_sampledDepthSurface) {
+        if (surface) {
+            surface->Release();
+        }
+
+        return;
+    }
+
+    if (this->m_sampledDepthSurface) {
+        this->m_sampledDepthSurface->Release();
+    }
+
+    this->m_sampledDepthSurface = surface;
+
+    // Applies straight away when the back buffer is the current target.
+    if (!this->m_textureTarget[GxBuffers_Color].m_apiSpecific && !this->m_textureTarget[GxBuffers_Depth].m_apiSpecific) {
+        this->m_d3dDevice->SetDepthStencilSurface(surface ? surface : this->m_defDepthSurface);
+    }
 }
 
 // VERIFY: 956c292e manual

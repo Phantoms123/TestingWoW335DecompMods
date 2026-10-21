@@ -6,6 +6,7 @@
 #include "Engine/Source/Services/Texture.h"
 #include "Engine/Source/ShaderEffect/ShaderEffect.h"
 #include "Engine/Source/ShaderEffect/ShadowCache.h"
+#include "Engine/Source/ShaderEffect/SunShafts.h"
 #include "WoW/Common/AaBsp.h"
 #include "WoW/Source/UIUtil/PortraitButton.h"
 #include "WoW/Source/WorldClient/Map.h"
@@ -619,6 +620,13 @@ bool CWorldParam::GxTextureCacheSizeCallback(CVar* var, const char* oldValue, co
     return true;
 }
 
+// CHANGED: not in the original client. 4.3.4's sunShafts setting: 0 off, 1 low, 2 high.
+static bool SunShaftsCallback(CVar* var, const char* oldValue, const char* value, void* arg) {
+    int32_t mode = SStrToInt(value);
+    SunShafts::SetMode(mode > 0 ? static_cast<uint32_t>(mode) : 0);
+    return true;
+}
+
 // VERIFY: 9acf82a1 auto
 // OFFSET: 0x0078E400
 void CWorldParam::Initialize() {
@@ -638,6 +646,9 @@ void CWorldParam::Initialize() {
     CWorldParam::cvar_horizonFarClip = CVar::Register("horizonFarclipScale", "Far clip plane scale for horizon", 1, "4.0", CWorldParam::HorizonFarClipScaleCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     CWorldParam::cvar_horizonNearClip = CVar::Register("horizonNearclipScale", "Near clip plane scale for horizon", 1, "0.7", CWorldParam::HorizonNearClipScaleCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     CWorldParam::cvar_showFootprints = CVar::Register("showfootprints", "toggles rendering of footprints", 1, "1", CWorldParam::ShowFootprintsCallback, CATEGORY_GRAPHICS, false, nullptr, false);
+    // CHANGED: sun shafts from 4.3.4; needs its shaders in Shaders\\Cata (see COMBINED.md).
+    CVar* sunShafts = CVar::Register("sunShafts", "Sun shafts (0 off, 1 low, 2 high); needs the 4.x shaders in Shaders\\Cata", 1, "0", SunShaftsCallback, CATEGORY_GRAPHICS, false, nullptr, false);
+    SunShafts::SetMode(sunShafts && sunShafts->m_intValue > 0 ? static_cast<uint32_t>(sunShafts->m_intValue) : 0);
     CWorldParam::cvar_bspCache = CVar::Register("bspcache", "BSP node caching", 1, "1", CWorldParam::BspCacheCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     CWorldParam::cvar_footstepBias = CVar::Register("footstepBias", "Unit footstep depth bias", 1, "0.125", CWorldParam::FootstepBiasCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     CWorldParam::cvar_occlusion = CVar::Register("occlusion", "Use hardware occlusion test", 1, "1", CWorldParam::HardwareOcclusionCallback, CATEGORY_GRAPHICS, false, nullptr, false);

@@ -249,6 +249,8 @@ class CGxDeviceD3d : public CGxDevice {
     /* 3BA4 */ uint32_t m_d3dVertexStreamStride [8];
     /* 3BC4 */ uint32_t m_deviceStates [182];
     /* 3E9C */ bool m_texEnabled [8];
+    // CHANGED: not in the original client. Level 0 of the texture set by DeviceSetSampledDepth.
+    LPDIRECT3DSURFACE9 m_sampledDepthSurface = nullptr;
 
     virtual void ITexMarkAsUpdated(CGxTex* texId);
     virtual void IRsSendToHw(EGxRenderState which);
@@ -271,6 +273,7 @@ class CGxDeviceD3d : public CGxDevice {
     virtual void DeviceSaveDepthSurface();
     virtual void DeviceRestoreDepthSurface();
     virtual void DeviceResolveDepthBuffer(CGxTex* texture);
+    virtual void DeviceSetSampledDepth(CGxTex* texture);
     virtual void DeviceCopyTex(CGxTex* source, uint32_t sourcePlane, CGxTex* dest, uint32_t destPlane);
     virtual void DeviceOverride(EGxOverride override, uint32_t value);
     virtual void CapsWindowSize(CRect& rect);

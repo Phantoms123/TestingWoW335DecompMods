@@ -32,6 +32,7 @@
 #include "WoW/Source/WorldClient/World.h"
 #include "WoW/Source/WorldClient/WorldParam.h"
 #include "Engine/Source/Gxu/Gxu.h"
+#include "Engine/Source/ShaderEffect/SunShafts.h"
 #include "WoW/Source/Ui/WorldFrame.h"
 
 // STATIC: 0x00AF4C20
@@ -3027,6 +3028,8 @@ void DayNight::DNGlare::Render() {
     g_theGxDevicePtr->RsSet(GxRs_Texture0, gxTex);
     GxRsSet(GxRs_ColorOp0, 0);
     GxRsSet(GxRs_AlphaOp0, 0);
+    // CHANGED: with sun shafts on, the sun glare draws with 4.3.4's DNGlare shader, which adds the shafts.
+    bool shafts = this == &DayNight::g_sunGlare && SunShafts::SetupGlare(world);
     GxPrimVertexPtr(4, s_glareVertices, sizeof(C3Vector), nullptr, 0, &this->m_color, 0, s_glareTexCoords, sizeof(C2Vector), nullptr, 0);
     GxPrimIndexPtr(4, s_glareIndices);
     CGxBatch batch;
@@ -3036,6 +3039,10 @@ void DayNight::DNGlare::Render() {
     batch.m_minIndex = 0;
     batch.m_maxIndex = 3;
     g_theGxDevicePtr->Draw(&batch, 1);
+
+    if (shafts) {
+        SunShafts::EndGlare();
+    }
     GxXformSetViewport(minX, maxX, minY, maxY, minZ, maxZ);
     GxXformPop(GxXform_World);
     g_theGxDevicePtr->RsPop();

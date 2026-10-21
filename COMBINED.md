@@ -53,6 +53,21 @@ Every changed spot in the original sources is marked `// CHANGED:`.
 - Checked on 209 4.3.4 `ps_3_0`/`vs_3_0` files (4,842 permutations): each decodes to a complete D3D9 shader,
   byte-identical to an independent reader, and damaged copies are refused without reading out of bounds.
 
+### Depth texture and sun shafts (Engine/Source/Gx, Engine/Source/ShaderEffect)
+- New texture format `GxTex_Intz` (D3D9 INTZ) and `CGxDevice::DeviceSetSampledDepth`: the back buffer's depth
+  buffer can be a texture shaders read. 4.3.4 copied depth with NVAPI or AMD's RESZ, which DXVK lacks; here the
+  world renders straight into it, so it works on Windows drivers and on Linux through DXVK. Needs
+  multisampling off.
+- `DepthCache.cpp`: keeps that texture sized to the window while an effect uses it.
+- `SunShafts.cpp`: 4.3.4's sun shafts, using 4.3.4's own shaders. With shafts on, the sun glare draws with 4.3.4's
+  DNGlare shader, which adds them. Shader constants the passes overwrite are put back afterwards, since the
+  client's own shaders keep the projection and fog colour for the whole frame.
+- To use it: put these 4.3.4 shader files in a patch MPQ under `Shaders\Cata\` (keeping the 4.3.4 folder
+  layout), then `/console sunShafts 2` (1 is the cheaper mode):
+  - `Shaders\Cata\Pixel\ps_3_0\SunShaftsMask.bls`, `SunShaftsPropagate.bls`, `DNGlare.bls`
+  - `Shaders\Cata\Vertex\vs_3_0\SunShaftsMask.bls`, `SunShaftsPropagate.bls`, `DNGlare.bls`
+  If they are missing, or the device cannot sample depth, the setting stays off and the log says why.
+
 ### Volumetric fog and water (WoW/Source/VolFog)
 - CoAVolFog's renderers, shaders, data and `CoAVolFog.ini` as upstream; its DLL loader, call-site patches and
   address reads are replaced by calls from the client's world render and reads of the client's own globals.
@@ -67,6 +82,8 @@ Every changed spot in the original sources is marked `// CHANGED:`.
 
 - The converters are checked against real 4.3.4 files, but the client itself has not been run on them yet.
 - No sample model used 4.x special effects 0-2 or compressed gravity, so those two conversions are untested.
+- Sun shafts are checked against the 4.3.4 shaders' inputs, constants and permutations, but have not been run
+  in the client yet.
 - 4.x models whose effects need shaders that 3.3.5a's shader archive does not contain draw with the closest
   standard shader. Exact results need the 4.x shaders ported too.
 - Split tiles are read synchronously when first needed, which can hitch while flying into new areas.

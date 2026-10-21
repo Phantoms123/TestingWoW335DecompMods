@@ -30,6 +30,8 @@
 #include "Engine/Source/Tempest/CAaBox.h"
 #include "Engine/Source/Tempest/CImVector.h"
 #include "Engine/Source/lua-5.1/src/lua.h"
+#include "Engine/Source/ShaderEffect/DepthCache.h"
+#include "Engine/Source/ShaderEffect/SunShafts.h"
 #include "WoW/Common/TextureCache.h"
 #include "WoW/Source/Client.h"
 #include "WoW/Source/DB/DBClient/DBClient.h"
@@ -1655,6 +1657,9 @@ void CGWorldFrame::UpdateObject(CGObject_C* object, uint32_t flags) {
     }
 }
 
+// CHANGED: defined below OnWorldRender.
+static void UpdateSunShafts();
+
 // VERIFY: 2ea40d3b manual
 // OFFSET: 0x004F8EA0
 void CGWorldFrame::OnWorldRender() {
@@ -1673,6 +1678,9 @@ void CGWorldFrame::OnWorldRender() {
     GxRsSet(GxRs_Multisample, 1);
     CGWorldFrame::UpdateScreenEffectParams();
     FFX::Start();
+    // CHANGED: sun shafts from 4.3.4 read the scene depth, so the world draws its depth into a texture.
+    SunShafts::BeginFrame();
+    DepthCache::BeginFrame();
 
     CRect fullViewport = { 0.0f, 0.0f, 1.0f, 1.0f };
 
@@ -1762,8 +1770,12 @@ void CGWorldFrame::OnWorldRender() {
         CWorldScene::RenderWeather();
         CWorldScene::RenderLiquidPass();
         scene->Draw(M2PASS_2);
+        // CHANGED: sun shafts once the opaque world is drawn, as 4.3.4's CWorldView::Render does.
+        UpdateSunShafts();
     } else {
         scene->Draw(M2PASS_2);
+        // CHANGED: sun shafts once the opaque world is drawn, before the see-through liquids.
+        UpdateSunShafts();
         // CHANGED: CoAVolFog writes liquid depth, then may composite the fog before the see-through models.
         vf_on_liquid_begin();
         CWorldScene::RenderLiquidPass();
@@ -1805,6 +1817,19 @@ void CGWorldFrame::OnWorldRender() {
     vf_on_world_done();
     FFX::Finish();
     CVehiclePassenger_C::PostRenderUpdateAll();
+}
+
+// CHANGED: not in the original client.
+static void UpdateSunShafts() {
+    if (!SunShafts::IsEnabled() || !DayNight::g_sunGlare.m_enable) {
+        return;
+    }
+
+    CGCamera* camera = CGWorldFrame::GetActiveCamera();
+
+    if (camera) {
+        SunShafts::Update(DayNight::GetInfo()->m_cameraPos, DayNight::g_sunGlare.m_position, camera->m_nearZ, camera->m_farZ, CWorld::s_unk_ADEEE4);
+    }
 }
 
 // VERIFY: 79b17fb9 manual

@@ -16,6 +16,11 @@ static const uint32_t SHADER_COMPAT_MAGIC = 0x47585348;  // 'GXSH'
 static const uint32_t SHADER_COMPAT_VERSION_CLIENT = 0x10003;
 static const uint32_t SHADER_COMPAT_VERSION_4X = 0x10004;
 
+// Where features ported from 4.x load that client's shaders from, so they never replace this client's
+// shaders of the same name: Shaders\Cata\Pixel\ps_3_0\Name.bls and so on.
+#define SHADER_COMPAT_PIXEL_PATH "Shaders\\Cata\\Pixel"
+#define SHADER_COMPAT_VERTEX_PATH "Shaders\\Cata\\Vertex"
+
 struct ShaderCompatPermute {
     // The header words this client's CGxShader keeps (unk_003C, unk_0040, unk_0044, unk_0046).
     uint32_t header0;

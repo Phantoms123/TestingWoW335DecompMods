@@ -115,6 +115,10 @@ void CGxDevice::DeviceRestoreDepthSurface() {
 void CGxDevice::DeviceResolveDepthBuffer(CGxTex* texture) {
 }
 
+// CHANGED: devices without sampled depth support ignore it.
+void CGxDevice::DeviceSetSampledDepth(CGxTex* texture) {
+}
+
 void CGxDevice::DeviceCopyTex(CGxTex* source, uint32_t sourcePlane, CGxTex* dest, uint32_t destPlane) {
 }
 
