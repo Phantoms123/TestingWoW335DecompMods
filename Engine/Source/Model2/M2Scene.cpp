@@ -29,6 +29,9 @@ const uint32_t s_localLighting[7] = { 1, 1, 1, 1, 1, 0, 0 };
 const uint32_t s_blendModes[3][7] = { { 0, 1, 2, 10, 3, 4, 5 }, { 2, 2, 2, 10, 3, 4, 5 }, { 2, 2, 2, 10, 3, 4, 5 } };
 
 // STATIC: 0x00AF5898
+// CHANGED: not in the original client (see M2Scene.h).
+bool CM2Scene::s_keepClipPlane;
+
 uint32_t CM2Scene::s_optFlags = 0xFFFFFFFF;
 
 // STATIC: 0x00AF58A0

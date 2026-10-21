@@ -60,6 +60,10 @@ namespace Liquid {
         void EndReflection();
         // Whether the world's culling should take in more above the view for the reflection.
         bool ReflectionNeedsWideCulling();
+        // Within a reflection (mode 3): mirrors the models (trees, characters, creatures) for the caller to draw.
+        bool BeginModelReflection();
+        void EndModelReflection();
+        void SetReflectionModels(bool enable);
         // While a reflection draws: true gives its clip plane in world space (for drawing without shaders), false
         // in clip space again.
         void SetReflectionClipForFixedFunction(bool fixedFunction);

@@ -773,6 +773,11 @@ static bool ShorelineSoftnessCallback(CVar* var, const char* oldValue, const cha
     return true;
 }
 
+static bool ReflectionModelsCallback(CVar* var, const char* oldValue, const char* value, void* arg) {
+    Liquid::Cata::SetReflectionModels(SStrToInt(value) != 0);
+    return true;
+}
+
 static bool SunShaftsCallback(CVar* var, const char* oldValue, const char* value, void* arg) {
     int32_t mode = SStrToInt(value);
     SunShafts::SetMode(mode > 0 ? static_cast<uint32_t>(mode) : 0);
@@ -812,6 +817,8 @@ void CWorldParam::Initialize() {
     Liquid::Cata::SetReflectionStrength(reflectionStrength ? reflectionStrength->m_floatValue : 0.75f);
     CVar* shorelineSoftness = CVar::Register("shorelineSoftness", "How much softer the 4.3.4 water's shorelines get with distance (0 as 4.3.4, 1 default, up to 4)", 1, "1", ShorelineSoftnessCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     Liquid::Cata::SetShorelineSoftness(shorelineSoftness ? shorelineSoftness->m_floatValue : 1.0f);
+    CVar* reflectionModels = CVar::Register("reflectionModels", "Reflect trees, characters and creatures in the water with reflectionMode 3 (0 off, 1 on)", 1, "1", ReflectionModelsCallback, CATEGORY_GRAPHICS, false, nullptr, false);
+    Liquid::Cata::SetReflectionModels(!reflectionModels || reflectionModels->m_intValue != 0);
     CVar* reflectionDownscale = CVar::Register("reflectionDownscale", "Water reflection texture downscale (0-4)", 1, "0", ReflectionDownscaleCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     Liquid::Cata::SetReflectionDownscale(reflectionDownscale ? static_cast<uint32_t>(reflectionDownscale->m_intValue) : 0);
     RegisterPostEffects();

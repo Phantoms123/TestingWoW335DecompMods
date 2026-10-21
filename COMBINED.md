@@ -103,10 +103,14 @@ Every changed spot in the original sources is marked `// CHANGED:`.
   (about a third of a second) instead of switching. Outdoors, the culling reaches a screen's height above the view
   while reflections are on, so what the water mirrors does not pop as the camera turns, and the reflection is
   softened slightly (as 4.3.4's blurredReflection). The low-detail horizon terrain is drawn into it too (with
-  the clip plane in world space, as it draws without shaders), so distant hills do not pop in as they load.
+  the clip plane in world space, as it draws without shaders), so distant hills do not pop in as they load. With reflectionMode 3 the opaque models (trees, characters,
+  creatures; `reflectionModels 0` leaves them out) are drawn too: their matrices already hold the view, so they are
+  mirrored through the projection (the view-space mirror in front of it), which keeps the same clip plane
+  (CM2Scene::s_keepClipPlane stops models in liquid from setting their own). The chunks considered for culling
+  also reach a screen's height above the view.
 - `shorelineSoftness` (default 1): the depths the water shader compares are scaled down for distant water (PS
   c5-c8 z and c22), so its shoreline fade and foam cover more of the shallows instead of ending within a pixel.
-- Not ported yet: reflections of models (trees, characters), ripples from the collision meshes of moving objects
+- Not ported yet: ripples from the collision meshes of moving objects
   (4.3.4's PerturbDisplMapMesh).
 
 ### Advanced video options (Engine/Source/ShaderEffect/PostEffects.cpp)

@@ -15,6 +15,7 @@
 #include "Engine/Source/Gx/Gx.h"
 #include "Engine/Source/Gxu/Gxu.h"
 #include "Engine/Source/Model2/M2Light.h"
+#include "Engine/Source/Model2/M2Scene.h"
 #include "Engine/Source/Os/TimeManager.h"
 #include "Engine/Source/Services/Texture.h"
 #include "Engine/Source/ShaderEffect/DepthCache.h"
@@ -1132,6 +1133,8 @@ static CGxTex* s_reflectionSavedColor;
 static float s_reflectionSavedViewport[6];
 static C4Plane s_reflectionClip;
 static float s_reflectionPlaneZ;
+static C44Matrix s_reflectionSavedProjection;
+static bool s_reflectionModels = true;
 
 bool Liquid::Cata::BeginReflection(const C3Vector& worldViewOrigin, uint32_t& mode) {
     mode = s_reflectionMode;
@@ -1221,6 +1224,38 @@ void Liquid::Cata::SetReflectionClipForFixedFunction(bool fixedFunction) {
     } else {
         g_theGxDevicePtr->ClipPlaneSet(0, s_reflectionClip);
     }
+}
+
+void Liquid::Cata::SetReflectionModels(bool enable) {
+    s_reflectionModels = enable;
+}
+
+// Models are animated with the view already in their matrices, so they are mirrored through the projection
+// instead: the view-space mirror (the view undone, the mirror, the view again) goes in front of it. The whole
+// transform then matches the mirrored world's, so the same clip plane holds.
+bool Liquid::Cata::BeginModelReflection() {
+    if (!s_inReflection || !s_reflectionModels || s_reflectionMode < 3) {
+        return false;
+    }
+
+    CGxDevice* device = g_theGxDevicePtr;
+    s_reflectionSavedProjection = device->m_projNative;
+    C44Matrix viewMirror = s_reflectionSavedView.Inverse() * MirrorZ(s_reflectionPlaneZ) * s_reflectionSavedView;
+    device->m_projNative = viewMirror * s_reflectionSavedProjection;
+    device->XformSetView(s_reflectionSavedView);
+    CShaderEffect::UpdateProjMatrix();
+    CM2Scene::s_keepClipPlane = true;
+    return true;
+}
+
+void Liquid::Cata::EndModelReflection() {
+    CGxDevice* device = g_theGxDevicePtr;
+    CM2Scene::s_keepClipPlane = false;
+    device->m_projNative = s_reflectionSavedProjection;
+    device->XformSetView(MirrorZ(s_reflectionPlaneZ) * s_reflectionSavedView);
+    CShaderEffect::UpdateProjMatrix();
+    device->ClipPlaneSet(0, s_reflectionClip);
+    GxRsSet(GxRs_ClipPlaneMask, 1);
 }
 
 bool Liquid::Cata::ReflectionNeedsWideCulling() {

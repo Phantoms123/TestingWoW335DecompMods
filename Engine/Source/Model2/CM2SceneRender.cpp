@@ -256,6 +256,11 @@ void CM2SceneRender::SetupLighting() {
         return;
     }
 
+    // CHANGED: a water reflection's clip plane stays.
+    if (CM2Scene::s_keepClipPlane) {
+        return;
+    }
+
     if (this->m_curElement->m_flags & 2) {
         C4Vector plane;
         plane.x = this->m_curLighting->m_liquidPlane.n.x;

@@ -209,6 +209,12 @@ void CWorldScene::Render(const C3Vector& cameraPos, float time) {
     CWorldScene::RenderMapObjDefGroups();
     CWorldScene::RenderHorizon();
 
+    // The opaque models: trees, characters, creatures.
+    if (World::s_m2Scene && Liquid::Cata::BeginModelReflection()) {
+        World::s_m2Scene->Draw(M2PASS_0);
+        Liquid::Cata::EndModelReflection();
+    }
+
     if (CWorldScene::s_unk_ADF570.m_maxViewDepth >= 0.0f) {
         if (CWorldScene::s_exteriorPortalViews.Count()) {
             CWorldScene::CreateInversePortalList();
