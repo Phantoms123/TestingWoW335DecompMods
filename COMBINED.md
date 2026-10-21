@@ -62,8 +62,8 @@ Every changed spot in the original sources is marked `// CHANGED:`.
 ## Building
 
 Windows: as in README.md (Visual Studio 2022, CMake). Use `-DWOWDECOMP_DISABLE_SIGNATURE_CHECKS=ON` to load
-modified MPQs. CoAVolFog needs `fxc.exe` from the Windows SDK (installed with Visual Studio's C++ workload) and
-internet access at configure time for Dear ImGui; `-DWOWDECOMP_VOLFOG=OFF` leaves it out.
+modified MPQs. CoAVolFog needs `fxc.exe` from the Windows SDK (installed with Visual Studio's C++ workload);
+`-DWOWDECOMP_VOLFOG=OFF` leaves it out.
 
 Linux (DXVK backend), with SDL2, DXVK-native, libvorbis and libcurl installed:
 

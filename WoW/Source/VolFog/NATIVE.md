@@ -57,7 +57,8 @@ at fixed addresses. In this tree the client calls it directly, so none of that i
 ## Building
 
 On by default on Windows (`WOWDECOMP_VOLFOG`). It needs `fxc.exe` from the Windows SDK, found automatically or
-given with `-DFXC=<path>`, and downloads Dear ImGui at configure time. `CoAVolFog.ini`, `fogdata.bin` and
+given with `-DFXC=<path>`. Dear ImGui for the settings window is vendored in `ThirdParty/imgui` (v1.92.9b, as
+upstream). `CoAVolFog.ini`, `fogdata.bin` and
 `waterdata.bin` are copied next to the client executable. Configure with `-DWOWDECOMP_VOLFOG=OFF` to leave it out;
 the client then renders exactly as before.
 

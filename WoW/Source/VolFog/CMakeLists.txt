@@ -2,8 +2,11 @@
 # Windows only: it draws through the Direct3D 9 device and its shaders are compiled with fxc from the Windows SDK.
 
 file(GLOB FXC_CANDIDATES "$ENV{ProgramFiles\(x86\)}/Windows Kits/10/bin/10.*/x86/fxc.exe")
-list(SORT FXC_CANDIDATES COMPARE NATURAL ORDER DESCENDING)
-list(GET FXC_CANDIDATES 0 FXC_DEFAULT)
+set(FXC_DEFAULT "")
+if(FXC_CANDIDATES)
+    list(SORT FXC_CANDIDATES COMPARE NATURAL ORDER DESCENDING)
+    list(GET FXC_CANDIDATES 0 FXC_DEFAULT)
+endif()
 set(FXC "${FXC_DEFAULT}" CACHE FILEPATH "HLSL compiler (fxc.exe)")
 if(NOT EXISTS "${FXC}")
     message(FATAL_ERROR "CoAVolFog needs fxc.exe from the Windows SDK: install the SDK, set -DFXC=<path>, or configure with -DWOWDECOMP_VOLFOG=OFF")
@@ -91,14 +94,7 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/WaterFftShaders.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/WaterShaders.cmake)
 add_custom_target(vf_shaders DEPENDS ${SHADER_HEADERS})
 
-include(FetchContent)
-if(POLICY CMP0135)
-    cmake_policy(SET CMP0135 NEW)
-endif()
-FetchContent_Declare(imgui
-    URL https://github.com/ocornut/imgui/archive/refs/tags/v1.92.9b.tar.gz
-    URL_HASH SHA256=21d8a0a565e85dce943e375db00812c2f3f0ab21f3f0f7964e364a63422d7f99)
-FetchContent_MakeAvailable(imgui)
+set(imgui_SOURCE_DIR ${CMAKE_SOURCE_DIR}/ThirdParty/imgui)
 
 add_library(imgui STATIC
     ${imgui_SOURCE_DIR}/imgui.cpp
