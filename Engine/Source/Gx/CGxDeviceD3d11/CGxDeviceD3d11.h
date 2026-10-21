@@ -123,6 +123,10 @@ class CGxDeviceD3d11 : public CGxDevice {
     virtual void IShaderReload(CGxShader* shader, const char* path, const char* name);
     virtual void IShaderCreate(CGxShader* shader);
     virtual void CursorSetVisible(int32_t visible);
+    virtual void CursorUnlock(uint32_t x, uint32_t y);
+    virtual void ICursorCreate(const CGxFormat& format);
+    virtual void ICursorDestroy();
+    virtual void ICursorDraw();
     virtual void StereoSetConvergence(float convergence);
     virtual float StereoGetConvergence();
     virtual void StereoSetSeparation(float separation);
@@ -134,6 +138,9 @@ class CGxDeviceD3d11 : public CGxDevice {
 
     // Window and device.
     void* m_hwnd = nullptr;
+    // The hardware cursor: an SDL colour cursor made from the client's cursor image.
+    void* m_sdlCursor = nullptr;
+    int32_t m_hwCursorDirty = 1;
     int32_t m_ownhwnd = 0;
     IDXGIFactory1* m_factory = nullptr;
     ID3D11Device* m_device = nullptr;

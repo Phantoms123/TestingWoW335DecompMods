@@ -533,8 +533,67 @@ void CGxDeviceD3d11::CapsWindowSizeInScreenCoords(CRect& rect) {
     }
 }
 
+// The cursor. With the hardware cursor (the usual case) SDL shows the client's cursor image; otherwise the client
+// draws it into the frame and SDL's own cursor is hidden, so only one ever shows.
 void CGxDeviceD3d11::CursorSetVisible(int32_t visible) {
     CGxDevice::CursorSetVisible(visible);
+    SDL_ShowCursor(this->m_hwCursor && this->m_cursorVisible ? SDL_ENABLE : SDL_DISABLE);
+}
+
+void CGxDeviceD3d11::CursorUnlock(uint32_t x, uint32_t y) {
+    CGxDevice::CursorUnlock(x, y);
+    this->m_hwCursorDirty = 1;
+}
+
+void CGxDeviceD3d11::ICursorCreate(const CGxFormat& format) {
+    CGxDevice::ICursorCreate(format);
+    this->m_hwCursorDirty = 1;
+    SDL_ShowCursor(this->m_hwCursor && this->m_cursorVisible ? SDL_ENABLE : SDL_DISABLE);
+}
+
+void CGxDeviceD3d11::ICursorDestroy() {
+    CGxDevice::ICursorDestroy();
+
+    if (this->m_sdlCursor) {
+        SDL_SetCursor(SDL_GetDefaultCursor());
+        SDL_FreeCursor(static_cast<SDL_Cursor*>(this->m_sdlCursor));
+        this->m_sdlCursor = nullptr;
+    }
+
+    this->m_hwCursorDirty = 1;
+}
+
+void CGxDeviceD3d11::ICursorDraw() {
+    if (!this->m_hwCursor) {
+        SDL_ShowCursor(SDL_DISABLE);
+        CGxDevice::ICursorDraw();
+        return;
+    }
+
+    if (!this->m_hwCursorDirty) {
+        return;
+    }
+
+    // m_cursor: 32x32 ARGB.
+    SDL_Surface* surface = SDL_CreateRGBSurfaceFrom(this->m_cursor, 32, 32, 32, 32 * 4, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
+
+    if (surface) {
+        SDL_Cursor* cursor = SDL_CreateColorCursor(surface, static_cast<int>(this->m_cursorHotspotX), static_cast<int>(this->m_cursorHotspotY));
+        SDL_FreeSurface(surface);
+
+        if (cursor) {
+            SDL_SetCursor(cursor);
+
+            if (this->m_sdlCursor) {
+                SDL_FreeCursor(static_cast<SDL_Cursor*>(this->m_sdlCursor));
+            }
+
+            this->m_sdlCursor = cursor;
+        }
+    }
+
+    SDL_ShowCursor(this->m_cursorVisible ? SDL_ENABLE : SDL_DISABLE);
+    this->m_hwCursorDirty = 0;
 }
 
 int32_t CGxDeviceD3d11::DeviceWM(EGxWM wm, uintptr_t param1, uintptr_t param2) {
@@ -838,7 +897,7 @@ void CGxDeviceD3d11::ISetCaps(const CGxFormat& format) {
     caps.m_rttFormat[GxTex_Intz] = 1;
     caps.m_generateMipMaps = 1;
     caps.m_colorWrite = 1;
-    caps.m_hwCursor = 0;
+    caps.m_hwCursor = 1;
     caps.m_maxClipPlanes = 6;
     caps.m_texTarget[GxTex_2d] = 1;
     caps.m_texTarget[GxTex_CubeMap] = 1;
