@@ -1,0 +1,1 @@
+Upstream: https://github.com/jealous-sound/coa-vfog @ 3908909b577ca2f31be26fd643905cb33bda7943 (GPL-3.0). Vendored without proxy/ (the version.dll loader); see WoW/Source/VolFog/NATIVE.md for what changed.
