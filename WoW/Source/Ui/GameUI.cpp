@@ -2190,6 +2190,9 @@ CGPartyPetState* CGPartyMemberStateRepository::FindPetState(const WOWGUID& guid)
 // VERIFY: c132a45d auto
 // OFFSET: 0x0051FB80
 void CGGameUI::ScaleToScreenSize(int32_t width, int32_t height, int32_t force) {
+#if !defined(_WIN32) || defined(WOWDECOMP_VULKAN)
+    if (width <= 0 || height <= 0) return;
+#endif
     if (!force && CGGameUI::m_screenWidth > 0 && CGGameUI::m_screenWidth == width && CGGameUI::m_screenHeight > 0 && CGGameUI::m_screenHeight == height) {
         return;
     }
@@ -2198,6 +2201,9 @@ void CGGameUI::ScaleToScreenSize(int32_t width, int32_t height, int32_t force) {
     CGGameUI::m_screenHeight = height;
 
     float aspect = Screen::GetAspectRatio();
+#if !defined(_WIN32) || defined(WOWDECOMP_VULKAN)
+    float scale = CoordinateWindowUiScale(static_cast<float>(width), static_cast<float>(height));
+#else
     float scale = height > 768 ? 768.0f / height : 1.0f;
 
     if (aspect * 3.0f < 4.0f && aspect * 0.75f <= scale) {
@@ -2211,6 +2217,7 @@ void CGGameUI::ScaleToScreenSize(int32_t width, int32_t height, int32_t force) {
     if (scale <= 0.63999999f) {
         scale = 0.63999999f;
     }
+#endif
 
     if (CGGameUI::m_UISimpleParent) {
         CGGameUI::m_UISimpleParent->SetFrameScale(scale, true);
@@ -2218,6 +2225,9 @@ void CGGameUI::ScaleToScreenSize(int32_t width, int32_t height, int32_t force) {
         FrameScript_SignalEvent(SCRIPT_EVENT_UPDATE_FLOATING_CHAT_WINDOWS, nullptr);
     }
 
+#if !defined(_WIN32) || defined(WOWDECOMP_VULKAN)
+    CGGameUI::m_aspect = aspect;
+#else
     if (fabs(CGGameUI::m_aspect - aspect) >= 0.001f) {
         if (lua_tainted && CGGameUI::m_simpleTop && !CGGameUI::m_simpleTop->unused_1250) {
             CGGameUI::ShowBlockedActionFeedback(nullptr, 1);
@@ -2227,6 +2237,7 @@ void CGGameUI::ScaleToScreenSize(int32_t width, int32_t height, int32_t force) {
             CGGameUI::m_reloadUIRequested = 1;
         }
     }
+#endif
 }
 
 // VERIFY: 7d99c1aa auto
@@ -2243,11 +2254,15 @@ void CGGameUI::HandleDisplaySizeChanged(const CSizeEvent& evt) {
             CGGameUI::SetUIScale(scale);
             float aspect = Screen::GetAspectRatio();
 
+#if !defined(_WIN32) || defined(WOWDECOMP_VULKAN)
+            CGGameUI::m_aspect = aspect;
+            FrameScript_SignalEvent(SCRIPT_EVENT_DISPLAY_SIZE_CHANGED, nullptr);
+#else
             if (fabs(CGGameUI::m_aspect - aspect) >= 0.001f) {
                 CGGameUI::Reload();
                 CGGameUI::m_aspect = aspect;
             }
-
+#endif
             return;
         }
     }

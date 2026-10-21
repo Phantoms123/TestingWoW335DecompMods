@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.13)
 
 if (${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
     message(FATAL_ERROR
@@ -13,39 +13,40 @@ project(wowdecomp CXX C)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-if (NOT CMAKE_SYSTEM_NAME MATCHES "Windows")
-    message(FATAL_ERROR "wowdecomp targets Windows only.")
+include(cmake/WowPlatform.cmake)
+wowdecomp_configure_platform()
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+if (WOWDECOMP_OS STREQUAL "Darwin")
+    message(FATAL_ERROR "macOS platform identity is ready; Darwin OS leaves and client integration are not implemented yet. See docs/PlatformPortability.md.")
+endif ()
+if (WOWDECOMP_POSIX)
+    find_package(Threads REQUIRED)
+endif ()
+if (WOWDECOMP_CPU STREQUAL "arm64" OR (WOWDECOMP_POSIX AND WOWDECOMP_ARCH_32))
+    message(FATAL_ERROR "The native client currently requires x86-64; Windows also supports x86. ARM64 CPU/SIMD leaves remain to be implemented.")
 endif ()
 
-# x64 is the target. Win32 stays buildable: it is the configuration whose struct layouts can be
-# checked against Wow.exe 3.3.5a (12340).
-if (CMAKE_SIZEOF_VOID_P EQUAL 8)
-    set(WOWDECOMP_ARCH_64 1)
-    add_compile_definitions(WOWDECOMP_ARCH_64=1)
-elseif (CMAKE_SIZEOF_VOID_P EQUAL 4)
-    set(WOWDECOMP_ARCH_32 1)
-    add_compile_definitions(WOWDECOMP_ARCH_32=1)
-    # x87 floating point like the VS2005 original; keeps Win32 code comparable with the binary (re/tools/verify.py).
-    if (MSVC)
-        add_compile_options(/arch:IA32 /fp:fast)
+option(WOWDECOMP_VULKAN "Build the native Vulkan backend alongside D3D9/DXVK" OFF)
+if (WOWDECOMP_VULKAN)
+    if (CMAKE_VERSION VERSION_LESS 3.16)
+        message(FATAL_ERROR "The native Vulkan build requires CMake 3.16 or newer")
     endif ()
-    # 32-bit time_t like the original build: time/localtime/mktime resolve to _time32/_localtime32/_mktime32.
-    add_compile_definitions(_USE_32BIT_TIME_T)
-else ()
-    message(FATAL_ERROR "Unsupported pointer size.")
+    add_compile_definitions(WOWDECOMP_VULKAN=1)
 endif ()
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-add_compile_definitions(
-    WIN32
-    _WINDOWS
-    NOMINMAX
-    WIN32_LEAN_AND_MEAN
-    _CRT_SECURE_NO_WARNINGS
-)
+if (WIN32)
+    add_compile_definitions(
+        WIN32
+        _WINDOWS
+        NOMINMAX
+        WIN32_LEAN_AND_MEAN
+        _CRT_SECURE_NO_WARNINGS
+    )
+endif ()
 
 # Off by default: the client checks MPQ file MD5s (signaturefile) and GlueXML/FrameXML/AddOn .toc.sig files like the
 # original. ON accepts unsigned or modified game data and interface files.

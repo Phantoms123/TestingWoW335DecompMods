@@ -66,7 +66,7 @@ struct CGxAppRenderState {
     /* 0014 */ int32_t m_dirty;
 };
 
-typedef void (__fastcall* GxDeviceCallback)();
+typedef void (STORM_FASTCALL* GxDeviceCallback)();
 
 class CGxDevice {
     public:
@@ -283,7 +283,7 @@ class CGxDevice {
 
     CGxDevice();
     CGxBuf* BufCreate(CGxPool* pool, uint32_t itemSize, uint32_t itemCount, uint32_t index);
-    void BufDestroy(CGxBuf*& buf);
+    virtual void BufDestroy(CGxBuf*& buf);
     void DeviceCreatePools();
     void DeviceCreateStreamBufs();
     void IShaderLoad(CGxShader** shaders, EGxShTarget target, const char* path, const char* name, uint32_t permutations);
