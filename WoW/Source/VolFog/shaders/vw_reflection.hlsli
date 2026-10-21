@@ -85,7 +85,7 @@ float4 TraceScreenReflection(WaterPixel w, float2 pixel, float3 R, out float2 hi
     float previous = 0;
     float front = 0;
     float behind = kNoReflectionHit;
-    [loop] for (int step = 1; step <= kReflectionSteps; ++step)
+    VF_FIXED_LOOP for (int step = 1; step <= kReflectionSteps; ++step)
     {
         [branch] if (behind == kNoReflectionHit)
         {
@@ -100,7 +100,7 @@ float4 TraceScreenReflection(WaterPixel w, float2 pixel, float3 R, out float2 hi
     }
     [branch] if (behind == kNoReflectionHit)
         return 0;
-    [loop] for (int refinement = 0; refinement < kReflectionRefinements; ++refinement)
+    VF_FIXED_LOOP for (int refinement = 0; refinement < kReflectionRefinements; ++refinement)
     {
         float middle = 0.5 * (front + behind);
         bool middleBehind = RayBehindScene(ray, middle);

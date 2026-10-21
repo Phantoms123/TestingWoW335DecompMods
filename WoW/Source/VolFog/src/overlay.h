@@ -2,7 +2,7 @@
 
 #include "settings_panel.h"
 
-#include <windows.h>
+#include "platform.h"
 #include <d3d9.h>
 
 void AttachOverlay(IDirect3DDevice9* device, HWND window);

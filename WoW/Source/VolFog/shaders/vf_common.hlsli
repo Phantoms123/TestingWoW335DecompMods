@@ -1,3 +1,12 @@
+// CHANGED (wowdecomp): loops with a fixed trip count and no early exit. fxc keeps them as loops; vkd3d-shader
+// (Tools/VfHlsl, used for Linux builds) cannot emit shader model 3 loops yet, so there they are unrolled, which
+// computes the same result.
+#if defined(VF_VKD3D)
+#define VF_FIXED_LOOP [unroll]
+#else
+#define VF_FIXED_LOOP [loop]
+#endif
+
 float4 cWorldViewportPx : register(c0);
 float4 cPixelGrid : register(c1);
 float4 cViewToNdc : register(c2);

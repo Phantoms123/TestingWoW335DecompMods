@@ -11,6 +11,9 @@
 #include "Engine/Source/Os/Joystick.h"
 #include "Engine/Source/Os/TimeManager.h"
 
+// CHANGED (wowdecomp): CoAVolFog's overlay input hook (WoW/Source/VolFog), present only when it is built in.
+extern "C" int vf_on_os_event(void* sdlEvent) __attribute__((weak));
+
 namespace {
 std::array<OSEVENT, 16> s_queue;
 size_t s_head;
@@ -282,6 +285,8 @@ int32_t OsInputGet(OSINPUT* id, int32_t* param0, int32_t* param1, int32_t* param
     }
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
+        // CHANGED (wowdecomp): CoAVolFog's settings overlay sees input first and keeps what it uses.
+        if (vf_on_os_event && vf_on_os_event(&event)) continue;
         OsGuiProcessMessage(&event);
         if (s_textPosition < s_textSize) QueueCharacter();
         if (OsQueueGet(id, param0, param1, param2, param3)) return 1;

@@ -6,7 +6,7 @@
 #include "ps_depth_check.h"
 #include "vs_fullscreen.h"
 
-#include <windows.h>
+#include "platform.h"
 
 #include <climits>
 #include <cmath>
@@ -49,11 +49,11 @@ struct NvapiD3D9
 
 int GuardedInitialize(NvapiInitialize initialize)
 {
-    __try
+    VF_TRY
     {
         return initialize();
     }
-    __except (EXCEPTION_EXECUTE_HANDLER)
+    VF_EXCEPT(EXCEPTION_EXECUTE_HANDLER)
     {
         return kNvapiCallFaulted;
     }
@@ -61,11 +61,11 @@ int GuardedInitialize(NvapiInitialize initialize)
 
 int GuardedResourceCall(NvapiResourceCall call, IDirect3DResource9* resource)
 {
-    __try
+    VF_TRY
     {
         return call(resource);
     }
-    __except (EXCEPTION_EXECUTE_HANDLER)
+    VF_EXCEPT(EXCEPTION_EXECUTE_HANDLER)
     {
         return kNvapiCallFaulted;
     }
@@ -74,11 +74,11 @@ int GuardedResourceCall(NvapiResourceCall call, IDirect3DResource9* resource)
 int GuardedStretchRect(NvapiStretchRectEx call, IDirect3DDevice9* dev, IDirect3DResource9* source,
                        IDirect3DResource9* destination)
 {
-    __try
+    VF_TRY
     {
         return call(dev, source, nullptr, destination, nullptr, D3DTEXF_POINT);
     }
-    __except (EXCEPTION_EXECUTE_HANDLER)
+    VF_EXCEPT(EXCEPTION_EXECUTE_HANDLER)
     {
         return kNvapiCallFaulted;
     }
@@ -93,6 +93,12 @@ Function NvapiFunction(NvapiQueryInterface query, unsigned id)
 NvapiD3D9 LoadNvapiD3D9()
 {
     NvapiD3D9 nvapi;
+#if !defined(_WIN32)
+    // CHANGED (wowdecomp): NVAPI is a Windows driver DLL; the Linux client resolves MSAA depth without it.
+    nvapi.unavailable = "NVAPI is Windows-only";
+    VF_LOG_INFO("NVAPI unavailable: %s", nvapi.unavailable);
+    return nvapi;
+#else
     HMODULE library = LoadLibraryExW(sizeof(void*) == 8 ? L"nvapi64.dll" : L"nvapi.dll", nullptr,
                                      LOAD_LIBRARY_SEARCH_SYSTEM32);
     const auto query =
@@ -119,6 +125,7 @@ NvapiD3D9 LoadNvapiD3D9()
     VF_LOG_INFO("NVAPI %s%s", nvapi.unavailable[0] ? "unavailable: " : "loaded with the D3D9 depth copy",
                 nvapi.unavailable);
     return nvapi;
+#endif
 }
 
 const NvapiD3D9& Nvapi()
@@ -127,6 +134,7 @@ const NvapiD3D9& Nvapi()
     return nvapi;
 }
 
+#if defined(_WIN32)
 bool InFolder(const wchar_t* file, const wchar_t* folder)
 {
     const wchar_t* slash = std::wcsrchr(file, L'\\');
@@ -151,6 +159,13 @@ bool LoadedFromSystemFolder(const void* code)
     const bool inWow64 = GetSystemWow64DirectoryW(wow64, MAX_PATH) && InFolder(path, wow64);
     return inSystem || inWow64;
 }
+#else
+// CHANGED (wowdecomp): on Linux d3d9 is always DXVK-native, never a system driver NVAPI could reach.
+bool LoadedFromSystemFolder(const void*)
+{
+    return false;
+}
+#endif
 
 const void* FirstMethodOf(IUnknown* object)
 {

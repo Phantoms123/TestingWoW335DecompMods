@@ -132,7 +132,12 @@ void RaiseInjectedFault(WaterFaultStage stage)
     if (g_injectedFault != stage)
         return;
     g_injectedFault = WaterFaultStage::None;
+#if defined(_WIN32)
     RaiseException(kInjectedWaterFault, 0, 0, nullptr);
+#else
+    // CHANGED (wowdecomp): no structured exceptions to raise; the fault-injection test is Windows-only.
+    VF_LOG_INFO("injected water fault 0x%08X ignored (no SEH on this platform)", kInjectedWaterFault);
+#endif
 }
 
 template <typename T>

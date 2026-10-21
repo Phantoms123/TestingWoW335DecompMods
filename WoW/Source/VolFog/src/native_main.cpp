@@ -8,7 +8,10 @@
 #include "noise_volume.h"
 #include "water_data.h"
 
-#include <windows.h>
+#include "platform.h"
+#if !defined(_WIN32)
+#include <unistd.h>
+#endif
 
 #include <string>
 
@@ -19,7 +22,13 @@ bool g_started = false;
 std::string ClientDirectory()
 {
     char path[MAX_PATH] = {};
+#if defined(_WIN32)
     DWORD n = GetModuleFileNameA(nullptr, path, MAX_PATH);
+#else
+    // CHANGED (wowdecomp): the Linux client's own path.
+    ssize_t r = readlink("/proc/self/exe", path, MAX_PATH - 1);
+    DWORD n = r > 0 ? static_cast<DWORD>(r) : 0;
+#endif
     std::string dir(path, n);
     size_t slash = dir.find_last_of("\\/");
     return slash == std::string::npos ? std::string() : dir.substr(0, slash + 1);

@@ -126,7 +126,7 @@ float4 SameSurfaceCurrentAverage(float2 lowResTexel, float viewZ, float depthCla
 {
     float4 sum = 0;
     float weightSum = 0;
-    [loop] for (int k = 0; k < 9; ++k)
+    VF_FIXED_LOOP for (int k = 0; k < 9; ++k)
     {
         float2 tap = lowResTexel + float2(k % 3, k / 3) - 1;
         float tapDepth = SampleDepth(sDepth, LowResTexelToFullPixel(tap));

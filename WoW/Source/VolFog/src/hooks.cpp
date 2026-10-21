@@ -13,7 +13,7 @@
 #include "water_renderer.h"
 #include "status_log.h"
 
-#include <windows.h>
+#include "platform.h"
 
 #include <algorithm>
 #include <cmath>
@@ -945,11 +945,11 @@ void FailWater()
 {
     g_waterFailed = true;
     GlobalClientRippleSprites().Restore();
-    __try
+    VF_TRY
     {
         AbortArmedWaterPass();
     }
-    __except (WaterGuardFilter(GetExceptionCode(), "water pass abort"))
+    VF_EXCEPT(WaterGuardFilter(GetExceptionCode(), "water pass abort"))
     {
         g_waterPassDevice = nullptr;
     }
@@ -959,12 +959,12 @@ bool TagArmedWaterDraw(const void* liquidSettings)
 {
     if (!g_waterPassDevice)
         return false;
-    __try
+    VF_TRY
     {
         TagWaterDrawUnsafe(liquidSettings);
         return true;
     }
-    __except (WaterGuardFilter(GetExceptionCode(), "water draw classification"))
+    VF_EXCEPT(WaterGuardFilter(GetExceptionCode(), "water draw classification"))
     {
         FailWater();
         return false;
@@ -975,11 +975,11 @@ void UntagArmedWaterDraw()
 {
     if (!g_waterPassDevice)
         return;
-    __try
+    VF_TRY
     {
         UntagWaterDraw(g_waterPassDevice);
     }
-    __except (WaterGuardFilter(GetExceptionCode(), "water draw untag"))
+    VF_EXCEPT(WaterGuardFilter(GetExceptionCode(), "water draw untag"))
     {
         FailWater();
     }
@@ -987,11 +987,11 @@ void UntagArmedWaterDraw()
 
 void EndWaterFrameGuarded()
 {
-    __try
+    VF_TRY
     {
         EndWaterFrame();
     }
-    __except (WaterGuardFilter(GetExceptionCode(), "water frame end"))
+    VF_EXCEPT(WaterGuardFilter(GetExceptionCode(), "water frame end"))
     {
         FailWater();
     }
@@ -1032,11 +1032,11 @@ extern "C" float __cdecl vf_far_clip_clamp(float clientFarClip, float farClipSet
 {
     if (!g_farClipLifted)
         return clientFarClip;
-    __try
+    VF_TRY
     {
         return LiftedFarClipClamp(clientFarClip, farClipSetting, mapId);
     }
-    __except (EXCEPTION_EXECUTE_HANDLER)
+    VF_EXCEPT(EXCEPTION_EXECUTE_HANDLER)
     {
         return clientFarClip;
     }
@@ -1046,11 +1046,11 @@ extern "C" void __cdecl vf_on_frame_begin()
 {
     if (!g_engineHooksInstalled)
         return;
-    __try
+    VF_TRY
     {
         OnFrameBegin();
     }
-    __except (GuardFilter(GetExceptionCode(), "frame begin hook"))
+    VF_EXCEPT(GuardFilter(GetExceptionCode(), "frame begin hook"))
     {
         g_failed = true;
     }
@@ -1061,11 +1061,11 @@ extern "C" void __cdecl vf_on_frame_end()
     if (!g_engineHooksInstalled)
         return;
     EndWaterFrameGuarded();
-    __try
+    VF_TRY
     {
         OnFrameEnd();
     }
-    __except (GuardFilter(GetExceptionCode(), "frame end hook"))
+    VF_EXCEPT(GuardFilter(GetExceptionCode(), "frame end hook"))
     {
         g_failed = true;
     }
@@ -1076,11 +1076,11 @@ extern "C" void __cdecl vf_on_water_pass_begin(const void* liquidRenderer)
 {
     if (!g_waterHooksInstalled)
         return;
-    __try
+    VF_TRY
     {
         OnWaterPassBegin(liquidRenderer);
     }
-    __except (WaterGuardFilter(GetExceptionCode(), "water pass begin hook"))
+    VF_EXCEPT(WaterGuardFilter(GetExceptionCode(), "water pass begin hook"))
     {
         FailWater();
     }
@@ -1090,11 +1090,11 @@ extern "C" void __cdecl vf_on_water_pass_end()
 {
     if (!g_waterHooksInstalled)
         return;
-    __try
+    VF_TRY
     {
         OnWaterPassEnd();
     }
-    __except (WaterGuardFilter(GetExceptionCode(), "water pass end hook"))
+    VF_EXCEPT(WaterGuardFilter(GetExceptionCode(), "water pass end hook"))
     {
         FailWater();
     }
@@ -1104,11 +1104,11 @@ extern "C" void __cdecl vf_on_liquid_begin()
 {
     if (!g_engineHooksInstalled)
         return;
-    __try
+    VF_TRY
     {
         OnLiquidSurfaceBegin();
     }
-    __except (GuardFilter(GetExceptionCode(), "liquid begin hook"))
+    VF_EXCEPT(GuardFilter(GetExceptionCode(), "liquid begin hook"))
     {
         g_failed = true;
     }
@@ -1118,11 +1118,11 @@ extern "C" void __cdecl vf_on_liquid_end()
 {
     if (!g_engineHooksInstalled)
         return;
-    __try
+    VF_TRY
     {
         OnLiquidSurfaceEnd();
     }
-    __except (GuardFilter(GetExceptionCode(), "liquid end hook"))
+    VF_EXCEPT(GuardFilter(GetExceptionCode(), "liquid end hook"))
     {
         g_failed = true;
     }
@@ -1132,11 +1132,11 @@ extern "C" void __cdecl vf_on_transparents_begin()
 {
     if (!g_transparentFogHooksInstalled)
         return;
-    __try
+    VF_TRY
     {
         OnTransparentsBegin();
     }
-    __except (GuardFilter(GetExceptionCode(), "transparent fog hook"))
+    VF_EXCEPT(GuardFilter(GetExceptionCode(), "transparent fog hook"))
     {
         g_failed = true;
         DisarmTransparentFog();
@@ -1147,11 +1147,11 @@ extern "C" void __cdecl vf_on_m2_batch_fog(M2BatchFogArgs* args)
 {
     if (!g_transparentFogHooksInstalled || !g_m2BatchFogObserved)
         return;
-    __try
+    VF_TRY
     {
         OnM2BatchFog(*args);
     }
-    __except (TransparentFogGuardFilter(GetExceptionCode(), "M2 batch fog hook"))
+    VF_EXCEPT(TransparentFogGuardFilter(GetExceptionCode(), "M2 batch fog hook"))
     {
         FailTransparentFog();
     }
@@ -1161,11 +1161,11 @@ extern "C" void __cdecl vf_on_opaque_done()
 {
     if (!g_engineHooksInstalled)
         return;
-    __try
+    VF_TRY
     {
         OnOpaqueDone();
     }
-    __except (GuardFilter(GetExceptionCode(), "opaque hook"))
+    VF_EXCEPT(GuardFilter(GetExceptionCode(), "opaque hook"))
     {
         g_failed = true;
     }
@@ -1176,11 +1176,11 @@ extern "C" void __cdecl vf_on_world_done()
     if (!g_engineHooksInstalled)
         return;
     ForeverLookAtWorldDone();
-    __try
+    VF_TRY
     {
         OnWorldDone();
     }
-    __except (GuardFilter(GetExceptionCode(), "world hook"))
+    VF_EXCEPT(GuardFilter(GetExceptionCode(), "world hook"))
     {
         g_failed = true;
     }
@@ -1218,13 +1218,13 @@ extern "C" void __cdecl vf_on_world_text_begin()
     g_worldTextDevice = nullptr;
     if (!g_engineHooksInstalled)
         return;
-    __try
+    VF_TRY
     {
         if (!g_failed && GlobalConfig().Get().enable)
             g_worldTextDevice = GameFogDevice();
         SuppressDepthWrite(g_worldTextDevice, true);
     }
-    __except (GuardFilter(GetExceptionCode(), "world text depth hook"))
+    VF_EXCEPT(GuardFilter(GetExceptionCode(), "world text depth hook"))
     {
         g_failed = true;
     }

@@ -55,11 +55,11 @@ if (WOWDECOMP_DISABLE_SIGNATURE_CHECKS)
     add_compile_definitions(DISABLE_SIGNATURE_CHECKS=1)
 endif ()
 
-# CoAVolFog (WoW/Source/VolFog): volumetric fog and modern water drawn through the Direct3D 9 device. Windows only,
-# since its shaders are compiled with fxc from the Windows SDK.
+# CoAVolFog (WoW/Source/VolFog): volumetric fog and modern water drawn through the Direct3D 9 device (DXVK-native on
+# Linux, which uses the shader headers in WoW/Source/VolFog/shaders/vkd3d).
 include(CMakeDependentOption)
 cmake_dependent_option(WOWDECOMP_VOLFOG "Build CoAVolFog (volumetric fog and modern water) into the client" ON
-    "WIN32" OFF)
+    "WIN32 OR CMAKE_SYSTEM_NAME STREQUAL Linux" OFF)
 if (WOWDECOMP_VOLFOG)
     add_compile_definitions(WOWDECOMP_VOLFOG=1)
 endif ()

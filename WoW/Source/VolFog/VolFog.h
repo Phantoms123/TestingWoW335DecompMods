@@ -19,6 +19,15 @@ struct VolFogM2BatchFog {
 
 #if defined(WOWDECOMP_VOLFOG)
 
+#if !defined(_WIN32)
+#ifndef __stdcall
+#define __stdcall
+#endif
+#ifndef __cdecl
+#define __cdecl
+#endif
+#endif
+
 typedef IDirect3D9* (__stdcall* VolFogDirect3DCreate9Fn)(unsigned int sdkVersion);
 
 // Loads CoAVolFog.ini, fogdata.bin and waterdata.bin from the client folder. Call once, before the device exists.
@@ -43,6 +52,11 @@ extern "C" void __cdecl vf_on_water_pass_end();
 extern "C" int __cdecl vf_on_water_draw_begin(void* liquidSettings);
 extern "C" void __cdecl vf_on_water_draw_end(int tagged);
 extern "C" float __cdecl vf_far_clip_clamp(float clientFarClip, float farClipSetting, int mapId);
+#if !defined(_WIN32)
+// The overlay's input on Linux (CoAVolFog chains the window procedure on Windows): offered each SDL event before the
+// client handles it; nonzero means the overlay took it.
+extern "C" int vf_on_os_event(void* sdlEvent);
+#endif
 
 #define VOLFOG_ENABLED 1
 
@@ -67,6 +81,7 @@ inline void vf_on_water_pass_end() {}
 inline int vf_on_water_draw_begin(void*) { return 0; }
 inline void vf_on_water_draw_end(int) {}
 inline float vf_far_clip_clamp(float clientFarClip, float, int) { return clientFarClip; }
+inline int vf_on_os_event(void*) { return 0; }
 
 #endif
 

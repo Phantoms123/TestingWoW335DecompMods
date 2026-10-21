@@ -72,7 +72,13 @@ Every changed spot in the original sources is marked `// CHANGED:`.
 - CoAVolFog's renderers, shaders, data and `CoAVolFog.ini` as upstream; its DLL loader, call-site patches and
   address reads are replaced by calls from the client's world render and reads of the client's own globals.
   `WoW/Source/VolFog/NATIVE.md` maps every upstream patch site and address to the source that replaces it.
-- Windows only, Direct3D 9 backend. Settings window: Ctrl+F7 in game.
+- Direct3D 9 backend on Windows; DXVK backend on Linux. Settings window: Ctrl+F7 in game.
+- Linux: the Win32-only parts have Linux equivalents (`src/platform.h`): INI reading and writing, timers, locks.
+  The settings window reads SDL input (the client's event loop offers each event to it first, `vf_on_os_event`)
+  and draws with ImGui's SDL2 backend. NVAPI depth copy is skipped (it is a Windows driver DLL); fault guards run
+  unguarded, so a fault in CoAVolFog crashes rather than switching the effect off.
+- Linux shaders: `shaders/vkd3d` holds the compiled headers, made by `Tools/VfHlsl` (vkd3d-shader with an fxc-style
+  front end, since fxc.exe is Windows-only). See `Tools/VfHlsl/README.md` to rebuild them.
 
 ### Build fixes after the merge
 - `WoW/Source/Game/Types.h`: `windows.h` guarded for non-Windows builds.
@@ -98,6 +104,8 @@ Every changed spot in the original sources is marked `// CHANGED:`.
 Windows: as in README.md (Visual Studio 2022, CMake). Use `-DWOWDECOMP_DISABLE_SIGNATURE_CHECKS=ON` to load
 modified MPQs. CoAVolFog needs `fxc.exe` from the Windows SDK (installed with Visual Studio's C++ workload);
 `-DWOWDECOMP_VOLFOG=OFF` leaves it out.
+
+Linux builds CoAVolFog too, from the committed shader headers; `-DWOWDECOMP_VOLFOG=OFF` leaves it out.
 
 Linux (DXVK backend), with SDL2, DXVK-native, libvorbis and libcurl installed:
 

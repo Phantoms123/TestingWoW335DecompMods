@@ -3,6 +3,7 @@
 #include "Engine/Source/Gx/CGxDeviceD3d/CGxDeviceD3d.h"
 #include "Engine/Source/Os/Window.h"
 #include "Engine/Source/Os/SDL/Window.h"
+#include "WoW/Source/VolFog/VolFog.h"
 
 namespace {
 void SetClientRect(CGxDeviceD3d& device, CGxFormat* format = nullptr) {
@@ -63,7 +64,13 @@ int32_t CGxDeviceD3d::ILoadD3dLib(HINSTANCE& library, LPDIRECT3D9& d3d) {
     // Native D3D9 is linked, not loaded as a Windows DLL. Its WSI handle must
     // agree with the SDL2 window pointers used by this platform implementation.
     if (SDL_setenv("DXVK_WSI_DRIVER", "SDL2", 1) != 0) return 0;
+#if VOLFOG_ENABLED
+    // CHANGED: the Direct3D 9 object is wrapped so CoAVolFog can draw through the device it creates.
+    d3d = VolFog_CreateDirect3D9([](unsigned int sdkVersion) -> IDirect3D9* { return Direct3DCreate9(sdkVersion); },
+                                 D3D_SDK_VERSION);
+#else
     d3d = Direct3DCreate9(D3D_SDK_VERSION);
+#endif
     return d3d != nullptr;
 }
 

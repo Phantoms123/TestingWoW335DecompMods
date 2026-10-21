@@ -1,0 +1,160 @@
+--- a/libs/vkd3d/libs/vkd3d-shader/hlsl_codegen.c
++++ b/libs/vkd3d/libs/vkd3d-shader/hlsl_codegen.c
+@@ -10586,14 +10586,90 @@
+ 
+         vsir_src_from_hlsl_node(&ins->src[0], ctx, condition, VKD3DSP_WRITEMASK_ALL);
+     }
++    else if (jump->type == HLSL_IR_JUMP_BREAK)
++    {
++        generate_vsir_add_program_instruction(ctx, program, &instr->loc, VSIR_OP_BREAK, 0, 0);
++    }
+     else
+     {
+         hlsl_fixme(ctx, &instr->loc, "Jump type %s.", hlsl_jump_type_to_string(jump->type));
+     }
+ }
+ 
++/* Shader model 2.x/3 has no unbounded loop, so a loop that was not unrolled becomes a "rep" of the
++ * largest count the hardware allows, left through its "break" instructions. The count lives in an
++ * integer constant register that no HLSL variable is allocated to. */
++#define SM1_LOOP_COUNT_REGISTER 15
++#define SM1_LOOP_COUNT_MAX 255
++
++static bool sm1_block_has_loop(const struct hlsl_block *block)
++{
++    const struct hlsl_ir_node *instr;
++
++    LIST_FOR_EACH_ENTRY(instr, &block->instrs, struct hlsl_ir_node, entry)
++    {
++        if (instr->type == HLSL_IR_LOOP)
++            return true;
++        if (instr->type == HLSL_IR_IF)
++        {
++            const struct hlsl_ir_if *iff = hlsl_ir_if(instr);
++
++            if (sm1_block_has_loop(&iff->then_block) || sm1_block_has_loop(&iff->else_block))
++                return true;
++        }
++    }
++
++    return false;
++}
++
++static void sm1_generate_vsir_loop_count_def(struct hlsl_ctx *ctx, struct vsir_program *program,
++        const struct vkd3d_shader_location *loc)
++{
++    struct vkd3d_shader_instruction *ins;
++
++    if (!(ins = generate_vsir_add_program_instruction(ctx, program, loc, VSIR_OP_DEFI, 1, 1)))
++        return;
++
++    vsir_dst_operand_init(&ins->dst[0], VKD3DSPR_CONSTINT, VSIR_DATA_I32, 1);
++    ins->dst[0].reg.dimension = VSIR_DIMENSION_VEC4;
++    ins->dst[0].reg.idx[0].offset = SM1_LOOP_COUNT_REGISTER;
++    ins->dst[0].write_mask = VKD3DSP_WRITEMASK_ALL;
++
++    vsir_src_operand_init(&ins->src[0], VKD3DSPR_IMMCONST, VSIR_DATA_I32, 0);
++    ins->src[0].reg.dimension = VSIR_DIMENSION_VEC4;
++    ins->src[0].reg.u.immconst_u32[0] = SM1_LOOP_COUNT_MAX;
++    ins->src[0].reg.u.immconst_u32[1] = 0;
++    ins->src[0].reg.u.immconst_u32[2] = 1;
++    ins->src[0].reg.u.immconst_u32[3] = 0;
++    ins->src[0].swizzle = VKD3D_SHADER_NO_SWIZZLE;
++}
++
+ static void sm1_generate_vsir_block(struct hlsl_ctx *ctx, struct hlsl_block *block, struct vsir_program *program);
+ 
++static void sm1_generate_vsir_instr_loop(struct hlsl_ctx *ctx, struct vsir_program *program, struct hlsl_ir_loop *loop)
++{
++    struct hlsl_ir_node *instr = &loop->node;
++    struct vkd3d_shader_instruction *ins;
++
++    if (!hlsl_version_ge(ctx, 2, 1))
++    {
++        hlsl_fixme(ctx, &instr->loc, "Loops that cannot be unrolled need shader model 2.x or later.");
++        return;
++    }
++
++    if (!(ins = generate_vsir_add_program_instruction(ctx, program, &instr->loc, VSIR_OP_REP, 0, 1)))
++        return;
++
++    vsir_src_operand_init(&ins->src[0], VKD3DSPR_CONSTINT, VSIR_DATA_I32, 1);
++    ins->src[0].reg.dimension = VSIR_DIMENSION_VEC4;
++    ins->src[0].reg.idx[0].offset = SM1_LOOP_COUNT_REGISTER;
++    ins->src[0].swizzle = VKD3D_SHADER_NO_SWIZZLE;
++
++    sm1_generate_vsir_block(ctx, &loop->body, program);
++
++    generate_vsir_add_program_instruction(ctx, program, &instr->loc, VSIR_OP_ENDREP, 0, 0);
++}
++
+ static void sm1_generate_vsir_instr_if(struct hlsl_ctx *ctx, struct vsir_program *program, struct hlsl_ir_if *iff)
+ {
+     struct hlsl_ir_node *condition = iff->condition.node;
+@@ -10665,6 +10741,10 @@
+                 sm1_generate_vsir_instr_jump(ctx, program, hlsl_ir_jump(instr));
+                 break;
+ 
++            case HLSL_IR_LOOP:
++                sm1_generate_vsir_instr_loop(ctx, program, hlsl_ir_loop(instr));
++                break;
++
+             case HLSL_IR_LOAD:
+                 sm1_generate_vsir_instr_load(ctx, program, hlsl_ir_load(instr));
+                 break;
+@@ -10702,6 +10782,8 @@
+ 
+     hlsl_block_init(&block);
+     sm1_generate_vsir_constant_defs(ctx, program, &block);
++    if (sm1_block_has_loop(body))
++        sm1_generate_vsir_loop_count_def(ctx, program, &func->loc);
+     sm1_generate_vsir_sampler_dcls(ctx, program, &block);
+     list_move_head(&body->instrs, &block.instrs);
+ 
+--- a/libs/vkd3d/libs/vkd3d-shader/d3dbc.c
++++ b/libs/vkd3d/libs/vkd3d-shader/d3dbc.c
+@@ -2019,6 +2019,27 @@
+         put_f32(buffer, ins->src[0].reg.u.immconst_f32[x]);
+ }
+ 
++static void d3dbc_write_vsir_defi(struct d3dbc_compiler *d3dbc, const struct vkd3d_shader_instruction *ins)
++{
++    struct vkd3d_bytecode_buffer *buffer = &d3dbc->buffer;
++    uint32_t token;
++
++    const struct vsir_dst_operand reg =
++    {
++        .reg.type = VKD3DSPR_CONSTINT,
++        .write_mask = VKD3DSP_WRITEMASK_ALL,
++        .reg.idx[0].offset = ins->dst[0].reg.idx[0].offset,
++        .reg.idx_count = 1,
++    };
++
++    token = VKD3D_SM1_OP_DEFI | (5 << VKD3D_SM1_INSTRUCTION_LENGTH_SHIFT);
++    put_u32(buffer, token);
++
++    write_sm1_dst_register(buffer, &reg);
++    for (unsigned int x = 0; x < 4; ++x)
++        put_u32(buffer, ins->src[0].reg.u.immconst_u32[x]);
++}
++
+ static void d3dbc_write_vsir_sampler_dcl(struct d3dbc_compiler *d3dbc,
+         unsigned int reg_id, enum vkd3d_sm1_resource_type res_type)
+ {
+@@ -2098,6 +2119,16 @@
+             d3dbc_write_vsir_def(d3dbc, ins);
+             break;
+ 
++        case VSIR_OP_DEFI:
++            d3dbc_write_vsir_defi(d3dbc, ins);
++            break;
++
++        case VSIR_OP_REP:
++        case VSIR_OP_ENDREP:
++        case VSIR_OP_BREAK:
++            d3dbc_write_instruction(d3dbc, ins);
++            break;
++
+         case VSIR_OP_DCL:
+             d3dbc_write_vsir_dcl(d3dbc, ins);
+             break;

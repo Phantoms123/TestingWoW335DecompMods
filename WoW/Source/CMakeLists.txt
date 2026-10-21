@@ -96,11 +96,12 @@ target_link_libraries(Wow
         WowSvcs
 )
 
-if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    target_link_libraries(Wow PRIVATE "-Wl,--end-group")
-endif ()
-
+# CoAVolFog reads client state through the engine headers, so on Linux it joins the rescanned group.
 if (TARGET VolFog)
     target_link_libraries(Wow PRIVATE VolFog)
     volfog_copy_runtime_files(Wow)
+endif ()
+
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_link_libraries(Wow PRIVATE "-Wl,--end-group")
 endif ()

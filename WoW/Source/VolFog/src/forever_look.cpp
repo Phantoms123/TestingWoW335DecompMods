@@ -5,7 +5,7 @@
 #include "log.h"
 #include "status_log.h"
 
-#include <windows.h>
+#include "platform.h"
 
 #include <algorithm>
 #include <cmath>
@@ -312,12 +312,12 @@ void LogDebugSummary()
 
 bool ReadFrame(ForeverLookFrame& frame)
 {
-    __try
+    VF_TRY
     {
         frame = g_client.frame(GlobalConfig().Get());
         return true;
     }
-    __except (ForeverLookFilter(GetExceptionCode(), "the Forever look inputs"))
+    VF_EXCEPT(ForeverLookFilter(GetExceptionCode(), "the Forever look inputs"))
     {
         g_glowFailed = true;
         g_gradingFailed = true;
@@ -328,11 +328,11 @@ bool ReadFrame(ForeverLookFrame& frame)
 void FailGlow()
 {
     g_glowFailed = true;
-    __try
+    VF_TRY
     {
         RestoreGlow();
     }
-    __except (EXCEPTION_EXECUTE_HANDLER)
+    VF_EXCEPT(EXCEPTION_EXECUTE_HANDLER)
     {
         g_glow = GlowFrame();
     }
@@ -340,13 +340,13 @@ void FailGlow()
 
 void FeedGlowGuarded(const ForeverLookFrame& frame, const Config& cfg)
 {
-    __try
+    VF_TRY
     {
         FeedGlow(frame, cfg);
         RecordGlowStatus();
         LogGlowOverride();
     }
-    __except (ForeverLookFilter(GetExceptionCode(), "the Forever glow"))
+    VF_EXCEPT(ForeverLookFilter(GetExceptionCode(), "the Forever glow"))
     {
         FailGlow();
     }
@@ -416,11 +416,11 @@ void ForeverLookAtWorldDone()
         g_grading = GradingFrame();
         return;
     }
-    __try
+    VF_TRY
     {
         g_grading = PrepareGrading(g_frameRead.frame, GlobalConfig().Get());
     }
-    __except (ForeverLookFilter(GetExceptionCode(), "colour grading"))
+    VF_EXCEPT(ForeverLookFilter(GetExceptionCode(), "colour grading"))
     {
         g_gradingFailed = true;
         g_grading = GradingFrame();
@@ -429,20 +429,20 @@ void ForeverLookAtWorldDone()
 
 void ForeverLookAtFrameEnd()
 {
-    __try
+    VF_TRY
     {
         RestoreGlow();
     }
-    __except (ForeverLookFilter(GetExceptionCode(), "the Forever glow restore"))
+    VF_EXCEPT(ForeverLookFilter(GetExceptionCode(), "the Forever glow restore"))
     {
         g_glowFailed = true;
         g_glow = GlowFrame();
     }
-    __try
+    VF_TRY
     {
         GradeWorldFrame();
     }
-    __except (ForeverLookFilter(GetExceptionCode(), "colour grading"))
+    VF_EXCEPT(ForeverLookFilter(GetExceptionCode(), "colour grading"))
     {
         g_gradingFailed = true;
         g_grading = GradingFrame();

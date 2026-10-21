@@ -1,19 +1,38 @@
 # CoAVolFog (https://github.com/jealous-sound/coa-vfog, GPL-3.0) built into the client instead of attaching as a DLL.
-# Windows only: it draws through the Direct3D 9 device and its shaders are compiled with fxc from the Windows SDK.
-
-file(GLOB FXC_CANDIDATES "$ENV{ProgramFiles\(x86\)}/Windows Kits/10/bin/10.*/x86/fxc.exe")
-set(FXC_DEFAULT "")
-if(FXC_CANDIDATES)
-    list(SORT FXC_CANDIDATES COMPARE NATURAL ORDER DESCENDING)
-    list(GET FXC_CANDIDATES 0 FXC_DEFAULT)
-endif()
-set(FXC "${FXC_DEFAULT}" CACHE FILEPATH "HLSL compiler (fxc.exe)")
-if(NOT EXISTS "${FXC}")
-    message(FATAL_ERROR "CoAVolFog needs fxc.exe from the Windows SDK: install the SDK, set -DFXC=<path>, or configure with -DWOWDECOMP_VOLFOG=OFF")
-endif()
+# It draws through the Direct3D 9 device: the Windows client's own, or DXVK-native's on Linux.
+#
+# Shaders: on Windows they are compiled with fxc from the Windows SDK. Elsewhere the headers in shaders/vkd3d are
+# used; they were made by Tools/VfHlsl (vkd3d-shader with an fxc-style front end). Set -DVFHLSL=<path to vfhlsl> to
+# rebuild them from the HLSL instead.
 
 set(SHADER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shaders)
 set(SHADER_OUT ${CMAKE_CURRENT_BINARY_DIR}/shaders)
+set(SHADER_PREBUILT "")
+
+if(WIN32)
+    file(GLOB FXC_CANDIDATES "$ENV{ProgramFiles\(x86\)}/Windows Kits/10/bin/10.*/x86/fxc.exe")
+    set(FXC_DEFAULT "")
+    if(FXC_CANDIDATES)
+        list(SORT FXC_CANDIDATES COMPARE NATURAL ORDER DESCENDING)
+        list(GET FXC_CANDIDATES 0 FXC_DEFAULT)
+    endif()
+    set(FXC "${FXC_DEFAULT}" CACHE FILEPATH "HLSL compiler (fxc.exe)")
+    if(NOT EXISTS "${FXC}")
+        message(FATAL_ERROR "CoAVolFog needs fxc.exe from the Windows SDK: install the SDK, set -DFXC=<path>, or configure with -DWOWDECOMP_VOLFOG=OFF")
+    endif()
+    set(VF_SHADER_COMPILER "${FXC}")
+else()
+    if(NOT WOWDECOMP_DXVK)
+        message(FATAL_ERROR "CoAVolFog on this platform needs the DXVK backend (-DWOWDECOMP_DXVK=ON), or configure with -DWOWDECOMP_VOLFOG=OFF")
+    endif()
+    set(VFHLSL "" CACHE FILEPATH "Tools/VfHlsl/vfhlsl, to rebuild the CoAVolFog shader headers (empty: use shaders/vkd3d)")
+    if(VFHLSL)
+        set(VF_SHADER_COMPILER "${VFHLSL}")
+    else()
+        set(SHADER_PREBUILT ${SHADER_DIR}/vkd3d)
+        set(SHADER_OUT ${SHADER_PREBUILT})
+    endif()
+endif()
 file(MAKE_DIRECTORY ${SHADER_OUT})
 
 set(VF_INCLUDES ${SHADER_DIR}/vf_common.hlsli ${SHADER_DIR}/vf_integrate.hlsli
@@ -34,12 +53,19 @@ function(vf_shader name source profile)
         set(includes ${VF_INCLUDES})
     endif()
     set(out ${SHADER_OUT}/${name}.h)
+    if(SHADER_PREBUILT)
+        if(NOT EXISTS ${out})
+            message(FATAL_ERROR "CoAVolFog shader header ${out} is missing; rebuild the headers with -DVFHLSL=<vfhlsl>")
+        endif()
+        set(SHADER_HEADERS ${SHADER_HEADERS} ${out} PARENT_SCOPE)
+        return()
+    endif()
     add_custom_command(
         OUTPUT ${out}
-        COMMAND "${FXC}" /nologo /O3 /T ${profile} /E main /Vn g_${name} ${ARGN}
+        COMMAND "${VF_SHADER_COMPILER}" /nologo /O3 /T ${profile} /E main /Vn g_${name} ${ARGN}
                 /Fh ${out} /Fc ${SHADER_OUT}/${name}.asm ${SHADER_DIR}/${source}
         DEPENDS ${SHADER_DIR}/${source} ${includes}
-        COMMENT "fxc ${name}"
+        COMMENT "HLSL ${name}"
         VERBATIM)
     set(SHADER_HEADERS ${SHADER_HEADERS} ${out} PARENT_SCOPE)
 endfunction()
@@ -102,9 +128,20 @@ add_library(imgui STATIC
     ${imgui_SOURCE_DIR}/imgui_draw.cpp
     ${imgui_SOURCE_DIR}/imgui_tables.cpp
     ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-    ${imgui_SOURCE_DIR}/backends/imgui_impl_dx9.cpp
-    ${imgui_SOURCE_DIR}/backends/imgui_impl_win32.cpp)
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_dx9.cpp)
 target_include_directories(imgui PUBLIC ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends)
+if(WIN32)
+    target_sources(imgui PRIVATE ${imgui_SOURCE_DIR}/backends/imgui_impl_win32.cpp)
+else()
+    # The Linux client's window is an SDL one; Direct3D 9 comes from DXVK-native.
+    target_sources(imgui PRIVATE ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl2.cpp)
+    if(NOT TARGET PkgConfig::SDL2)
+        find_package(PkgConfig REQUIRED)
+        pkg_check_modules(SDL2 REQUIRED IMPORTED_TARGET GLOBAL sdl2>=2.0.22)
+    endif()
+    target_link_libraries(imgui PUBLIC PkgConfig::SDL2 DXVKNative::D3D9)
+    set_target_properties(imgui PROPERTIES POSITION_INDEPENDENT_CODE ON)
+endif()
 target_compile_definitions(imgui
     PUBLIC IMGUI_DISABLE_DEMO_WINDOWS IMGUI_DISABLE_DEBUG_TOOLS
     PRIVATE IMGUI_IMPL_WIN32_DISABLE_GAMEPAD IMGUI_DISABLE_WIN32_DEFAULT_IME_FUNCTIONS
@@ -145,7 +182,12 @@ target_compile_definitions(VolFog PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECU
 if(MSVC)
     target_compile_options(VolFog PRIVATE /fp:fast /GS)
 endif()
-target_link_libraries(VolFog PRIVATE imgui kernel32 user32)
+if(WIN32)
+    target_link_libraries(VolFog PRIVATE imgui kernel32 user32)
+else()
+    target_link_libraries(VolFog PRIVATE imgui PkgConfig::SDL2 DXVKNative::D3D9)
+    target_compile_options(VolFog PRIVATE -ffast-math -Wno-unused-function)
+endif()
 
 # The files CoAVolFog reads at start-up, placed next to the client executable.
 set(VOLFOG_RUNTIME_FILES
