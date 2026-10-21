@@ -75,6 +75,7 @@ static CTexture* s_realReflectionTex;
 static CTexture* s_realReflectionTemp;
 static CTexture* s_realReflectionDepth;
 static float s_reflectionDistance = 300.0f;
+static bool s_reflectionDepthBound;
 static CTexture* s_blurredBackTex;
 static CTexture* s_blurTempTex;
 static uint32_t s_screenWidth;
@@ -1193,13 +1194,17 @@ bool Liquid::Cata::BeginReflection(const C3Vector& worldViewOrigin, uint32_t& mo
     GxXformView(s_reflectionSavedView);
 
     device->RsPush();
+    // The colour target first, so the depth texture is never paired with the (larger) back buffer.
+    GxRenderTargetSet(GxBuffers_Color, target, 0);
     CGxTex* depth = GxTexOf(s_realReflectionDepth);
 
-    if (depth) {
+    if (depth && depth->m_width == target->m_width && depth->m_height == target->m_height) {
         GxRenderTargetSet(GxBuffers_Depth, depth, 0);
+    } else {
+        depth = nullptr;
     }
 
-    GxRenderTargetSet(GxBuffers_Color, target, 0);
+    s_reflectionDepthBound = depth != nullptr;
     GxXformSetViewport(0.0f, 1.0f, 0.0f, 1.0f, vp[4], vp[5]);
 
     DayNight::DNInfo* info = DayNight::GetInfo();
@@ -1295,7 +1300,7 @@ void Liquid::Cata::EndReflection() {
     GxRsSet(GxRs_ClipPlaneMask, 0);
     device->XformSetView(s_reflectionSavedView);
 
-    CGxTex* depth = GxTexOf(s_realReflectionDepth);
+    CGxTex* depth = s_reflectionDepthBound ? GxTexOf(s_realReflectionDepth) : nullptr;
     CGxTex* reflection = GxTexOf(s_realReflectionTex);
     DayNight::DNInfo* info = DayNight::GetInfo();
 
