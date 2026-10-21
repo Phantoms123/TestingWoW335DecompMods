@@ -20,6 +20,9 @@
 #include "Engine/Source/Tempest/CMath.h"
 #include "WoW/Source/WorldClient/CChunkLiquid.h"
 #include "WoW/Source/WorldClient/AdtCompat.h"
+#include "WoW/Source/DB/DBClient/DBClient.h"
+#include "WoW/Source/DB/Rec/LiquidTypeRec.h"
+#include "WoW/Source/LiquidSystem/Types.h"
 
 void CMapArea::Destroy() {
 }
@@ -306,6 +309,49 @@ void CMapArea::LoadTextures(char* fileNames, uint32_t fileNamesSize) {
     } while (offset < fileNamesSize);
 }
 
+// CHANGED: not in the original client. Makes liquid authored for 4.x safe for this client, in place:
+//  - a liquid type with no LiquidType record becomes plain water (id 1); every lookup of the type
+//    dereferences the record without a null check, so an unknown id would crash.
+//  - vertex format 3 (heights, texture coordinates, depths) becomes format 1: its data starts with
+//    exactly the format 1 layout, so only the depths are dropped. Formats past 3 keep no vertex data.
+static void NormalizeLiquid(uint8_t* data, uint32_t size) {
+    static const uint32_t CHUNK_COUNT = 256;
+    static const uint16_t FALLBACK_LIQUID_TYPE = 1;
+
+    if (size < CHUNK_COUNT * sizeof(SMLiquidChunkDesc)) {
+        return;
+    }
+
+    for (uint32_t i = 0; i < CHUNK_COUNT; i++) {
+        SMLiquidChunkDesc chunk;
+        memcpy(&chunk, data + i * sizeof(SMLiquidChunkDesc), sizeof(chunk));
+
+        if (!chunk.m_layerCount || chunk.m_offsetInstances > size || chunk.m_layerCount > (size - chunk.m_offsetInstances) / sizeof(SMLiquidInstance)) {
+            continue;
+        }
+
+        for (uint32_t layer = 0; layer < chunk.m_layerCount; layer++) {
+            uint8_t* at = data + chunk.m_offsetInstances + layer * sizeof(SMLiquidInstance);
+            SMLiquidInstance instance;
+            memcpy(&instance, at, sizeof(instance));
+
+            if (!g_liquidTypeDB.GetRecord(instance.m_liquidType)) {
+                DebugLog("Unknown liquid type %u, drawn as water\n", instance.m_liquidType);
+                instance.m_liquidType = FALLBACK_LIQUID_TYPE;
+            }
+
+            if (instance.m_vertexFormat == 3) {
+                instance.m_vertexFormat = 1;
+            } else if (instance.m_vertexFormat > 3) {
+                instance.m_vertexFormat = 2;
+                instance.m_offsetVertexData = 0;
+            }
+
+            memcpy(at, &instance, sizeof(instance));
+        }
+    }
+}
+
 // VERIFY: 2e3ea90a manual
 // OFFSET: 0x007D6EF0
 void CMapArea::ProcessIffChunks() {
@@ -330,7 +376,10 @@ void CMapArea::ProcessIffChunks() {
         void* mem = SMemAlloc(sizeof(Liquid::CAreaData), __FILE__, __LINE__, 0);
         Liquid::CAreaData* liquid = mem ? new (mem) Liquid::CAreaData(nullptr) : nullptr;
         this->m_liquid = liquid;
-        liquid->SetData(&reinterpret_cast<SIffChunk*>(header + this->m_header->m_mh2o)->m_data);
+        SIffChunk* mh2o = reinterpret_cast<SIffChunk*>(header + this->m_header->m_mh2o);
+        // CHANGED: make 4.x liquid types and vertex formats safe before anything reads them.
+        NormalizeLiquid(reinterpret_cast<uint8_t*>(&mh2o->m_data), mh2o->m_size);
+        liquid->SetData(&mh2o->m_data);
     }
 
     if (this->m_header->m_mtxf) {
