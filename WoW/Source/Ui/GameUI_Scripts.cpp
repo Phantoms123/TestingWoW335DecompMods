@@ -1676,7 +1676,7 @@ static int32_t Script_GetCursorPosition(lua_State* L) {
     float y = 0.0f;
 
     if (!CSimpleTop::s_instance) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     NDCToDDC(CSimpleTop::s_instance->m_mousePosition.m_x, CSimpleTop::s_instance->m_mousePosition.m_y, &x, &y);
@@ -1958,7 +1958,7 @@ static int32_t Script_IsInInstance(lua_State* L) {
 // OFFSET: 0x00516BF0
 static int32_t Script_GetMouseFocus(lua_State* L) {
     if (!CSimpleTop::s_instance) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     CSimpleFrame* focus = CSimpleTop::s_instance->m_mouseFocus;
@@ -2055,7 +2055,7 @@ static int32_t Script_GetZonePVPInfo(lua_State* L) {
 // OFFSET: 0x0050F950
 static int32_t Script_GetMouseButtonClicked(lua_State* L) {
     if (!CSimpleTop::s_instance) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     lua_pushstring(L, CSimpleTop::s_instance->m_mouseButtonName);
@@ -2122,7 +2122,7 @@ static int32_t Script_SetLayoutMode(lua_State* L) {
     }
 
     if (!CSimpleTop::s_instance) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     CSimpleTop::s_instance->m_moveResizeEnabled = enabled;
@@ -2133,7 +2133,7 @@ static int32_t Script_SetLayoutMode(lua_State* L) {
 // OFFSET: 0x00511CC0
 static int32_t Script_InCombatLockdown(lua_State* L) {
     if (!CSimpleTop::s_instance) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     if (CSimpleTop::s_instance->m_allowProtectedActions) {
@@ -2859,7 +2859,7 @@ static int32_t Script_GetCursorInfo(lua_State* L) {
                 } else {
                     if (type != 1) {
                         lua_pushstring(L, "UNKNOWN");
-                        SErrDisplayAppFatalMessage("", "", 0);
+                        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
                     }
 
                     lua_pushstring(L, "MOUNT");
@@ -4441,7 +4441,7 @@ static int32_t Script_GetMirrorTimerProgress(lua_State* L) {
     MirrorTimerInfo* timer = &CGGameUI::m_mirrorTimerInfo[index];
 
     if (!timer) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     lua_pushnumber(L, timer->m_value + timer->m_scale * static_cast<int32_t>(OsGetAsyncTimeMs() - timer->m_startTime));
@@ -4785,7 +4785,7 @@ static int32_t Script_DropItemOnUnit(lua_State* L) {
 
         if (unit->m_obj->m_guid == ClntObjMgrGetActivePlayer()) {
             if (!player) {
-                SErrDisplayAppFatalMessage("", "", 0);
+                SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
             }
 
             player->AutoEquipCursorItem(0);

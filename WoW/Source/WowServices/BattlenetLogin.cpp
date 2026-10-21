@@ -58,7 +58,7 @@ void BattlenetAllocator::Free(void* memory) {
 // OFFSET: 0x008C5180
 bool BattlenetApplication::Send(uint32_t connection, const void* data, uint32_t size) {
     if (connection != this->m_connection) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     return this->m_wowConnection->Send(static_cast<uint8_t*>(const_cast<void*>(data)), size, true);
@@ -111,7 +111,7 @@ bool BattlenetLogin::Connected(const NETADDR& address) {
     ConsoleWrite(text, DEFAULT_COLOR);
 
     if (!g_tumorManager || !this->m_application) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     Battlenet::SystemClient& client = g_tumorManager->m_tumor;
@@ -124,7 +124,7 @@ bool BattlenetLogin::Connected(const NETADDR& address) {
 // OFFSET: 0x008C5370
 bool BattlenetLogin::Disconnected() {
     if (!g_tumorManager || !this->m_application) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     Battlenet::SystemClient& client = g_tumorManager->m_tumor;
@@ -331,7 +331,7 @@ void BattlenetLogin::SetAuthModuleMatrixInfo(const char* info, const char* chall
     const char* cursor = SStrChr(info, ',');
 
     if (!cursor) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     cursor++;
@@ -340,7 +340,7 @@ void BattlenetLogin::SetAuthModuleMatrixInfo(const char* info, const char* chall
     cursor = SStrChr(cursor, ',');
 
     if (!cursor) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     cursor++;
@@ -349,7 +349,7 @@ void BattlenetLogin::SetAuthModuleMatrixInfo(const char* info, const char* chall
     cursor = SStrChr(cursor, ',');
 
     if (!cursor) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     cursor++;
@@ -358,7 +358,7 @@ void BattlenetLogin::SetAuthModuleMatrixInfo(const char* info, const char* chall
     cursor = SStrChr(cursor, ',');
 
     if (!cursor) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     cursor++;
@@ -367,18 +367,18 @@ void BattlenetLogin::SetAuthModuleMatrixInfo(const char* info, const char* chall
     cursor = SStrChr(cursor, ',');
 
     if (!cursor) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     cursor++;
     this->m_matrixChallengeCount = SStrToUnsigned(cursor);
 
     if (SStrChr(cursor, ',')) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     if (!this->m_matrixWidth || !this->m_matrixHeight || !this->m_matrixMinDigitCount || !this->m_matrixMaxDigitCount || !this->m_matrixChallengeCount) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     if (this->m_matrixData) {
@@ -389,7 +389,7 @@ void BattlenetLogin::SetAuthModuleMatrixInfo(const char* info, const char* chall
 
     for (uint32_t i = 0; i < this->m_matrixChallengeCount; i++) {
         if (!challenges) {
-            SErrDisplayAppFatalMessage("", "", 0);
+            SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
         }
 
         if (i) {
@@ -401,7 +401,7 @@ void BattlenetLogin::SetAuthModuleMatrixInfo(const char* info, const char* chall
     }
 
     if (challenges) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     this->m_matrixEnabled = true;
@@ -412,12 +412,12 @@ void BattlenetLogin::SetAuthModuleMatrixInfo(const char* info, const char* chall
 // OFFSET: 0x008C61E0
 void BattlenetLogin::SetAuthModulePinInfo(const char* keyMap) {
     if (!keyMap || SStrLen(keyMap) != 10) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     for (uint32_t i = 0; i < 10; i++) {
         if (!isdigit(static_cast<uint8_t>(keyMap[i]))) {
-            SErrDisplayAppFatalMessage("", "", 0);
+            SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
         }
 
         this->m_pinKeyMap[1 + i] = keyMap[i] - '0';
@@ -460,7 +460,7 @@ void BattlenetLogin::LogConnectionStatus(const char* format, ...) {
 // OFFSET: 0x008C6980
 void BattlenetApplication::Disconnect(uint32_t connection) {
     if (connection != this->m_connection) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     if (this->m_wowConnection) {
@@ -524,25 +524,25 @@ uint32_t BattlenetApplication::Connect(const Battlenet::IP4::AddressPort& addres
 // VERIFY: 9d0ccd2a auto
 // OFFSET: 0x00532A60
 uint32_t BattlenetApplication::OpenDatagram(int32_t port, const uint32_t& tendrilId) {
-    SErrDisplayAppFatalMessage("", "", 0);
+    SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
 }
 
 // VERIFY: 2c202c4c auto
 // OFFSET: 0x00532A60
 void BattlenetApplication::CloseDatagram(uint32_t connection) {
-    SErrDisplayAppFatalMessage("", "", 0);
+    SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
 }
 
 // VERIFY: 30835edb auto
 // OFFSET: 0x00532A60
 bool BattlenetApplication::SendDatagram(uint32_t connection, const void* data, uint32_t size, const Battlenet::IP4::AddressPort& address) {
-    SErrDisplayAppFatalMessage("", "", 0);
+    SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
 }
 
 // VERIFY: 2a2561a1 auto
 // OFFSET: 0x00532A60
 uint64_t BattlenetApplication::GetCurrentTime() const {
-    SErrDisplayAppFatalMessage("", "", 0);
+    SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
 }
 
 // VERIFY: 2aca7dfc auto
@@ -656,7 +656,7 @@ void BattlenetLogin::JoinRealm(uint32_t region, uint32_t battlegroup, uint32_t i
     }
 
     if (!g_tumorManager) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     g_tumorManager->SendEvent<Battlenet::Event::Creep::Invoke, Protocol>(Battlenet::Event::CREEP, invoke);
@@ -683,7 +683,7 @@ void BattlenetLogin::GetLogonMethod() {
     this->m_password = nullptr;
 
     if (!g_tumorManager) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     g_tumorManager->SendEvent<Battlenet::Event::Creep::Invoke, Protocol>(Battlenet::Event::CREEP, invoke);
@@ -813,7 +813,7 @@ void BattlenetLogin::EnterPIN(int32_t count, uint8_t* digits) {
     this->m_pinKeyMap[0] = 0;
 
     if (static_cast<uint32_t>(count) > 10) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     char pin[12];
@@ -834,7 +834,7 @@ void BattlenetLogin::EnterPIN(int32_t count, uint8_t* digits) {
     *param->Set<0, BSN::String<256>>() = pin;
 
     if (!g_tumorManager) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     g_tumorManager->SendEvent<Battlenet::Event::Creep::Invoke, Protocol>(Battlenet::Event::CREEP, invoke);
@@ -844,7 +844,7 @@ void BattlenetLogin::EnterPIN(int32_t count, uint8_t* digits) {
 // OFFSET: 0x008C7C10
 void BattlenetLogin::EnterMatrix(uint8_t value) {
     if (!this->m_matrixEnabled) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     Battlenet::Event::Creep::Invoke invoke;
@@ -857,7 +857,7 @@ void BattlenetLogin::EnterMatrix(uint8_t value) {
     *param->Set<1, uint32_t>() = value;
 
     if (!g_tumorManager) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     g_tumorManager->SendEvent<Battlenet::Event::Creep::Invoke, Protocol>(Battlenet::Event::CREEP, invoke);
@@ -867,7 +867,7 @@ void BattlenetLogin::EnterMatrix(uint8_t value) {
 // OFFSET: 0x008C7D00
 void BattlenetLogin::RevertMatrix() {
     if (!this->m_matrixEnabled) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     Battlenet::Event::Creep::Invoke invoke;
@@ -877,7 +877,7 @@ void BattlenetLogin::RevertMatrix() {
     message->m_name = Battlenet::Event::AuthModule::RevertMatrixCard;
 
     if (!g_tumorManager) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     g_tumorManager->SendEvent<Battlenet::Event::Creep::Invoke, Protocol>(Battlenet::Event::CREEP, invoke);
@@ -887,7 +887,7 @@ void BattlenetLogin::RevertMatrix() {
 // OFFSET: 0x008C7DC0
 void BattlenetLogin::CommitMatrix() {
     if (!this->m_matrixEnabled) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     Battlenet::Event::Creep::Invoke invoke;
@@ -897,7 +897,7 @@ void BattlenetLogin::CommitMatrix() {
     message->m_name = Battlenet::Event::AuthModule::CommitMatrixCard;
 
     if (!g_tumorManager) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     g_tumorManager->SendEvent<Battlenet::Event::Creep::Invoke, Protocol>(Battlenet::Event::CREEP, invoke);
@@ -907,7 +907,7 @@ void BattlenetLogin::CommitMatrix() {
 // OFFSET: 0x008C7E80
 void BattlenetLogin::FinalizeMatrix() {
     if (!this->m_matrixEnabled) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     this->m_matrixEnabled = false;
@@ -919,7 +919,7 @@ void BattlenetLogin::FinalizeMatrix() {
     message->m_name = Battlenet::Event::AuthModule::FinalizeMatrixCard;
 
     if (!g_tumorManager) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     g_tumorManager->SendEvent<Battlenet::Event::Creep::Invoke, Protocol>(Battlenet::Event::CREEP, invoke);
@@ -929,7 +929,7 @@ void BattlenetLogin::FinalizeMatrix() {
 // OFFSET: 0x008C7F40
 void BattlenetLogin::EnterToken(const char* token) {
     if (!this->m_tokenRequired) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     this->m_tokenRequired = false;
@@ -944,7 +944,7 @@ void BattlenetLogin::EnterToken(const char* token) {
     *param->Set<0, BSN::String<256>>() = token;
 
     if (!g_tumorManager) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     g_tumorManager->SendEvent<Battlenet::Event::Creep::Invoke, Protocol>(Battlenet::Event::CREEP, invoke);
@@ -958,7 +958,7 @@ void BattlenetLogin::SendSurveyInfoToModule() {
     Battlenet::Authentication::ModuleMessage* message = authentication->Set<2, Battlenet::Authentication::ModuleMessage>();
     message->m_moduleId = this->m_moduleId;
 
-    SErrDisplayAppFatalMessage("", "", 0);
+    SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
 }
 
 // VERIFY: 98c6abd3 manual
@@ -983,7 +983,7 @@ bool BattlenetLogin::SetGameAccount(uint32_t index) {
     *param->Set<0, BSN::String<256>>() = account.m_name;
 
     if (!g_tumorManager) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     g_tumorManager->SendEvent<Battlenet::Event::Creep::Invoke, Protocol>(Battlenet::Event::CREEP, invoke);
@@ -1062,7 +1062,7 @@ void BattlenetApplication::WCConnected(WowConnection* connection, WowConnection*
     this->m_localAddress.m_port[1] = addr->selfAddr.data[3];
 
     if (!this->m_login) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     NETADDR* peer = static_cast<NETADDR*>(malloc(sizeof(NETADDR)));
@@ -1074,7 +1074,7 @@ void BattlenetApplication::WCConnected(WowConnection* connection, WowConnection*
 // OFFSET: 0x008C87B0
 void BattlenetApplication::WCDataReady(WowConnection* connection, uint32_t timeStamp, uint8_t* data, int32_t length) {
     if (!this->m_login) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     void* copy = malloc(length);
@@ -1270,7 +1270,7 @@ void BattlenetLogin::DestroyTumorManager() {
 // OFFSET: 0x008C8F00
 void BattlenetLogin::Init(LoginResponse* loginResponse) {
     if (!loginResponse) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     this->m_loginResponse = loginResponse;
@@ -1618,7 +1618,7 @@ void BattlenetLogin::EventQueueUpdate() {
 
             case BN_EVENT_DATA: {
                 if (!g_tumorManager) {
-                    SErrDisplayAppFatalMessage("", "", 0);
+                    SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
                 }
 
                 uint32_t used;
@@ -1662,7 +1662,7 @@ void BattlenetLogin::EventQueueUpdate() {
                 this->SendSurveyInfoToModule();
 
             default:
-                SErrDisplayAppFatalMessage("", "", 0);
+                SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
         }
 
         free(event->m_data);
@@ -1750,7 +1750,7 @@ bool BattlenetLogin::IsGMAccount() {
 // OFFSET: 0x008C5E30
 bool BattlenetLogin::GetMatrixInfo(uint32_t* width, uint32_t* height, uint32_t* minDigits, uint32_t* maxDigits, bool* flipCoords, uint32_t* challengeCount) {
     if (!width || !height || !minDigits || !maxDigits || !challengeCount || !flipCoords) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     if (!this->m_matrixEnabled) {
@@ -1770,7 +1770,7 @@ bool BattlenetLogin::GetMatrixInfo(uint32_t* width, uint32_t* height, uint32_t* 
 // OFFSET: 0x008C5ED0
 bool BattlenetLogin::GetMatrixCoordinates(uint32_t index, uint32_t* x, uint32_t* y) {
     if (!x || !y) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
         return false;
     }
 
@@ -1783,7 +1783,7 @@ bool BattlenetLogin::GetMatrixCoordinates(uint32_t index, uint32_t* x, uint32_t*
     *y = coordinate / this->m_matrixWidth;
 
     if (*y >= this->m_matrixHeight) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
         return false;
     }
 
@@ -1819,49 +1819,49 @@ uint32_t BattlenetLogin::GetGameAccountRegion(uint32_t index) {
 // VERIFY: 588e5d04 auto
 // OFFSET: 0x00532A60
 void BattlenetLogin::GetVersionProof(const uint8_t* versionChallenge) {
-    SErrDisplayAppFatalMessage("", "", 0);
+    SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
 }
 
 // VERIFY: 7c681e4b auto
 // OFFSET: 0x00532A60
 void BattlenetLogin::SetPinInfo(bool enabled, uint32_t seed, const uint8_t* salt) {
-    SErrDisplayAppFatalMessage("", "", 0);
+    SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
 }
 
 // VERIFY: e59eb6e7 auto
 // OFFSET: 0x00532A60
 void BattlenetLogin::GetPinInfo(bool* enabled, uint8_t** salt, uint8_t** hash) {
-    SErrDisplayAppFatalMessage("", "", 0);
+    SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
 }
 
 // VERIFY: 0834ae87 auto
 // OFFSET: 0x00532A60
 void BattlenetLogin::SetMatrixInfo(bool enabled, uint8_t width, uint8_t height, uint8_t minDigits, uint8_t maxDigits, bool flipCoords, uint8_t challengeCount, uint64_t seed, const uint8_t* sessionKey, uint32_t sessionKeyLength) {
-    SErrDisplayAppFatalMessage("", "", 0);
+    SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
 }
 
 // VERIFY: a0319163 auto
 // OFFSET: 0x00532A60
 void BattlenetLogin::GetMatrixProof(bool* enabled, const uint8_t** proof) const {
-    SErrDisplayAppFatalMessage("", "", 0);
+    SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
 }
 
 // VERIFY: e23e08a1 auto
 // OFFSET: 0x00532A60
 void BattlenetLogin::GetTokenInfo(bool* enabled, char* token) {
-    SErrDisplayAppFatalMessage("", "", 0);
+    SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
 }
 
 // VERIFY: 8e3e2131 auto
 // OFFSET: 0x00532A60
 void BattlenetLogin::LogonResult(Grunt::Result result, const uint8_t* sessionKey, uint32_t sessionKeyLength, uint16_t flags) {
-    SErrDisplayAppFatalMessage("", "", 0);
+    SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
 }
 
 // VERIFY: 14fadb30 auto
 // OFFSET: 0x00532A60
 void BattlenetLogin::ReconnectResult(Grunt::Result result, const uint8_t* sessionKey, uint32_t sessionKeyLength, uint16_t flags) {
-    SErrDisplayAppFatalMessage("", "", 0);
+    SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
 }
 
 // VERIFY: 9b7ebb81 auto
@@ -1873,7 +1873,7 @@ int32_t BattlenetLogin::GetServerId() {
 // VERIFY: 16ee8ba4 auto
 // OFFSET: 0x00532A60
 const uint8_t* BattlenetLogin::GetVersionChallenge() {
-    SErrDisplayAppFatalMessage("", "", 0);
+    SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
 }
 
 // VERIFY: 6aac27e5 auto
@@ -1884,43 +1884,43 @@ void BattlenetLogin::Reconnect() {
 // VERIFY: 6c77d2b7 auto
 // OFFSET: 0x00532A60
 int32_t BattlenetLogin::Wait(const char* message, LoginData& loginData) {
-    SErrDisplayAppFatalMessage("", "", 0);
+    SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
 }
 
 // VERIFY: b98bce31 auto
 // OFFSET: 0x00532A60
 void BattlenetLogin::ProveVersion(const uint8_t* versionChecksum) {
-    SErrDisplayAppFatalMessage("", "", 0);
+    SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
 }
 
 // VERIFY: 7d626730 auto
 // OFFSET: 0x00532A60
 void BattlenetLogin::FileAccept(bool accept, uint64_t offset) {
-    SErrDisplayAppFatalMessage("", "", 0);
+    SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
 }
 
 // VERIFY: eb437353 auto
 // OFFSET: 0x00532A60
 void BattlenetLogin::FileComplete(bool success) {
-    SErrDisplayAppFatalMessage("", "", 0);
+    SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
 }
 
 // VERIFY: b94b273e auto
 // OFFSET: 0x00532A60
 int32_t BattlenetLogin::GetSurveyId() {
-    SErrDisplayAppFatalMessage("", "", 0);
+    SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
 }
 
 // VERIFY: 3249b71d auto
 // OFFSET: 0x00532A60
 void BattlenetLogin::SendSurveyData(uint16_t size, uint8_t* data) {
-    SErrDisplayAppFatalMessage("", "", 0);
+    SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
 }
 
 // VERIFY: 8a2c0499 auto
 // OFFSET: 0x00532A60
 void BattlenetLogin::SendSurveyFailed() {
-    SErrDisplayAppFatalMessage("", "", 0);
+    SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
 }
 
 // VERIFY: 4092e10a auto

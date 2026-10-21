@@ -123,7 +123,7 @@ char BattlenetUI::s_displayName[72];
 // OFFSET: 0x00530D00
 char* FilterChatLinks(const char* source, char* dest, uint32_t size) {
     if (!source || !dest || !size) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     char* out = dest;
@@ -293,7 +293,7 @@ int32_t BattlenetUI::QSortDisambiguateFriendListCB(const void* a, const void* b)
 // OFFSET: 0x00532850
 void BattlenetUI::SortFriendInviteList() {
     if (!BattlenetUI::m_friendInvites) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     BSN::Array<Battlenet::Friends::FriendInvite, 100>& invites = BattlenetUI::m_friendInvites->m_data.m_invites;
@@ -799,7 +799,7 @@ void BattlenetUI::FriendInviteListInitializedCB(void* param, int32_t argc, const
     }
 
     if (!BattlenetUI::s_initialized || !BattlenetUI::m_friendInvites) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     BattlenetUI::m_friendInvites->m_data.m_invites.m_count = 0;
@@ -824,19 +824,19 @@ void BattlenetUI::FriendInviteAddedCB(void* param, int32_t argc, const GeneralFu
     }
 
     if (!BattlenetUI::s_initialized || !BattlenetUI::m_friendInvites) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     uint32_t presenceId = static_cast<uint32_t>(args[0].ToUInt64());
 
     if (!presenceId) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     Battlenet::Friends::FriendInvite invite = BattlenetAPI::GetFriendInvite(presenceId);
 
     if (!invite.m_presenceId) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     *BattlenetUI::m_friendInvites->m_data.m_invites.New() = invite;
@@ -869,7 +869,7 @@ void BattlenetUI::FriendInviteRemovedCB(void* param, int32_t argc, const General
     uint32_t presenceId;
 
     if (!BattlenetUI::s_initialized || !BattlenetUI::m_friendInvites || (presenceId = static_cast<uint32_t>(args[0].ToUInt64())) == 0) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     BSN::Array<Battlenet::Friends::FriendInvite, 100>& invites = BattlenetUI::m_friendInvites->m_data.m_invites;
@@ -899,7 +899,7 @@ void BattlenetUI::FriendInfoChangedCB(void* param, int32_t argc, const GeneralFu
     }
 
     if (!BattlenetUI::s_initialized) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     BSN::BSNEncodedObject<Battlenet::Presence::FieldUpdate, Protocol> update(args[0].ToObject());
@@ -946,7 +946,7 @@ void BattlenetUI::NewPresenceCB(void* param, int32_t argc, const GeneralFunction
     }
 
     if (!BattlenetUI::s_initialized) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     uint32_t presenceId = static_cast<uint32_t>(args[0].ToUInt64());
@@ -983,7 +983,7 @@ void BattlenetUI::ToonNameUpdateCB(void* param, int32_t argc, const GeneralFunct
     }
 
     if (!BattlenetUI::s_initialized) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     BSN::BSNEncodedObject<Battlenet::Presence::FieldUpdate, Protocol> update(args[0].ToObject());
@@ -1009,7 +1009,7 @@ void BattlenetUI::OnlineTimeChangedCB(void* param, int32_t argc, const GeneralFu
     }
 
     if (!BattlenetUI::s_initialized) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     BSN::BSNEncodedObject<Battlenet::Presence::FieldUpdate, Protocol> update(args[0].ToObject());
@@ -1065,7 +1065,7 @@ void BattlenetUI::LastOnlineChangedCB(void* param, int32_t argc, const GeneralFu
     }
 
     if (!BattlenetUI::s_initialized) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     BSN::BSNEncodedObject<Battlenet::Presence::FieldUpdate, Protocol> update(args[0].ToObject());
@@ -1087,7 +1087,7 @@ void BattlenetUI::CustomMessageChangedCB(void* param, int32_t argc, const Genera
     }
 
     if (!BattlenetUI::s_initialized) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     BSN::BSNEncodedObject<Battlenet::Presence::FieldUpdate, Protocol> update(args[0].ToObject());
@@ -1241,7 +1241,7 @@ void BattlenetUI::ChatChannelJoinedCB(void* param, int32_t argc, const GeneralFu
     int32_t type = static_cast<int32_t>(args[1].ToInt64());
 
     if (channel >= 6) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     Battlenet::Chat::MemberList members = BattlenetAPI::GetChatMemberList(channel);
@@ -1299,7 +1299,7 @@ void BattlenetUI::ChatChannelLeftCB(void* param, int32_t argc, const GeneralFunc
     uint8_t channel = static_cast<uint8_t>(args[0].ToUInt64());
 
     if (channel >= 6) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     ChatConversation conversation;
@@ -1324,7 +1324,7 @@ void BattlenetUI::ChatChannelClosedCB(void* param, int32_t argc, const GeneralFu
     uint32_t presenceId = static_cast<uint32_t>(args[1].ToUInt64());
 
     if (channel >= 6) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     ChatConversation conversation;
@@ -1354,7 +1354,7 @@ void BattlenetUI::ChatChannelMessageReceivedCB(void* param, int32_t argc, const 
     }
 
     if (channel >= 6) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     char text[1024];
@@ -1382,7 +1382,7 @@ void BattlenetUI::ChatChannelMessageBlockedCB(void* param, int32_t argc, const G
     uint32_t presenceId = static_cast<uint32_t>(args[1].ToUInt64());
 
     if (channel >= 6) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     BattlenetUI::SendScriptEvent(SCRIPT_EVENT_BN_CHAT_CHANNEL_MESSAGE_BLOCKED, "%d%u", channel + 1, presenceId);
@@ -1402,7 +1402,7 @@ void BattlenetUI::ChatChannelMemberJoinedCB(void* param, int32_t argc, const Gen
     uint32_t presenceId = static_cast<uint32_t>(args[1].ToUInt64());
 
     if (channel >= 6) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     BattlenetUI::UpdateAutoComplete(presenceId, 0x30, 1, BattlenetUI::GetNameForPresenceIdHelper(presenceId));
@@ -1429,7 +1429,7 @@ void BattlenetUI::ChatChannelMemberLeftCB(void* param, int32_t argc, const Gener
     uint32_t presenceId = static_cast<uint32_t>(args[1].ToUInt64());
 
     if (channel >= 6) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     ChatConversation conversation;
@@ -1454,7 +1454,7 @@ void BattlenetUI::ChatChannelMemberUpdatedCB(void* param, int32_t argc, const Ge
     uint32_t presenceId = static_cast<uint32_t>(args[1].ToUInt64());
 
     if (channel >= 6) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     BattlenetUI::SendScriptEvent(SCRIPT_EVENT_BN_CHAT_CHANNEL_MEMBER_UPDATED, "%d%u", channel + 1, presenceId);
@@ -1508,7 +1508,7 @@ void BattlenetUI::FriendsOfFriendCB(void* param, int32_t argc, const GeneralFunc
     }
 
     if (!BattlenetUI::s_friendsOfFriend) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     uint16_t error = static_cast<uint16_t>(args[0].ToUInt64());
@@ -1620,7 +1620,7 @@ void BattlenetUI::PopulateAutoComplete() {
         uint32_t presenceId = BattlenetUI::m_friends[i].m_presenceID;
 
         if (!presenceId) {
-            SErrDisplayAppFatalMessage("", "", 0);
+            SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
         }
 
         const char* name = BattlenetUI::GetNameForPresenceIdHelper(presenceId);
@@ -1693,7 +1693,7 @@ void BattlenetUI::FriendAddedCB(void* param, int32_t argc, const GeneralFunction
     uint32_t presenceId;
 
     if (!BattlenetUI::s_initialized || (presenceId = static_cast<uint32_t>(args[0].ToUInt64())) == 0) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     if (BattlenetAPI::IsRIDFriend(presenceId)) {
@@ -1730,7 +1730,7 @@ void BattlenetUI::FriendRemovedCB(void* param, int32_t argc, const GeneralFuncti
     uint32_t presenceId;
 
     if (!BattlenetUI::s_initialized || (presenceId = static_cast<uint32_t>(args[0].ToUInt64())) == 0) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     int32_t index = BattlenetUI::FindFriendIndex(presenceId);
@@ -1768,7 +1768,7 @@ void BattlenetUI::OnlinePresenceChangedCB(void* param, int32_t argc, const Gener
     }
 
     if (!BattlenetUI::s_initialized) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     BSN::BSNEncodedObject<Battlenet::Presence::FieldUpdate, Protocol> update(args[0].ToObject());
@@ -1860,7 +1860,7 @@ void BattlenetUI::ChatChannelCreateCB(void* param, int32_t argc, const GeneralFu
     uint8_t channel = static_cast<uint8_t>(args[1].ToUInt64());
 
     if (channel >= 6) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     BattlenetUI::SendScriptEvent(SCRIPT_EVENT_BN_CHAT_CHANNEL_CREATE_SUCCEEDED, "%d", channel + 1);
@@ -1883,7 +1883,7 @@ void BattlenetUI::ChatChannelInviteCB(void* param, int32_t argc, const GeneralFu
     uint8_t channel = static_cast<uint8_t>(args[2].ToUInt64());
 
     if (channel >= 6) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     if (error) {
@@ -1908,7 +1908,7 @@ void BattlenetUI::ChatChannelMessageUndeliverableCB(void* param, int32_t argc, c
     uint8_t channel = static_cast<uint8_t>(args[0].ToUInt64());
 
     if (channel >= 6) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     BattlenetUI::DisplayError(static_cast<uint16_t>(args[1].ToUInt64()), 0);
@@ -1924,7 +1924,7 @@ void BattlenetUI::Init() {
     }
 
     if (BattlenetUI::m_friendInvites) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     BattlenetUI::m_friendInvites = new (__FILE__, __LINE__) BSN::BSNEncodedObject<Battlenet::Friends::FriendInviteContainer, Protocol>();
@@ -1935,7 +1935,7 @@ void BattlenetUI::Init() {
         BattlenetUI::s_eventCallbacks[i].m_handle = BattlenetAPI::RegisterEvent(BattlenetUI::s_eventCallbacks[i].m_event, callback);
 
         if (!BattlenetUI::s_eventCallbacks[i].m_handle) {
-            SErrDisplayAppFatalMessage("", "", 0);
+            SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
         }
     }
 
@@ -1944,7 +1944,7 @@ void BattlenetUI::Init() {
         BattlenetUI::s_presenceCallbacks[i].m_handle = BattlenetAPI::RegisterPresenceUpdateCallback(0, BattlenetUI::s_presenceCallbacks[i].m_field, callback);
 
         if (!BattlenetUI::s_presenceCallbacks[i].m_handle) {
-            SErrDisplayAppFatalMessage("", "", 0);
+            SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
         }
     }
 

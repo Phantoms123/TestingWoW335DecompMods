@@ -816,7 +816,7 @@ int32_t Script_GetMovieResolution(lua_State* L) {
     CVar* resolution = CVar::Lookup("gxResolution");
 
     if (!resolution || !resolution->m_stringValue.m_str) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     int32_t width;

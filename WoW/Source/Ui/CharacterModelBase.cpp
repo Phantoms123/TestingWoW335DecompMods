@@ -73,7 +73,7 @@ int32_t CGCharacterModelBase::GetObjectType() {
 // OFFSET: 0x005142B0
 CSimpleFrame* CGCharacterModelBase::Create(CSimpleFrame* parent) {
     if (CGCharacterModelBase::s_characterModelHeap.m_bytesPerData < sizeof(CGCharacterModelBase)) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     void* data = CGCharacterModelBase::s_characterModelHeap.GetData(0, STORM_TYPE_NAME(CGCharacterModelBase), SLOG_OBJECT);

@@ -683,7 +683,7 @@ int32_t ItemLinkInfo::GetItemIdFromLink(const char* link) {
 // OFFSET: 0x005143A0
 CSimpleFrame* CGTooltip::Create(CSimpleFrame* parent) {
     if (CGTooltip::s_tooltipHeap.m_bytesPerData < sizeof(CGTooltip)) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     void* data = CGTooltip::s_tooltipHeap.GetData(0, STORM_TYPE_NAME(CGTooltip), SLOG_OBJECT);

@@ -827,7 +827,7 @@ static int32_t Script_BNSetSelectedBlock(lua_State* L) {
     uint32_t presenceId = blockList.m_accounts.m_data[index];
 
     if (!presenceId) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     BattlenetUI::s_selectedBlock = presenceId;
@@ -980,7 +980,7 @@ static int32_t Script_BNSetSelectedToonBlock(lua_State* L) {
     uint32_t presenceId = blockList.m_toons.m_data[index];
 
     if (!presenceId) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     BattlenetUI::s_selectedToonBlock = presenceId;
@@ -1222,7 +1222,7 @@ static int32_t Script_BNSetSelectedFriend(lua_State* L) {
     uint32_t presenceId = BattlenetUI::m_friends[static_cast<uint32_t>(index - 1)].m_presenceID;
 
     if (!presenceId) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     BattlenetUI::s_selectedFriend = presenceId;

@@ -454,7 +454,7 @@ void ClientConnection::Cleanup() {
 // OFFSET: 0x006B0870
 void ClientConnection::AccountLogin(const char* accountName, const char* password, int32_t region, int32_t locale) {
     if (this->m_statusComplete != 1 || !accountName || !password) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     this->Initiate(COP_AUTHENTICATE, CSTATUS_AUTHENTICATING, nullptr);
@@ -472,7 +472,7 @@ void ClientConnection::Disconnect() {
 // OFFSET: 0x006B0970
 ClientConnection* ClientServices::Connection() {
     if (!ClientServices::s_currentConnection) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     return ClientServices::s_currentConnection;
@@ -488,7 +488,7 @@ Login* ClientServices::LoginConnection() {
 // OFFSET: 0x006B0B50
 void ClientServices::Send2(CDataStore* msg) {
     if (!ClientServices::s_currentConnection) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     ClientServices::s_currentConnection->Send(msg);
@@ -498,11 +498,11 @@ void ClientServices::Send2(CDataStore* msg) {
 // OFFSET: 0x006B0B80
 void ClientServices::SetMessageHandler(NETMESSAGE msgId, MESSAGE_HANDLER handler, void* param) {
     if (!handler) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     if (!ClientServices::s_currentConnection) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     ClientServices::s_currentConnection->SetMessageHandler(msgId, handler, param);
@@ -512,7 +512,7 @@ void ClientServices::SetMessageHandler(NETMESSAGE msgId, MESSAGE_HANDLER handler
 // OFFSET: 0x006B0BC0
 void ClientServices::ClearMessageHandler(NETMESSAGE msgId) {
     if (!ClientServices::s_currentConnection) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     ClientServices::s_currentConnection->ResetHandler(msgId);
@@ -532,7 +532,7 @@ const char* ClientServices::GetSelectedRealmName() {
 // OFFSET: 0x006B0DF0
 const char* ClientServices::GetServerAlertURL() {
     if (!ClientServices::s_serverAlertVar) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     return ClientServices::s_serverAlertVar->m_stringValue.m_str;
@@ -668,7 +668,7 @@ void ClientServices::Initialize() {
         g_clientConnection = new (__FILE__, __LINE__) ClientConnection(ClientServices::s_clientRealmResponse);
 
         if (!g_clientConnection) {
-            SErrDisplayAppFatalMessage("", "", 0);
+            SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
         }
     }
 
@@ -967,7 +967,7 @@ void ClientServices::LoginServerStatus(LOGIN_STATE state, LOGIN_RESULT result, c
     loginData.m_loginServerType = ClientServices::s_loginObj->GetLoginServerType();
 
     if (!ClientServices::s_currentConnection) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     ClientServices::s_currentConnection->SetLoginData(&loginData);
@@ -1019,7 +1019,7 @@ void ClientServices::GetRealmList() {
     ClientConnection* connection = ClientServices::s_currentConnection;
 
     if (!connection) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     connection->Initiate(COP_GET_REALMS, 35, nullptr);
@@ -1063,7 +1063,7 @@ bool ClientServices::GetCdKeys(Grunt::CdKey& cdKey) {
 // OFFSET: 0x006B2F60
 void ClientServices::RealmEnumCallback(uint32_t result) {
     if (!ClientServices::s_currentConnection) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     if (result == 1) {
@@ -1139,7 +1139,7 @@ int32_t ClientConnection::HandleCantConnect() {
 // OFFSET: 0x006B1390
 void ClientConnection::Connect() {
     if (this->m_statusComplete != 1) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     CGlueMgr::ResetQueueState();
@@ -1202,7 +1202,7 @@ void ClientServices::ConnectToSelectedServer() {
 // OFFSET: 0x006B2DF0
 bool ClientServices::SelectRealm(const char* realmName) {
     if (!ClientServices::s_realmNameVar) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     ClientServices::s_realmNameVar->Set(realmName, true, false, false, true);
@@ -1278,7 +1278,7 @@ void ClientRealmResponseAdapter::CharacterListReceived(RealmConnection* connecti
 // OFFSET: 0x006B1560
 int32_t ClientConnection::EnumerateCharacters(void (*callback)(CHARACTER_INFO& info, void* param), void* param) {
     if (!callback) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     int32_t count = this->m_characterList.Count();
@@ -1294,7 +1294,7 @@ int32_t ClientConnection::EnumerateCharacters(void (*callback)(CHARACTER_INFO& i
 // OFFSET: 0x006B0F60
 int32_t ClientServices::ValidDisconnect(const void* connection) {
     if (!connection || !ClientServices::s_currentConnection) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     return connection == ClientServices::s_currentConnection;
@@ -1310,7 +1310,7 @@ const char* ClientServices::GetAccountName() {
 // OFFSET: 0x006B0FE0
 void ClientServices::SetAccountName(const char* accountName) {
     if (!accountName) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     SStrCopy(ClientServices::s_accountName, accountName, sizeof(ClientServices::s_accountName));
@@ -1320,7 +1320,7 @@ void ClientServices::SetAccountName(const char* accountName) {
 // OFFSET: 0x006B1020
 void ClientServices::SetCharacterInfo(const CHARACTER_INFO* info) {
     if (!info) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     memcpy(&ClientServices::s_characterInfo, info, sizeof(ClientServices::s_characterInfo));
@@ -1532,7 +1532,7 @@ void ClientConnection::HandleLogoutComplete() {
     this->m_characterLoggedIn = 0;
 
     if (!ClientServices::s_currentConnection) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     if (this == ClientServices::s_currentConnection) {
@@ -1554,7 +1554,7 @@ void ClientServices::JoinRealmResult(uint32_t realmId, int32_t a2, int32_t a3, i
     }
 
     if (!ClientServices::s_currentConnection) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     if (!ClientServices::m_selectRealmInfoValid || !realmId || ClientServices::m_selectRealmInfo.m_realmId != realmId) {
@@ -1590,7 +1590,7 @@ void ClientConnection::CharacterLogout(bool quit, bool instant) {
     }
 
     if (!ClientServices::s_currentConnection) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     if (this != ClientServices::s_currentConnection) {
@@ -1621,7 +1621,7 @@ int32_t ClientServices::LaunchURL(const char* url) {
 // OFFSET: 0x006B0AA0
 void ClientServices::LoginEnterToken(const char* token) {
     if (!ClientServices::s_loginObj) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     ClientServices::s_loginObj->EnterToken(token);
@@ -1642,7 +1642,7 @@ void ClientConnection::HandleLogoutResponse(int32_t result, int32_t instant) {
 // OFFSET: 0x006B09A0
 void ClientServices::LoginEnterPIN(int32_t count, uint8_t* digits) {
     if (!ClientServices::s_loginObj) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     ClientServices::s_loginObj->EnterPIN(count, digits);
@@ -1652,7 +1652,7 @@ void ClientServices::LoginEnterPIN(int32_t count, uint8_t* digits) {
 // OFFSET: 0x006B09E0
 void ClientServices::LoginEnterMatrix(uint8_t value) {
     if (!ClientServices::s_loginObj) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     ClientServices::s_loginObj->EnterMatrix(value);
@@ -1662,7 +1662,7 @@ void ClientServices::LoginEnterMatrix(uint8_t value) {
 // OFFSET: 0x006B0A10
 void ClientServices::LoginRevertMatrix() {
     if (!ClientServices::s_loginObj) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     ClientServices::s_loginObj->RevertMatrix();
@@ -1672,7 +1672,7 @@ void ClientServices::LoginRevertMatrix() {
 // OFFSET: 0x006B0A40
 void ClientServices::LoginCommitMatrix() {
     if (!ClientServices::s_loginObj) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     ClientServices::s_loginObj->CommitMatrix();
@@ -1682,7 +1682,7 @@ void ClientServices::LoginCommitMatrix() {
 // OFFSET: 0x006B0A70
 void ClientServices::LoginFinalizeMatrix() {
     if (!ClientServices::s_loginObj) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     ClientServices::s_loginObj->FinalizeMatrix();
@@ -1729,7 +1729,7 @@ void ClientConnection::HandleCharacterLoginFailed(uint8_t result) {
     this->m_characterLoggedIn = 0;
 
     if (!ClientServices::s_currentConnection) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     if (this == ClientServices::s_currentConnection) {

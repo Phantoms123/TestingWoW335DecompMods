@@ -1454,7 +1454,7 @@ static int32_t TargetDirectionProc(WOWGUID guid, void* param) {
     TargetDirectionData* data = static_cast<TargetDirectionData*>(param);
 
     if (!data) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     if (unit == data->m_unit || unit == data->m_origin || !UnitMatchesTargetType(data->m_unit, unit, data->m_type)) {
@@ -1710,7 +1710,7 @@ void CGGameUI::InitializeFrameXML() {
     CGInputControl* input = CGInputControl::GetActive();
 
     if (!input) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     input->m_mouseModeFlags = 3;
@@ -1726,7 +1726,7 @@ void CGGameUI::InitializeFrameXML() {
     CGWorldFrame::RegisterFrames();
 
     if (GetDataInterfaceVersion() != GetCodeInterfaceVersion()) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     OsCreateDirectory("Logs", 0);
@@ -1792,13 +1792,13 @@ void CGGameUI::InitializeFrameXML() {
     CGGameUI::m_UISimpleParent = static_cast<CSimpleFrame*>(CScriptObject::GetScriptObjectByName("UIParent", CSimpleFrame::GetObjectType()));
 
     if (!CGGameUI::m_UISimpleParent) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     CGGameUI::m_gameTooltip = reinterpret_cast<CGTooltip*>(CScriptObject::GetScriptObjectByName("GameTooltip", CGTooltip::GetObjectType()));
 
     if (!CGGameUI::m_gameTooltip) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     BugReportRegister();
@@ -2001,7 +2001,7 @@ int32_t CGGameUI::Idle(const void* data, void* param) {
     lua_taintexpected = 0;
 
     if (lua_gettop(FrameScript_GetContext())) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     CGPlayer_C* player = static_cast<CGPlayer_C*>(ClntObjMgrObjectPtr(ClntObjMgrGetActivePlayer(), TYPEMASK_PLAYER, __FILE__, __LINE__));
@@ -2126,7 +2126,7 @@ void CGGameUI::UpdateActivePlayer() {
     CGPlayer_C* player = static_cast<CGPlayer_C*>(ClntObjMgrObjectPtr(ClntObjMgrGetActivePlayer(), TYPEMASK_PLAYER, __FILE__, __LINE__));
 
     if (!player) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     if (player->m_unit->m_unitFieldHealth > 0) {
@@ -2277,13 +2277,13 @@ void CGGameUI::OnMouseModeRelative() {
     CGWorldFrame* worldFrame = CGWorldFrame::s_currentWorldFrame;
 
     if (!worldFrame) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     worldFrame->OnMouseModeRelative();
 
     if (!CSimpleTop::s_instance) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     CSimpleTop::s_instance->SetMouseFocus(worldFrame);
@@ -2295,13 +2295,13 @@ void CGGameUI::OnMouseModeRelative() {
 // OFFSET: 0x00512DC0
 void CGGameUI::OnMouseModeNormal() {
     if (!CGWorldFrame::s_currentWorldFrame) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     CGWorldFrame::s_currentWorldFrame->OnMouseModeNormal();
 
     if (!CSimpleTop::s_instance) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     CSimpleTop::s_instance->m_checkFocus = 1;
@@ -2435,7 +2435,7 @@ void CGGameUI::ResetCamera(WOWGUID guid) {
     CGObject_C* object = ClntObjMgrObjectPtr(target, TYPEMASK_OBJECT, __FILE__, __LINE__);
 
     if (!object || !CGWorldFrame::s_currentWorldFrame) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     CGWorldFrame::s_currentWorldFrame->SetCameraTarget(object, 0);
@@ -2660,7 +2660,7 @@ void CGGameUI::UpdateCombatMode() {
     CGUIBindings* bindings = CGUIBindings::s_bindings;
 
     if (!bindings) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     if ((player->m_unit->m_unitFieldFlags & 0x80000) || (player->m_combatModeFlags & 0x2) || player->CGUnit_C::IsInMelee()) {
@@ -2794,7 +2794,7 @@ void CGGameUI::Target(WOWGUID guid) {
     }
 
     if (!ClntObjMgrGetCurrent() || CGGameUI::m_currentlyReloadingUI) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     if (lua_tainted) {
@@ -3464,7 +3464,7 @@ static void ItemPushItemStatsCallback(int32_t id, const WOWGUID& guid, void* par
     ItemPushData* data = static_cast<ItemPushData*>(param);
 
     if (!data) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     if (success) {
@@ -3493,7 +3493,7 @@ void OnItemPushResult(WOWGUID guid, uint8_t bag, uint32_t slot, uint32_t itemId,
         data->m_count = count;
 
         if (g_itemDBCache.GetRecord(itemId, guid, ItemPushItemStatsCallback, data, false)) {
-            SErrDisplayAppFatalMessage("", "", 0);
+            SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
         }
 
         return;
@@ -3696,7 +3696,7 @@ void CGGameUI::EnterWorld() {
     CM2Model* model = player ? player->GetObjectModel() : nullptr;
 
     if (!model) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     model->IsLoaded(1, 1);
@@ -4091,7 +4091,7 @@ void LoadSavedVariables(CStatus* status) {
 // OFFSET: 0x00513700
 int32_t CGGameUI::IsAutoLooting() {
     if (!CGUIBindings::s_bindings) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     int32_t autoLoot = g_autoLootDefaultCVar->m_intValue;
@@ -4107,7 +4107,7 @@ int32_t CGGameUI::IsAutoLooting() {
 // OFFSET: 0x00527A30
 void CCapturePointUIManager::AddCapturePoint(CGGameObject_C* object, uint32_t worldState, uint32_t radius) {
     if (!object) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     WOWGUID guid = object->m_obj->m_guid;
@@ -5067,7 +5067,7 @@ static int QSortCompareNearestUnit(const void* a, const void* b) {
     const NearestUnitData* right = static_cast<const NearestUnitData*>(b);
 
     if (!left || !right) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     if (left->m_inFront != right->m_inFront) {
@@ -5290,7 +5290,7 @@ static const char* s_victimStateTokens[9] = { "MISS", "WOUND", "DODGE", "PARRY",
 // OFFSET: 0x005133B0
 void CGGameUI::ShowCombatFeedbackAttackRoundInfo(const ATTACKROUNDINFO* info) {
     if (!info || info->m_victimState >= 9) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     CGGameUI::SignalUnitCombat(info->m_target, s_victimStateTokens[info->m_victimState], info->m_damage, info->m_schoolMask[0], info->m_hitInfo);
@@ -6006,7 +6006,7 @@ void CGGameUI::GetSelectionHighlightColor(const WOWGUID& guid, CImVector* color,
     }
 
     if (!viewer) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     if (unit->m_unit->m_unitFieldFlags & 0x8) {
@@ -6114,7 +6114,7 @@ void LoadPlacedFrames(HOSFILE localFile, HOSFILE cacheFile, void* param) {
     OsReadFile(localFile, buffer, size, &bytesRead);
 
     if (bytesRead != size) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     buffer[size] = '\0';
@@ -6201,7 +6201,7 @@ static void AccountVariablesLoadedCallback(HOSFILE localFile, HOSFILE cacheFile,
     CGCamera* camera = CGWorldFrame::GetActiveCamera();
 
     if (!s_accountDataPending && !camera) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     if (!camera) {
@@ -6225,7 +6225,7 @@ void LoadAccountVariables() {
     s_accountDataPending = 0x30;
 
     if (!CGGameUI::m_accountDataGeneration) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     LoadAccountData(0, AccountVariablesLoadedCallback, reinterpret_cast<void*>(static_cast<uintptr_t>((CGGameUI::m_accountDataGeneration << 16) | 0x10)));
@@ -6277,7 +6277,7 @@ static int32_t AutoMouseOverProc(WOWGUID guid, void* param) {
     }
 
     if (!param) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     AutoMouseOverData* data = static_cast<AutoMouseOverData*>(param);
@@ -6824,7 +6824,7 @@ int32_t CGGameUI::MessageHandler(void* param, NETMESSAGE msgId, uint32_t time, C
         }
 
         default: {
-            SErrDisplayAppFatalMessage("", "", 0);
+            SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
             return 1;
         }
     }
@@ -7926,7 +7926,7 @@ static int32_t FindMovieFileDataID(int32_t movieId) {
     const char* resolution;
 
     if (!var || (resolution = var->m_stringValue.m_str) == nullptr) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     int32_t width;
@@ -8197,7 +8197,7 @@ void CGGameUI::LeaveWorld() {
     CGInstanceEncounter_C::LeaveWorld();
 
     if (!CGWorldFrame::s_currentWorldFrame) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     CGWorldFrame::s_currentWorldFrame->SetCameraTarget(nullptr, 0);
@@ -8242,7 +8242,7 @@ void CGGameUI::LeaveWorld() {
 // OFFSET: 0x00529550
 void CCapturePointUIManager::RemoveCapturePoint(CGGameObject_C* object) {
     if (!object) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     WOWGUID guid = object->m_obj->m_guid;

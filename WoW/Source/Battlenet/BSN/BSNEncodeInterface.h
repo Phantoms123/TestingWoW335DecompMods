@@ -291,7 +291,7 @@ const BSN::EncodeContext* BSN::BSNEncodedObjectPtr<T, P, ON_STACK>::GetContext()
 template <class T, class P, int32_t ON_STACK>
 void BSN::BSNEncodedObjectPtr<T, P, ON_STACK>::Destroy() const {
     if (ON_STACK) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     delete this;

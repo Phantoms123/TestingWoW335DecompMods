@@ -9,7 +9,7 @@
 // OFFSET: 0x008C67B0
 uint32_t BattlenetApplication::Resolve(uint32_t token, const char* hostname) {
     if (!this->m_login || !g_tumorManager) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     Battlenet::SystemClient& client = g_tumorManager->m_tumor;

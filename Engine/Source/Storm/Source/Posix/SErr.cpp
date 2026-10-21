@@ -5,6 +5,8 @@
 #include <mutex>
 #include <exception>
 #include <unistd.h>
+#include <dlfcn.h>
+#include <execinfo.h>
 #include <thread>
 #include <SDL.h>
 #include "Engine/Source/Storm/H/storm.h"
@@ -192,6 +194,23 @@ int32_t STORMAPI SErrDisplayError(uint32_t error, const char* filename, int32_t 
     std::snprintf(summary, sizeof(summary), "%s\n%s:%d\n%s", errorText,
         filename ? filename : "", line, description ? description : "");
     std::fprintf(stderr, "%s\n", summary);
+    // CHANGED: not in the original client. The call stack, as module + offset, so a report from a stripped
+    // build can be matched to source with addr2line.
+    {
+        void* frames[32];
+        int count = backtrace(frames, 32);
+        std::fprintf(stderr, "Call stack:\n");
+        for (int i = 1; i < count; i++) {
+            Dl_info info{};
+            if (dladdr(frames[i], &info) && info.dli_fname) {
+                const char* module = std::strrchr(info.dli_fname, '/');
+                std::fprintf(stderr, "  #%d %s+0x%zx\n", i, module ? module + 1 : info.dli_fname,
+                    static_cast<size_t>(static_cast<char*>(frames[i]) - static_cast<char*>(info.dli_fbase)));
+            } else {
+                std::fprintf(stderr, "  #%d %p\n", i, frames[i]);
+            }
+        }
+    }
     bool handled = false;
     bool canShowDialog = false;
     char title[sizeof(s_logTitle)];

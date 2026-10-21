@@ -511,7 +511,7 @@ bool BattlenetFileDownload::Initialize(const char* fileName, const uint8_t* md5,
     BattlenetLogin* login = static_cast<BattlenetLogin*>(ClientServices::LoginConnection());
 
     if (!login || login->GetLoginServerType() != 1) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     if (login->GetLoginServerType() != 1) {

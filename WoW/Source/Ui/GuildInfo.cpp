@@ -396,7 +396,7 @@ void UpdateGuildRoster(int32_t a1) {
 // OFFSET: 0x005CA490
 int32_t QSortRoster(const void* a, const void* b) {
     if (!a || !b) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     GuildMemberInfo* left = *static_cast<GuildMemberInfo* const*>(a);

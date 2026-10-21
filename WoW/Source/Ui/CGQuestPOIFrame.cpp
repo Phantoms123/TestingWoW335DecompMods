@@ -58,7 +58,7 @@ int32_t CGQuestPOIFrame::GetObjectType() {
 // OFFSET: 0x00514260
 CSimpleFrame* CGQuestPOIFrame::Create(CSimpleFrame* parent) {
     if (CGQuestPOIFrame::s_questPOIHeap.m_bytesPerData < sizeof(CGQuestPOIFrame)) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     void* data = CGQuestPOIFrame::s_questPOIHeap.GetData(0, STORM_TYPE_NAME(CGQuestPOIFrame), SLOG_OBJECT);

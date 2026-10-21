@@ -2199,7 +2199,7 @@ static int32_t Script_ResetChatWindows(lua_State* L) {
         }
 
         if (rec->m_id >= 32) {
-            SErrDisplayAppFatalMessage("", "", 0);
+            SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
         }
 
         s_joinedZoneChannels |= 1 << (rec->m_id - 1);

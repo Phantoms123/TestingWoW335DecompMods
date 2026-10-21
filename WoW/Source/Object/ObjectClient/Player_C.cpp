@@ -399,7 +399,7 @@ static int32_t PetChangeHandler(WOWGUID guid, uint32_t fieldOffset, uint32_t fie
         CGPlayer_C* player = static_cast<CGPlayer_C*>(ClntObjMgrObjectPtr(guid, TYPEMASK_PLAYER, __FILE__, __LINE__));
 
         if (!player) {
-            SErrDisplayAppFatalMessage("", "", 0);
+            SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
         }
 
         for (int32_t i = 0; i < 2; i++) {
@@ -466,7 +466,7 @@ static int32_t DuelTeamUpdateHandler(WOWGUID guid, uint32_t fieldOffset, uint32_
 // OFFSET: 0x006D3010
 static int32_t GetWeaponSubClassCount(int32_t* count) {
     if (!count) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     int32_t maxSubClass = 0;
@@ -641,7 +641,7 @@ static void InitWeaponSkills() {
 
     while (index--) {
         if (!g_spellDB.GetRecordByIndex(index, &rec)) {
-            SErrDisplayAppFatalMessage("", "", 0);
+            SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
         }
 
         if (!(rec.m_attributes & 0x40)) {
@@ -881,7 +881,7 @@ void PlayerInitializeSounds() {
 // OFFSET: 0x006D5080
 void CGPlayer_C::UpdateQuestStatus(CGObject_C* object) {
     if (!object) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     WOWGUID guid = object->m_obj->m_guid;
@@ -892,7 +892,7 @@ void CGPlayer_C::UpdateQuestStatus(CGObject_C* object) {
 // OFFSET: 0x006D5130
 void CGPlayer_C::UpdateTaxiStatus(CGUnit_C* unit) {
     if (unit->UnitReaction(this) <= UNIT_REACTION_HOSTILE || !(unit->m_unit->m_unitNpcFlags & 0x2000)) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     CDataStore msg;
@@ -932,7 +932,7 @@ void CGPlayer_C::HandleRepopRequest(bool a2) {
 // OFFSET: 0x006DCB40
 void CGPlayer_C::ChangeStandState(uint32_t standState) {
     if (standState >= 11) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     if (this->m_obj->m_guid != ClntObjMgrGetActivePlayer()) {
@@ -980,7 +980,7 @@ void CGPlayer_C::ChangeStandState(uint32_t standState) {
 // OFFSET: 0x006E2B30
 void CGPlayer_C::SetClientStandState(uint32_t standState) {
     if (this->m_obj->m_guid != ClntObjMgrGetActivePlayer()) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     if (this->m_clientStandState == standState) {
@@ -1014,7 +1014,7 @@ void CGPlayer_C::SetClientStandState(uint32_t standState) {
 // OFFSET: 0x006D5EB0
 void CGPlayer_C::PreAnimate(CGWorldFrame* frame) {
     if (!frame) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     this->CGUnit_C::PreAnimate(frame);
@@ -1048,7 +1048,7 @@ void CGPlayer_C::ShouldRender(uint32_t flags, int32_t& culled, int32_t& hidden) 
 // OFFSET: 0x006D5C30
 uint32_t GetDisplayIdFromRaceAndGender(uint32_t race, uint32_t gender) {
     if (gender >= 3) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     ChrRacesRec* raceRec = g_chrRacesDB.GetRecord(race);
@@ -1076,7 +1076,7 @@ uint32_t GetDisplayIdFromRaceAndGender(uint32_t race, uint32_t gender) {
 // OFFSET: 0x006DC810
 CreatureModelDataRec* GetModelDataRec(uint32_t race, uint32_t gender) {
     if (gender >= 3) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     uint32_t displayID = GetDisplayIdFromRaceAndGender(race, gender);
@@ -1299,7 +1299,7 @@ bool CGPlayer_C::CanDualWield() {
 // OFFSET: 0x006D5A60
 int32_t CGPlayer_C::CanLoot(const CGObject_C* object) {
     if (!object) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     bool autoInteract = this->CanAutoInteract();
@@ -3244,7 +3244,7 @@ int32_t Packet_SMSG_QUEST_CONFIRM_ACCEPT(void* param, NETMESSAGE msgId, uint32_t
 // OFFSET: 0x006CBCB0
 int32_t Packet_SMSG_QUEST_POI_QUERY_RESPONSE(void* param, NETMESSAGE msgId, uint32_t time, CDataStore* msg) {
     if (msgId != SMSG_QUEST_POI_QUERY_RESPONSE) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     CGQuestLog::HandlePOIQueryResponse(msg);
@@ -3928,7 +3928,7 @@ int32_t Packet_Group_17(void* param, NETMESSAGE msgId, uint32_t time, CDataStore
 // OFFSET: 0x006D8370
 int32_t Packet_SMSG_QUEST_FORCE_REMOVE(void* param, NETMESSAGE msgId, uint32_t time, CDataStore* msg) {
     if (msgId != SMSG_QUEST_FORCE_REMOVED) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     if (!ClntObjMgrObjectPtr(ClntObjMgrGetActivePlayer(), TYPEMASK_PLAYER, __FILE__, __LINE__)) {
@@ -4271,7 +4271,7 @@ int32_t Packet_SMSG_CANCEL_COMBAT(void* param, NETMESSAGE msgId, uint32_t time, 
 // OFFSET: 0x006E6330
 int32_t Packet_Group_18(void* param, NETMESSAGE msgId, uint32_t time, CDataStore* msg) {
     if (!msg) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     WOWGUID itemGuid;
@@ -5721,7 +5721,7 @@ bool CGPlayer_C::CanTrackObject(CGObject_C* object) {
 // OFFSET: 0x006E2240
 int32_t Packet_SMSG_SEND_UNLEARN_SPELLS(void* param, NETMESSAGE msgId, uint32_t time, CDataStore* msg) {
     if (!msg) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     if (msgId != SMSG_SEND_UNLEARN_SPELLS) {
@@ -6658,7 +6658,7 @@ int32_t CGPlayer_C::OnListInventory(CDataStore* msg) {
     msg->Get(count);
 
     if (count > 150) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     CGPlayer_C::s_lastVendorListReceived = vendor;
@@ -7171,7 +7171,7 @@ int32_t OnUpdateQuest(WOWGUID guid, uint32_t offset, uint32_t count, const void*
 // OFFSET: 0x006E5180
 void CGPlayer_C::SetActiveMirrorHandlers() {
     if (this->m_obj->m_guid != ClntObjMgrGetActivePlayer()) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     ClntObjMgrSetObjMirrorHandler(this->m_obj->m_guid, ID_UNIT, 0x10, 8, CritterUpdate, nullptr, HANDLER_PRIORITY_NORMAL, 0);
@@ -7266,7 +7266,7 @@ void CGPlayer_C::SetActiveMirrorHandlers() {
 // OFFSET: 0x006E5960
 void CGPlayer_C::UnsetActiveMirrorHandlers() {
     if (this->m_obj->m_guid != ClntObjMgrGetActivePlayer()) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     ClntObjMgrUnsetObjMirrorHandler(this->m_obj->m_guid, ID_UNIT, 0x10, CritterUpdate, nullptr);
@@ -7730,7 +7730,7 @@ static void QuestCompleteCallback(int32_t id, const WOWGUID& guid, void* param, 
     QuestCache* quest = g_questDBCache.GetRecord(id, none, nullptr, nullptr, false);
 
     if (!quest) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     CGGameUI::DisplayError(ERR_QUEST_COMPLETE_S, quest->m_name);
@@ -7881,7 +7881,7 @@ int32_t ClientPlaySpellVisualHandler(WOWGUID guid, void* param) {
         const SpellRec* spell = static_cast<const SpellRec*>(param);
 
         if (!spell) {
-            SErrDisplayAppFatalMessage("", "", 0);
+            SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
         }
 
         const SpellVisualRec* visual = GetSpellVisual(spell);
@@ -8431,7 +8431,7 @@ static PlayerLootItem s_lootItems[18];
 // OFFSET: 0x006CEB80
 int32_t CGPlayer_C::GetLootItem(uint32_t slot) {
     if (slot >= 18) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     return s_lootItems[slot].m_itemId;
@@ -8441,7 +8441,7 @@ int32_t CGPlayer_C::GetLootItem(uint32_t slot) {
 // OFFSET: 0x006CEBB0
 int32_t CGPlayer_C::GetLootItemDisplayId(uint32_t slot) {
     if (slot >= 18) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     return s_lootItems[slot].m_displayId;
@@ -8451,7 +8451,7 @@ int32_t CGPlayer_C::GetLootItemDisplayId(uint32_t slot) {
 // OFFSET: 0x006CEBE0
 int32_t CGPlayer_C::GetLootItemCount(uint32_t slot) {
     if (slot >= 18) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     return s_lootItems[slot].m_count;
@@ -8461,7 +8461,7 @@ int32_t CGPlayer_C::GetLootItemCount(uint32_t slot) {
 // OFFSET: 0x006CEC10
 int32_t CGPlayer_C::GetLootItemRandomSuffix(uint32_t slot) {
     if (slot >= 18) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     return s_lootItems[slot].m_randomSuffix;
@@ -8471,7 +8471,7 @@ int32_t CGPlayer_C::GetLootItemRandomSuffix(uint32_t slot) {
 // OFFSET: 0x006CEC40
 int32_t CGPlayer_C::GetLootItemRandomPropertyId(uint32_t slot) {
     if (slot >= 18) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     return s_lootItems[slot].m_randomPropertyId;
@@ -8481,7 +8481,7 @@ int32_t CGPlayer_C::GetLootItemRandomPropertyId(uint32_t slot) {
 // OFFSET: 0x006CEC70
 int32_t CGPlayer_C::GetLootItemSlotType(uint32_t slot) {
     if (slot >= 18) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     return s_lootItems[slot].m_slotType;
@@ -8491,7 +8491,7 @@ int32_t CGPlayer_C::GetLootItemSlotType(uint32_t slot) {
 // OFFSET: 0x006DC770
 void CGPlayer_C::ClearLootItemSlotType(WOWGUID lootObject, uint32_t slot) {
     if (slot >= 18) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     CGPlayer_C* player = ClntObjMgrGetActivePlayerObj();
@@ -8867,7 +8867,7 @@ int32_t SkillRankChangeHandler(WOWGUID guid, uint32_t offset, uint32_t count, co
     uint32_t index = (offset - offsetof(CGPlayerLocalData, m_playerSkillInfo[0].m_rank)) / sizeof(PlayerSkillInfo);
 
     if (index >= 128) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     if (player && player->GetSkillValue(index) != newRank) {
@@ -8990,7 +8990,7 @@ static void RandomRollNameQueryCallback(int32_t id, const WOWGUID& guid, void* p
     uint32_t* roll = static_cast<uint32_t*>(param);
 
     if (!roll) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     if (success) {
@@ -9011,7 +9011,7 @@ static void RandomRollNameQueryCallback(int32_t id, const WOWGUID& guid, void* p
 // OFFSET: 0x006E2E90
 int32_t Packet_Group_9(void* param, NETMESSAGE msgId, uint32_t time, CDataStore* msg) {
     if (!msg) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     switch (msgId) {
@@ -9109,7 +9109,7 @@ int32_t Packet_Group_9(void* param, NETMESSAGE msgId, uint32_t time, CDataStore*
                     ItemLimitCategoryRec* rec = nullptr;
 
                     if (!category || !(rec = g_itemLimitCategoryDB.GetRecord(category))) {
-                        SErrDisplayAppFatalMessage("", "", 0);
+                        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
                     }
 
                     CGGameUI::DisplayError(error, rec->m_quantity, rec->m_name);
@@ -9687,7 +9687,7 @@ int32_t Packet_Group_9(void* param, NETMESSAGE msgId, uint32_t time, CDataStore*
             CGPlayer_C* player = ClntObjMgrGetActivePlayerObj();
 
             if (!player) {
-                SErrDisplayAppFatalMessage("", "", 0);
+                SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
                 return 0;
             }
 
@@ -9798,7 +9798,7 @@ int32_t Packet_Group_9(void* param, NETMESSAGE msgId, uint32_t time, CDataStore*
             CGPlayer_C* player = ClntObjMgrGetActivePlayerObj();
 
             if (!player) {
-                SErrDisplayAppFatalMessage("", "", 0);
+                SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
                 return 0;
             }
 
@@ -9848,7 +9848,7 @@ uint8_t CGPlayer_C::FindItemSlot(WOWGUID container, const CGItem_C* item) {
     CGObject_C* object = ClntObjMgrObjectPtr(container, TYPEMASK_OBJECT, __FILE__, __LINE__);
 
     if (!object || !object->GetBag()) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     if (!object->GetBag()->m_numSlots) {
@@ -9923,11 +9923,11 @@ void CGPlayer_C::SwapGuildBankItem(int32_t itemId, uint32_t virtualSlot, uint8_t
 // OFFSET: 0x006DB9D0
 void CGPlayer_C::SplitItem(WOWGUID item, WOWGUID srcContainer, uint32_t srcSlot, WOWGUID dstContainer, uint32_t dstSlot, uint32_t count) {
     if (srcSlot > 255 || dstSlot > 255) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     if (static_cast<int32_t>(count) <= 0) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     CDataStore msg;
@@ -10005,7 +10005,7 @@ void CGPlayer_C::GiftWrap(CGItem_C* item) {
 // OFFSET: 0x006DF890
 void CGPlayer_C::SwapItems(WOWGUID item, WOWGUID srcContainer, uint32_t srcSlot, WOWGUID dstContainer, uint32_t dstSlot, int32_t ignoreBind) {
     if (srcSlot > 255 || dstSlot > 255) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     if (!srcContainer) {
@@ -10111,7 +10111,7 @@ int32_t CGPlayer_C::ValidateSlot(uint32_t slot, WOWGUID item) {
 // OFFSET: 0x006DBAE0
 void CGPlayer_C::AutoStoreItemInBag(WOWGUID item, WOWGUID srcContainer, uint32_t srcSlot, WOWGUID dstBag, int32_t unused_a5) {
     if (srcSlot > 255) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     CDataStore msg;
@@ -10516,7 +10516,7 @@ void CGPlayer_C::UpdateInventoryComponent(INVENTORY_SLOTS slot, const VisibleIte
     VisibleItem_C* item = nullptr;
 
     if (!oldItem || slot > 18 || !(item = &this->m_player->m_playerVisibleItems[slot])) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     VisibleItem_C* old = const_cast<VisibleItem_C*>(oldItem);
@@ -10908,7 +10908,7 @@ void AreaTriggersInitialize(uint32_t mapId) {
 
         if (!rec) {
             s_areaTriggerStart = start;
-            SErrDisplayAppFatalMessage("", "", 0);
+            SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
         }
 
         if (rec->m_continentID == static_cast<int32_t>(mapId)) {
@@ -10968,7 +10968,7 @@ int32_t AreaTriggerCheck(const void* data, void* param) {
         AreaTriggerRec* rec = g_areaTriggerDB.GetRecordByIndex(i);
 
         if (!rec) {
-            SErrDisplayAppFatalMessage("", "", 0);
+            SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
         }
 
         if (AreaTriggerContains(rec, position)) {
@@ -11039,7 +11039,7 @@ int32_t CGPlayer_C::UpdateMountedCollisionBox(float mountHeight, int32_t force) 
     CreatureModelDataRec* modelData = displayInfo ? g_creatureModelDataDB.GetRecord(displayInfo->m_modelID) : nullptr;
 
     if (!modelData) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     float modelScale;
@@ -11075,7 +11075,7 @@ int32_t CGPlayer_C::UpdateUnitCollisionBox(int32_t a2, int32_t a3) {
     CreatureModelDataRec* modelData = displayInfo ? g_creatureModelDataDB.GetRecord(displayInfo->m_modelID) : nullptr;
 
     if (!modelData) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     float modelScale;
@@ -11645,7 +11645,7 @@ int32_t Packet_SMSG_GROUP_LIST(void* param, NETMESSAGE msgId, uint32_t time, CDa
         }
 
         if (guid == ClntObjMgrGetActivePlayer()) {
-            SErrDisplayAppFatalMessage("", "", 0);
+            SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
         }
 
         const CGPartyMemberState* state = nullptr;
@@ -11759,7 +11759,7 @@ int32_t Packet_SMSG_GROUP_LIST(void* param, NETMESSAGE msgId, uint32_t time, CDa
 
     if (isRaid) {
         if (memberCount >= 40) {
-            SErrDisplayAppFatalMessage("", "", 0);
+            SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
         }
 
         raidGuids[memberCount] = ClntObjMgrGetActivePlayer();
@@ -12527,7 +12527,7 @@ void CGPlayer_C::CheckForQuestItemLoot(uint32_t itemId, uint32_t count, uint32_t
             loot->m_totalCount = totalCount;
 
             if (g_questDBCache.GetRecord(entry->m_questId, WOWGUID(), QuestLootQuestQueryCallback, loot, false)) {
-                SErrDisplayAppFatalMessage("", "", 0);
+                SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
             }
         }
     }
@@ -12596,7 +12596,7 @@ int32_t Packet_SMSG_RESURRECT_REQUEST(void* param, NETMESSAGE msgId, uint32_t ti
 // OFFSET: 0x006DC070
 void CGPlayer_C::UpdateRepopTimer() {
     if (this->m_obj->m_guid != ClntObjMgrGetActivePlayer()) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     uint8_t bytes = this->m_player->m_playerFieldBytes[0];
@@ -13319,7 +13319,7 @@ void CGPlayer_C::Dance() {
 // OFFSET: 0x006E1780
 void CGPlayer_C::StartDance(PlayerDance* dance) {
     if (this->m_dance) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     this->m_dance = dance;
@@ -13392,7 +13392,7 @@ void CGPlayer_C::PlayDanceMove(const DanceMovesRec* move) {
                 DanceMovesRec* previous = g_danceMovesDB.GetRecord(this->m_dance->m_moves[this->m_danceMoveIndex - 1]);
 
                 if (previous->m_type == 4 || previous->m_type == 3) {
-                    SErrDisplayAppFatalMessage("", "", 0);
+                    SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
                 }
 
                 this->PlayDanceMove(previous);
@@ -13429,7 +13429,7 @@ void CGPlayer_C::DanceMoveAnimComplete() {
 // OFFSET: 0x006E5090
 void CGPlayer_C::DestructActivePlayer() {
     if (this->m_obj->m_guid != ClntObjMgrGetActivePlayer()) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     if (ClntObjMgrGetPlayerType() != 1) {
@@ -14092,7 +14092,7 @@ int32_t CGPlayer_C::XRayVisionEffectProc(WOWGUID guid, void* param) {
     const SpellRec* spell = static_cast<const SpellRec*>(param);
 
     if (!spell) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     const SpellVisualRec* visual = GetSpellVisual(spell);
@@ -14297,7 +14297,7 @@ void CGPlayer_C::TurnOffGuildTabardPurchase() {
     CGBag_C* bag = this->GetBag();
 
     if (!bag) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     WOWGUID tabard = bag->m_numSlots > 18 ? bag->m_slots[18] : WOWGUID();
@@ -14605,7 +14605,7 @@ void CGPlayer_C::ClearFarSight() {
 // OFFSET: 0x006E4FD0
 int32_t FarsightChangeHandler(WOWGUID guid, uint32_t offset, uint32_t count, const void* value, void* param) {
     if (guid != ClntObjMgrGetActivePlayer()) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     CGPlayer_C* player = static_cast<CGPlayer_C*>(ClntObjMgrObjectPtr(guid, TYPEMASK_PLAYER, __FILE__, __LINE__));

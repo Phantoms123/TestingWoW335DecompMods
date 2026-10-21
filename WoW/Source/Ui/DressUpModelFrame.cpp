@@ -58,7 +58,7 @@ int32_t CGDressUpModelFrame::GetObjectType() {
 // OFFSET: 0x00514300
 CSimpleFrame* CGDressUpModelFrame::Create(CSimpleFrame* parent) {
     if (CGDressUpModelFrame::s_dressUpModelHeap.m_bytesPerData < sizeof(CGDressUpModelFrame)) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     void* data = CGDressUpModelFrame::s_dressUpModelHeap.GetData(0, STORM_TYPE_NAME(CGDressUpModelFrame), SLOG_OBJECT);

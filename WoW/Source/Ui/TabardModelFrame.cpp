@@ -51,7 +51,7 @@ int32_t CGTabardModelFrame::GetObjectType() {
 // OFFSET: 0x00514350
 CSimpleFrame* CGTabardModelFrame::Create(CSimpleFrame* parent) {
     if (CGTabardModelFrame::s_tabardModelHeap.m_bytesPerData < sizeof(CGTabardModelFrame)) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     void* data = CGTabardModelFrame::s_tabardModelHeap.GetData(0, STORM_TYPE_NAME(CGTabardModelFrame), SLOG_OBJECT);

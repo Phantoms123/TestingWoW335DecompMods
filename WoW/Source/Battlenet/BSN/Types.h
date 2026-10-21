@@ -221,7 +221,7 @@ BSN::Array<T, N>::Array() {
 template <class T, uint32_t N>
 T& BSN::Array<T, N>::operator[](uint32_t index) {
     if (index >= this->m_count) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     return this->m_data[index];
@@ -232,7 +232,7 @@ T& BSN::Array<T, N>::operator[](uint32_t index) {
 template <class T, uint32_t N>
 const T& BSN::Array<T, N>::operator[](uint32_t index) const {
     if (index >= this->m_count) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     return this->m_data[index];
@@ -243,7 +243,7 @@ const T& BSN::Array<T, N>::operator[](uint32_t index) const {
 template <class T, uint32_t N>
 T* BSN::Array<T, N>::New() {
     if (this->m_count >= N) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     return &this->m_data[this->m_count++];
@@ -253,7 +253,7 @@ T* BSN::Array<T, N>::New() {
 template <class T, uint32_t SIZE>
 const T& BSN::FixedArray<T, SIZE>::operator[](uint32_t index) const {
     if (index >= SIZE) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     return this->m_data[index];
@@ -289,7 +289,7 @@ BSN::Optional<T>& BSN::Optional<T>::operator=(const Optional<T>& other) {
 template <class T>
 const T& BSN::Optional<T>::Get() const {
     if (!this->m_exists) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     return this->m_value;
@@ -299,7 +299,7 @@ const T& BSN::Optional<T>::Get() const {
 template <int32_t TAG, class T>
 T& BSN::Choice::Get() {
     if (this->m_tag != TAG) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     return *reinterpret_cast<T*>(this + 1);
@@ -310,7 +310,7 @@ T& BSN::Choice::Get() {
 template <class T, uint32_t N>
 void BSN::Array<T, N>::Remove(uint32_t index) {
     if (index >= this->m_count) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     if (this->m_count - index > 1) {
@@ -324,7 +324,7 @@ void BSN::Array<T, N>::Remove(uint32_t index) {
 template <class T, uint32_t N>
 void BSN::Array<T, N>::SetCount(uint32_t count) {
     if (count > N) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     for (uint32_t i = this->m_count; i < count; i++) {
@@ -339,7 +339,7 @@ void BSN::Array<T, N>::SetCount(uint32_t count) {
 template <int32_t TAG, class T>
 const T& BSN::Choice::Get() const {
     if (this->m_tag != TAG) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     return *reinterpret_cast<const T*>(this + 1);

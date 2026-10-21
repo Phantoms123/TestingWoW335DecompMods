@@ -435,7 +435,7 @@ int32_t CGChat::IsVoiceChatAllowed() {
 // OFFSET: 0x004FB0F0
 static int QSortDisplayListMembers(const void* a, const void* b) {
     if (!a || !b) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     WOWGUID none = WOWGUID();
@@ -1034,7 +1034,7 @@ bool SpamFilter(char* text, bool cache) {
 // OFFSET: 0x00509DD0
 void CGChat::AddChatMessage(const char* text, int32_t type, const char* senderName, uint32_t language, const char* channelName, const char* targetName, const char* flags, WOWGUID senderGuid, uint32_t senderUnk, WOWGUID targetGuid, int32_t achievementID, bool isGM, const ChatConversation* conversation) {
     if (type >= CHAT_MSG_MAX) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     if (!text) {
@@ -1220,7 +1220,7 @@ emoteDone:
             char* level = separator ? SStrChr(separator + 1, ':') : nullptr;
 
             if (!level) {
-                SErrDisplayAppFatalMessage("", "", 0);
+                SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
             }
 
             int32_t questLevel = SStrToInt(level + 1);
@@ -1804,7 +1804,7 @@ bool ChatParserParseText(const char* text, char* buffer, uint32_t size) {
 // OFFSET: 0x004FB410
 static void TranslateMessageCase(const char* word, char* dest, uint32_t size, const char* source) {
     if (!size) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     size--;
@@ -2004,7 +2004,7 @@ int32_t CGChat::OnCheckReloadSpamFilter(void* param, NETMESSAGE msgId, uint32_t 
 // OFFSET: 0x00505930
 void CGChat::TranslateMessage(uint32_t language, uint32_t skill, const char* text, char* buffer, uint32_t size, int32_t a6, int32_t a7) {
     if (!text || !buffer) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     if (!language) {
@@ -2127,7 +2127,7 @@ void CGChat::TranslateMessage(uint32_t language, uint32_t skill, const char* tex
 
             if (list) {
                 if (!list->m_words.Count()) {
-                    SErrDisplayAppFatalMessage("", "", 0);
+                    SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
                 }
 
                 TranslateMessageCase(list->m_words.m_data[hash % list->m_words.Count()]->m_word, buffer, size, word);
@@ -3049,7 +3049,7 @@ void CGChat::LogXPGain(CGUnit_C* unit, int32_t amount, int32_t type, int32_t bon
 
         if (exhaustion && !fequal(exhaustion->m_factor, 0.0f) && !fequal(exhaustion->m_factor, 1.0f)) {
             if (restState >= 7) {
-                SErrDisplayAppFatalMessage("", "", 0);
+                SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
             }
 
             char token[256];
@@ -4471,7 +4471,7 @@ void CGChat::LoadChatSettingsCallback(HOSFILE localFile, HOSFILE file, void* par
         ChatChannelsRec* rec = g_chatChannelsDB.GetRecordByIndex(i);
 
         if (rec->m_id > 32) {
-            SErrDisplayAppFatalMessage("", "", 0);
+            SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
         }
 
         allChannels |= 1 << (rec->m_id - 1);
@@ -4490,7 +4490,7 @@ void CGChat::LoadChatSettingsCallback(HOSFILE localFile, HOSFILE file, void* par
             if (!OsReadFile(file, buffer, size, &bytesRead)) {
                 buffer = nullptr;
             } else if (bytesRead != size) {
-                SErrDisplayAppFatalMessage("", "", 0);
+                SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
                 buffer = nullptr;
             }
         }
@@ -4811,7 +4811,7 @@ void CGChat::LoadChatSettingsCallback(HOSFILE localFile, HOSFILE file, void* par
                 }
 
                 if (rec->m_id > 32) {
-                    SErrDisplayAppFatalMessage("", "", 0);
+                    SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
                 }
 
                 uint32_t bit = 1 << (rec->m_id - 1);
@@ -4859,7 +4859,7 @@ void CGChat::LoadChatSettingsCallback(HOSFILE localFile, HOSFILE file, void* par
             }
 
             if (rec->m_id >= 32) {
-                SErrDisplayAppFatalMessage("", "", 0);
+                SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
             }
 
             s_joinedZoneChannels |= 1 << (rec->m_id - 1);
@@ -5922,7 +5922,7 @@ void CGChat::DisplayPendingUserList(ChatChannel* channel) {
         NameCache* name = g_nameDBCache.GetRecord(user->m_guid.m_guid, WOWGUID(), nullptr, nullptr, false);
 
         if (!name) {
-            SErrDisplayAppFatalMessage("", "", 0);
+            SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
         }
 
         const char* prefix = "";

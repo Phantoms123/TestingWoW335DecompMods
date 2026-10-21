@@ -35,7 +35,7 @@ void BSN::FourCC::ToString(char* dest, uint32_t size) const {
 
     for (int32_t shift = 24; shift >= 0; shift -= 8) {
         if (index >= 4) {
-            SErrDisplayAppFatalMessage("", "", 0);
+            SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
         }
 
         uint32_t c = this->m_value >> shift;

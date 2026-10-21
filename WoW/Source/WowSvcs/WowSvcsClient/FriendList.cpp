@@ -352,7 +352,7 @@ void FriendList::AddComplained(WOWGUID guid) {
 // OFFSET: 0x006B3960
 int32_t QSortFriends(const void* a, const void* b) {
     if (!a || !b) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     const FriendInfo* friendA = static_cast<const FriendInfo*>(a);
@@ -389,7 +389,7 @@ int32_t QSortFriends(const void* a, const void* b) {
 // OFFSET: 0x006B3A60
 int32_t QSortIgnore(const void* a, const void* b) {
     if (!a || !b) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     WOWGUID guidA = static_cast<const IgnoreInfo*>(a)->m_guid;
@@ -472,7 +472,7 @@ bool FriendList::IsIgnored(WOWGUID guid, bool includeComplained) {
 // OFFSET: 0x006B4C80
 int32_t CompareWhoResults(const void* a, const void* b) {
     if (!a || !b) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     WhoResult left = *static_cast<const WhoResult*>(a);
@@ -594,7 +594,7 @@ void __stdcall FriendList::AddFriend(const char* name, const char* note) {
 // OFFSET: 0x006B5630
 void FriendList::SendWho(const char* filter) {
     if (!filter) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     int32_t minLevel = 0;
@@ -976,7 +976,7 @@ int32_t FriendList::DoLocalWho() {
 // OFFSET: 0x006B8720
 int32_t Packet_SMSG_WHO(void* param, NETMESSAGE msgId, uint32_t time, CDataStore* msg) {
     if (!msg) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     uint32_t count;
@@ -1395,7 +1395,7 @@ void FriendListNameCallback(int32_t id, const WOWGUID& guid, void* param, bool s
     NameCache* record = g_nameDBCache.GetRecord(guid.m_guid, none, nullptr, nullptr, false);
 
     if (!record) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     char name[308];
@@ -1440,7 +1440,7 @@ void FriendListNameCallbackWithSort(int32_t id, const WOWGUID& guid, void* param
     NameCache* record = g_nameDBCache.GetRecord(guid.m_guid, none, nullptr, nullptr, false);
 
     if (!record) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     char name[308];
@@ -1486,7 +1486,7 @@ void FriendListIgnoreNameCallback(int32_t id, const WOWGUID& guid, void* param, 
     NameCache* record = g_nameDBCache.GetRecord(guid.m_guid, none, nullptr, nullptr, false);
 
     if (!record) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     char name[308];
@@ -1529,7 +1529,7 @@ void FriendListMuteNameCallback(int32_t id, const WOWGUID& guid, void* param, bo
     NameCache* record = g_nameDBCache.GetRecord(guid.m_guid, none, nullptr, nullptr, false);
 
     if (!record) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     char name[308];

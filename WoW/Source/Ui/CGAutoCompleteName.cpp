@@ -164,7 +164,7 @@ static AUTOCOMPLETE_NAMENODE* FindNodeByGuid(const WOWGUID& guid) {
 // OFFSET: 0x0057B630
 static int32_t ApplyNodeFlags(AUTOCOMPLETE_NAMENODE* node, uint32_t flags, int32_t touch, const char* name) {
     if (!node) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     node->m_flags |= flags;
@@ -212,7 +212,7 @@ void CGAutoCompleteName::AddFlags(const WOWGUID& guid, uint32_t flags, int32_t a
     }
 
     if (flags & 0x8) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     AUTOCOMPLETE_NAMENODE* node = FindNodeByGuid(guid);
@@ -415,7 +415,7 @@ AUTOCOMPLETE_NAMENODE* CGAutoCompleteName::AddPlayerToList(const uint32_t& prese
 // OFFSET: 0x0057B840
 int32_t CGAutoCompleteName::AddFlags(const uint32_t& presenceId, uint32_t flags, int32_t add, const char* name) {
     if (!presenceId) {
-        SErrDisplayAppFatalMessage("", "", 0);
+        SErrDisplayAppFatalMessage("Internal check failed", __FILE__, __LINE__);
     }
 
     AUTOCOMPLETE_NAMENODE* node = FindNodeByPresenceId(presenceId);
