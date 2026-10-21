@@ -1,5 +1,6 @@
 #include "engine.h"
 
+#include "client.h"
 #include "log.h"
 #include "water_classify.h"
 
@@ -12,204 +13,10 @@ namespace engine
 {
 namespace
 {
-constexpr uintptr_t kClientImageBase = 0x00400000;
-
-constexpr uintptr_t kGxDevice = 0x00C5DF88;
-constexpr uintptr_t kGxD3DDevice = 0x397C;
-constexpr uintptr_t kGxProjection = 0xF88;
-constexpr uintptr_t kGxViewportDepthRange = 0xF80;
-constexpr uintptr_t kGxViewIndex = 0x1AF8;
-constexpr uintptr_t kGxViewBase = 0x1B00;
-constexpr uintptr_t kGxViewStride = 64;
-constexpr uint32_t kGxViewStackDepth = 64;
 constexpr float kMinWorldDepthRangeSpan = 0.01f;
-
-constexpr uintptr_t kFfxCVar = 0x00D45774;
-constexpr uintptr_t kCurrentScreenEffect = 0x00D45780;
-constexpr uintptr_t kGlowScreenEffect = 0x00B74364;
-constexpr uintptr_t kDeathScreenEffect = 0x00B74368;
-constexpr uintptr_t kScreenEffectEnableCVar = 0x4;
-constexpr uintptr_t kCVarIntValue = 0x30;
-constexpr uintptr_t kDayNightGlow = 0x00D38C2C;
-
-constexpr uintptr_t kGlowEffectVtable = 0x00A941C8;
-constexpr uintptr_t kGlowSetParamSlot = 0x00A941D8;
-constexpr uintptr_t kGlowSetParam = 0x008BFDE0;
-constexpr uintptr_t kGlowCompositePassVtable = 0x00A94294;
-constexpr uintptr_t kGlowPassListCount = 0x4;
-constexpr uintptr_t kGlowPassListData = 0x8;
-constexpr uintptr_t kGlowPassListOffsets[kGlowPassLists] = {0x08, 0x1C};
-constexpr uint32_t kGlowCompositePassIndex = 2;
-constexpr uintptr_t kPassColourAlpha = 0x33;
-
-constexpr uintptr_t kViewGlobal = 0x00ADF5E8;
-constexpr uintptr_t kProjectionGlobal = 0x00ADF628;
-constexpr uintptr_t kCameraPosition = 0x00CD8F5C;
-constexpr uintptr_t kCameraTarget = 0x00CD8F68;
-constexpr uintptr_t kCameraInLiquid = 0x00CD8794;
-constexpr uintptr_t kCurrentMap = 0x00AB63BC;
-constexpr uintptr_t kWorldFrame = 0x00B7436C;
-constexpr uintptr_t kWorldFrameFarClip = 0xB14;
-
-constexpr uintptr_t kFogGroupStart[kDayNightFogGroupCount] = {0x00D38B90, 0x00D38BA4};
-constexpr uintptr_t kFogGroupEnd[kDayNightFogGroupCount] = {0x00D38B94, 0x00D38BA8};
-
-constexpr uintptr_t kDayFraction = 0x00D38B04;
-constexpr uintptr_t kSkyCenter = 0x00D38B18;
-constexpr uintptr_t kFogColor = 0x00D38BA0;
-constexpr uintptr_t kAmbientColor = 0x00D38BD4;
-constexpr uintptr_t kDirectColor = 0x00D38BD8;
-constexpr uintptr_t kSunColor = 0x00D38BF8;
-constexpr uintptr_t kZoneFogDistance = 0x00D38C1C;
-constexpr uintptr_t kSunPosition = 0x00D38E28;
-constexpr uintptr_t kMoonPosition = 0x00D38E48;
-constexpr uintptr_t kSunDayEnd = 0x00A41CA0;
-constexpr uintptr_t kSunDayStart = 0x00A41CA4;
-constexpr uintptr_t kDayNightScreenEffectLightSlot = 0x00D38B58;
-constexpr uintptr_t kDayNightStormBlend = 0x00D38B88;
-
-constexpr uintptr_t kLightSkyColors[kSkyColorCount] = {0x00D38BE0, 0x00D38BE4, 0x00D38BE8,
-                                                       0x00D38BEC, 0x00D38BF0, 0x00D38BF4};
-constexpr uintptr_t kLightRiverColors[kWaterColorPair] = {0x00D38C14, 0x00D38C18};
-constexpr uintptr_t kLightOceanColors[kWaterColorPair] = {0x00D38C0C, 0x00D38C10};
-
-constexpr uintptr_t kLiquidSettingsBankCount = 0x00D43B18;
-constexpr uintptr_t kLiquidSettingsBankEntries = 0x00D43B1C;
-constexpr uint32_t kMaxLiquidSettingsBankCount = 0x10000;
-constexpr uintptr_t kLiquidSettingsTexture0 = 0x000;
-constexpr size_t kLiquidSettingsTextureSlot = 0x80;
-constexpr uintptr_t kLiquidTypeMaxId = 0x00AD4070;
-constexpr uintptr_t kLiquidTypeMinId = 0x00AD4074;
-constexpr uintptr_t kLiquidTypeRows = 0x00AD4084;
-constexpr uintptr_t kLiquidTypeFlags = 0x08;
-constexpr uintptr_t kLiquidTypeSoundBank = 0x0C;
-constexpr uintptr_t kLiquidTypeMaterialId = 0x38;
-constexpr uintptr_t kLiquidBucketStride = 0x10;
-constexpr uintptr_t kLiquidBucketCount = 0x04;
-constexpr uintptr_t kTransparentLiquidPass = 1;
 constexpr int kClassifiedSettingsCacheSize = 32;
 constexpr int kMaxLoggedLiquidTypes = 64;
-
-constexpr size_t kMaxCodeBytes = 32;
-
-struct CodeBytes
-{
-    const char* name;
-    uintptr_t address;
-    size_t size;
-    unsigned char bytes[kMaxCodeBytes];
-};
-
-const CodeBytes kLightRecordStores[] = {
-    {"light record copy destination", 0x007F3574, 5, {0xB9, 0xD4, 0x8B, 0xD3, 0x00}},
-    {"sky top colour store", 0x007EC03C, 3, {0x89, 0x56, 0x0C}},
-    {"sky middle colour store", 0x007EC051, 3, {0x89, 0x4E, 0x10}},
-    {"sky band 1 colour store", 0x007EC063, 3, {0x89, 0x46, 0x14}},
-    {"sky band 2 colour store", 0x007EC075, 3, {0x89, 0x56, 0x18}},
-    {"sky smog colour store", 0x007EC087, 3, {0x89, 0x4E, 0x1C}},
-    {"fog colour store", 0x007EC09C, 3, {0x89, 0x46, 0x20}},
-    {"ocean close colour store", 0x007EC11D, 3, {0x89, 0x56, 0x38}},
-    {"ocean far colour store", 0x007EC132, 3, {0x89, 0x4E, 0x3C}},
-    {"river close colour store", 0x007EC144, 3, {0x89, 0x46, 0x40}},
-    {"river far colour store", 0x007EC152, 3, {0x89, 0x56, 0x44}},
-};
-
-const CodeBytes kWaterClientLayout[] = {
-    {"settings bank count check", 0x008A28F8, 6, {0x3B, 0x3D, 0x18, 0x3B, 0xD4, 0x00}},
-    {"settings bank array load", 0x008A2900, 5, {0xA1, 0x1C, 0x3B, 0xD4, 0x00}},
-    {"settings bank entry load", 0x008A2952, 3, {0x8B, 0x04, 0xB8}},
-    {"settings texture copy destination", 0x008A2809, 3, {0x89, 0x5D, 0xFC}},
-    {"LiquidType texture source", 0x008A280C, 3, {0x8D, 0x47, 0x3C}},
-    {"settings texture slot stride", 0x008A282E, 7, {0x81, 0x45, 0xFC, 0x80, 0x00, 0x00, 0x00}},
-    {"LiquidType minimum id load", 0x00793DF7, 5, {0xA1, 0x74, 0x40, 0xAD, 0x00}},
-    {"LiquidType maximum id check", 0x00793E00, 6, {0x3B, 0x35, 0x70, 0x40, 0xAD, 0x00}},
-    {"LiquidType rows load", 0x00793E08, 6, {0x8B, 0x15, 0x84, 0x40, 0xAD, 0x00}},
-    {"LiquidType row load", 0x00793E12, 3, {0x8B, 0x04, 0x8A}},
-    {"LiquidType material id read", 0x008A1FE8, 3, {0x8B, 0x78, 0x38}},
-    {"material render call with the settings argument", 0x008A22C7, 11,
-     {0x8B, 0x46, 0x04, 0x8B, 0x0E, 0x8B, 0x11, 0x8B, 0x52, 0x08, 0x50}},
-    {"liquid render pass return", 0x008A2376, 3, {0xC2, 0x08, 0x00}},
-    {"liquid renderer load at the water pass", 0x00790A91, 6, {0x8B, 0x0D, 0x10, 0x86, 0xCD, 0x00}},
-    {"transparent liquid pass index", 0x00790A9B, 2, {0x6A, 0x01}},
-    {"liquid renderer kept in ebx", 0x008A224C, 2, {0x8B, 0xD9}},
-    {"liquid bucket stride", 0x008A229C, 3, {0xC1, 0xE7, 0x04}},
-    {"liquid bucket count load", 0x008A229F, 4, {0x8B, 0x4C, 0x1F, 0x04}},
-    {"liquid draw loop skipped on an empty bucket", 0x008A22B2, 15,
-     {0x8B, 0x47, 0x04, 0x83, 0xC4, 0x10, 0x33, 0xDB, 0x85, 0xC0, 0x89, 0x45, 0x0C, 0x76, 0x3A}},
-    {"water material render return", 0x008A58FB, 3, {0xC2, 0x1C, 0x00}},
-    {"water no-specular material render return", 0x008A5C6B, 3, {0xC2, 0x1C, 0x00}},
-};
-
-constexpr CodeBytes kWorldRenderTailAfterFfxEnd = {
-    "world render tail after FFX end", 0x004F9286, 11,
-    {0xE8, 0x55, 0xE8, 0x24, 0x00, 0x5F, 0x5E, 0x8B, 0xE5, 0x5D, 0xC3}};
-
-const CodeBytes kGlowPassColourLayout[] = {
-    {"glow feed SetParam call", 0x004F883C, 8, {0x8B, 0x40, 0x10, 0x52, 0x6A, 0x03, 0xFF, 0xD0}},
-    {"glow SetParam argument reads", 0x008BFDE0, 17,
-     {0x55, 0x8B, 0xEC, 0x8B, 0x45, 0x0C, 0x8B, 0x10, 0x89, 0x51, 0x2C, 0x8A, 0x50, 0x04, 0x8A, 0x40, 0x08}},
-    {"underwater list composite pass load", 0x008BFDF2, 6, {0x8B, 0x71, 0x24, 0x8B, 0x76, 0x08}},
-    {"underwater composite colour store", 0x008BFE08, 3, {0x89, 0x7E, 0x30}},
-    {"clear-view list composite pass load", 0x008BFE14, 6, {0x8B, 0x41, 0x10, 0x8B, 0x48, 0x08}},
-    {"clear-view composite colour store", 0x008BFE21, 3, {0x89, 0x51, 0x30}},
-    {"glow SetParam return", 0x008BFE26, 3, {0xC2, 0x08, 0x00}},
-    {"glow effect vtable store", 0x008BFE98, 6, {0xC7, 0x03, 0xC8, 0x41, 0xA9, 0x00}},
-    {"glow composite pass vtable store", 0x008C2206, 6, {0xC7, 0x06, 0x94, 0x42, 0xA9, 0x00}},
-    {"glow composite colour argument", 0x008C28A1, 3, {0x83, 0xC6, 0x30}},
-    kWorldRenderTailAfterFfxEnd,
-};
-
-const CodeBytes kGradingPlacement[] = {
-    kWorldRenderTailAfterFfxEnd,
-    {"list flag clear after FFX end", 0x00747AE0, 27,
-     {0xA1, 0x68, 0x13, 0xCA, 0x00, 0x85, 0xC0, 0x74, 0x11, 0xB9, 0xFF, 0xEF, 0xFF, 0xFF,
-      0x8B, 0xFF, 0x21, 0x48, 0x10, 0x8B, 0x40, 0x08, 0x85, 0xC0, 0x75, 0xF6, 0xC3}},
-    {"name and icon draw after the world render", 0x004FB042, 5, {0xE8, 0xF9, 0xA0, 0x2E, 0x00}},
-    {"FFX pass end default target", 0x008C15A7, 13,
-     {0x8B, 0x01, 0x8B, 0x50, 0x5C, 0x6A, 0x00, 0x6A, 0x00, 0x6A, 0x00, 0xFF, 0xD2}},
-};
-
-const CodeBytes kTransparentFogClientLayout[] = {
-    {"M2 fog exponent argument", 0x0081FCEE, 9, {0x8B, 0x46, 0x70, 0xD9, 0x80, 0xB4, 0x00, 0x00, 0x00}},
-    {"M2 fog colour argument address", 0x0081FCF7, 4, {0x8D, 0x4D, 0xFC, 0x51}},
-    {"M2 fog argument block", 0x0081FCFB, 7, {0x83, 0xEC, 0x0C, 0xD9, 0x5C, 0x24, 0x08}},
-    {"M2 fog end argument", 0x0081FD02, 10, {0xD9, 0x80, 0xAC, 0x00, 0x00, 0x00, 0xD9, 0x5C, 0x24, 0x04}},
-    {"M2 fog start argument", 0x0081FD0C, 9, {0xD9, 0x80, 0xA8, 0x00, 0x00, 0x00, 0xD9, 0x1C, 0x24}},
-    {"M2 fog upload and argument pop", 0x0081FD1A, 10, {0x6A, 0x01, 0xE8, 0x6F, 0x36, 0x05, 0x00, 0x83, 0xC4, 0x14}},
-    {"M2 fog setter prologue", 0x00873210, 13,
-     {0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x14, 0x83, 0x3D, 0x20, 0x30, 0xD4, 0x00, 0x00}},
-    {"fog colour red byte read", 0x00873225, 7, {0x8B, 0x75, 0x14, 0x0F, 0xB6, 0x46, 0x02}},
-    {"fog colour green byte read", 0x00873242, 4, {0x0F, 0xB6, 0x4E, 0x01}},
-    {"fog colour blue byte read", 0x00873254, 3, {0x0F, 0xB6, 0x16}},
-    {"fog start and end read", 0x00873263, 8, {0xD9, 0x45, 0x0C, 0xD9, 0x45, 0x08, 0xD8, 0xE9}},
-    {"fog exponent read", 0x0087328C, 3, {0xD9, 0x45, 0x10}},
-    {"blend mode fog table read", 0x0081FB7B, 7, {0x8B, 0x04, 0x8D, 0x90, 0x53, 0xA4, 0x00}},
-    {"blend mode fog table", 0x00A45390, 16,
-     {0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00}},
-    {"blend mode fog table end", 0x00A453A0, 16,
-     {0x02, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}},
-    {"fog colour mode dispatch", 0x0081FBA3, 7, {0xFF, 0x24, 0x85, 0x7C, 0xFE, 0x81, 0x00}},
-    {"fog colour mode jump table", 0x0081FE7C, 16,
-     {0xAA, 0xFB, 0x81, 0x00, 0xAE, 0xFC, 0x81, 0x00, 0xC2, 0xFC, 0x81, 0x00, 0xD8, 0xFC, 0x81, 0x00}},
-    {"zero fog colour alpha register", 0x0081FB20, 2, {0x33, 0xDB}},
-    {"lighting fog colour alpha", 0x0081FC5D, 4, {0xC6, 0x45, 0xFB, 0xFF}},
-    {"black fog colour alpha", 0x0081FCB7, 3, {0x88, 0x5D, 0xFB}},
-    {"white fog colour alpha", 0x0081FCCD, 3, {0x88, 0x5D, 0xFB}},
-    {"grey fog colour alpha", 0x0081FCE3, 3, {0x88, 0x5D, 0xFB}},
-    {"glare call argument pop before", 0x004F9210, 3, {0x83, 0xC4, 0x14}},
-    {"world text call after the glare", 0x004F9218, 5, {0xE8, 0x63, 0xC3, 0x2E, 0x00}},
-    {"glare pass visibility test", 0x007F0877, 14,
-     {0x74, 0x3C, 0xD9, 0x05, 0x48, 0x8B, 0xD3, 0x00, 0x51, 0xB9, 0xA8, 0x8E, 0xD3, 0x00}},
-    {"glare pass moon tail jump", 0x007F08AB, 10, {0xB9, 0x58, 0x8F, 0xD3, 0x00, 0xE9, 0x4B, 0xBB, 0x1B, 0x00}},
-    {"glare pass return", 0x007F08B5, 1, {0xC3}},
-};
-
-constexpr size_t kGlarePassEntrySize = 7;
-constexpr unsigned char kGlarePassEntry[kGlarePassEntrySize] = {0x83, 0x3D, 0xCC, 0x8C, 0xD3, 0x00, 0x00};
-constexpr unsigned char kJumpRel32Opcode = 0xE9;
-constexpr size_t kJumpRel32Size = 5;
-constexpr unsigned char kMoveEaxImm32Opcode = 0xB8;
-constexpr unsigned char kJumpEax[] = {0xFF, 0xE0};
+constexpr size_t kLiquidSettingsTextureSlot = 0x80;
 
 struct OpaqueState
 {
@@ -220,19 +27,6 @@ struct OpaqueState
 };
 
 OpaqueState g_opaque = {};
-
-template <typename T>
-T Read(uintptr_t address)
-{
-    T value;
-    std::memcpy(&value, reinterpret_cast<const void*>(address), sizeof(T));
-    return value;
-}
-
-void ReadFloats(uintptr_t address, float* out, int count)
-{
-    std::memcpy(out, reinterpret_cast<const void*>(address), sizeof(float) * count);
-}
 
 bool Finite(const float* v, int count)
 {
@@ -250,15 +44,7 @@ bool IsPerspective(const float* p)
 
 bool ReadGxMatrices(float* view, float* proj)
 {
-    uintptr_t gx = Read<uintptr_t>(kGxDevice);
-    if (!gx)
-        return false;
-    uint32_t index = Read<uint32_t>(gx + kGxViewIndex);
-    if (index >= kGxViewStackDepth)
-        return false;
-    ReadFloats(gx + kGxViewBase + index * kGxViewStride, view, 16);
-    ReadFloats(gx + kGxProjection, proj, 16);
-    return Finite(view, 16) && IsPerspective(proj);
+    return client::GxViewMatrix(view) && client::GxProjectionMatrix(proj) && Finite(view, 16) && IsPerspective(proj);
 }
 
 bool IsWorldDepthRange(const float* minMaxZ)
@@ -269,12 +55,8 @@ bool IsWorldDepthRange(const float* minMaxZ)
 
 void ApplyPendingGxViewportDepthRange(D3DVIEWPORT9& viewport)
 {
-    uintptr_t gx = Read<uintptr_t>(kGxDevice);
-    if (!gx)
-        return;
     float minMaxZ[2];
-    ReadFloats(gx + kGxViewportDepthRange, minMaxZ, 2);
-    if (IsWorldDepthRange(minMaxZ))
+    if (client::GxViewportDepthRange(minMaxZ) && IsWorldDepthRange(minMaxZ))
     {
         viewport.MinZ = minMaxZ[0];
         viewport.MaxZ = minMaxZ[1];
@@ -287,16 +69,13 @@ bool UsableOpaqueState(const OpaqueState& state)
            Finite(state.cameraRelativeView, 16);
 }
 
-bool CaptureOpaqueStateUnsafe(IDirect3DDevice9* device, OpaqueState& state)
+bool CaptureOpaqueStateFrom(IDirect3DDevice9* device, OpaqueState& state)
 {
     if (FAILED(device->GetViewport(&state.viewport)))
         return false;
     ApplyPendingGxViewportDepthRange(state.viewport);
     if (!ReadGxMatrices(state.cameraRelativeView, state.glProjection))
-    {
-        ReadFloats(kViewGlobal, state.cameraRelativeView, 16);
-        ReadFloats(kProjectionGlobal, state.glProjection, 16);
-    }
+        client::WorldSceneMatrices(state.cameraRelativeView, state.glProjection);
     return UsableOpaqueState(state);
 }
 
@@ -315,240 +94,48 @@ void Normalize(float* v)
     v[2] /= len;
 }
 
-bool CVarEnabled(uintptr_t cvar)
+bool GlowRunsIn(const client::ScreenEffects& e)
 {
-    return cvar && Read<int32_t>(cvar + kCVarIntValue) != 0;
+    return e.ffxEnabled && e.current && e.current == e.glow && e.currentEnabled;
 }
 
-bool GlowScreenEffectRunsUnsafe()
+float GlowScreenEffectAmount(float glow)
 {
-    const uintptr_t effect = Read<uintptr_t>(kCurrentScreenEffect);
-    return CVarEnabled(Read<uintptr_t>(kFfxCVar)) && effect && effect == Read<uintptr_t>(kGlowScreenEffect) &&
-           CVarEnabled(Read<uintptr_t>(effect + kScreenEffectEnableCVar));
-}
-
-float GlowScreenEffectAmount()
-{
-    const float glow = Read<float>(kDayNightGlow);
-    if (!GlowScreenEffectRunsUnsafe() || !std::isfinite(glow))
+    if (!GlowRunsIn(client::ReadScreenEffects()) || !std::isfinite(glow))
         return 0.0f;
     return std::clamp(glow, 0.0f, 1.0f);
 }
 
-bool FindGlowCompositePassesUnsafe(const ScreenEffects& effects, GlowCompositePasses& out)
-{
-    if (!effects.glow || effects.current != effects.glow || Read<uintptr_t>(effects.glow) != kGlowEffectVtable)
-        return false;
-    for (int list = 0; list < kGlowPassLists; ++list)
-    {
-        const uintptr_t passes = effects.glow + kGlowPassListOffsets[list];
-        const uintptr_t data = Read<uintptr_t>(passes + kGlowPassListData);
-        if (Read<uint32_t>(passes + kGlowPassListCount) <= kGlowCompositePassIndex || !data)
-            return false;
-        const uintptr_t pass = Read<uintptr_t>(data + kGlowCompositePassIndex * sizeof(uintptr_t));
-        if (!pass || Read<uintptr_t>(pass) != kGlowCompositePassVtable)
-            return false;
-        out.pass[list] = pass;
-    }
-    return true;
-}
-
-LightParamsSelection ReadLightParamsSelection()
+LightParamsSelection LightParamsSelectionOf(const client::DayNightState& dn)
 {
     LightParamsSelection selection;
-    const float storm = Read<float>(kDayNightStormBlend);
-    selection.stormBlend = std::isfinite(storm) ? std::clamp(storm, 0.0f, 1.0f) : 0.0f;
-    const int32_t slot = Read<int32_t>(kDayNightScreenEffectLightSlot);
-    if (slot >= 0 && slot < FogData::kLightParamsSlots)
-        selection.screenEffectSlot = slot;
+    selection.stormBlend = std::isfinite(dn.stormBlend) ? std::clamp(dn.stormBlend, 0.0f, 1.0f) : 0.0f;
+    if (dn.screenEffectLightSlot >= 0 && dn.screenEffectLightSlot < FogData::kLightParamsSlots)
+        selection.screenEffectSlot = dn.screenEffectLightSlot;
     return selection;
 }
 
-bool ReadClassicLightInputsUnsafe(ClassicLightInputs& out)
+bool LightIsMoon(float dayFraction)
 {
-    out.mapId = Read<int32_t>(kCurrentMap);
-    ReadFloats(kCameraPosition, out.camPos, 3);
-    out.dayFraction = Read<float>(kDayFraction);
-    out.lightParams = ReadLightParamsSelection();
-    return Finite(out.camPos, 3) && std::isfinite(out.dayFraction);
+    return !(dayFraction >= client::kSunRisesAt && dayFraction <= client::kSunSetsAt);
 }
 
-bool BuildFrameInputsUnsafe(FrameInputs& out, bool withPointLights, const PointLightUpload& upload)
+float FarClipOf(const float* glProjection)
 {
-    std::memcpy(out.cameraRelativeView, g_opaque.cameraRelativeView, sizeof(out.cameraRelativeView));
-    std::memcpy(out.glProjection, g_opaque.glProjection, sizeof(out.glProjection));
-    out.viewport = g_opaque.viewport;
-    ReadFloats(kCameraPosition, out.camPos, 3);
-    ReadFloats(kCameraTarget, out.camTarget, 3);
-
-    out.dayFraction = Read<float>(kDayFraction);
-    float dayStart = Read<float>(kSunDayStart);
-    float dayEnd = Read<float>(kSunDayEnd);
-    out.lightIsMoon = !(out.dayFraction >= dayStart && out.dayFraction <= dayEnd);
-    float center[3];
-    float body[3];
-    ReadFloats(kSkyCenter, center, 3);
-    ReadFloats(out.lightIsMoon ? kMoonPosition : kSunPosition, body, 3);
-    out.toLight[0] = body[0] - center[0];
-    out.toLight[1] = body[1] - center[1];
-    out.toLight[2] = body[2] - center[2];
-    Normalize(out.toLight);
-
-    out.fogColor = Read<uint32_t>(kFogColor);
-    out.fogStart = Read<float>(kFogGroupStart[kFrameInputsFogGroup]);
-    out.fogEnd = Read<float>(kFogGroupEnd[kFrameInputsFogGroup]);
-    out.sunColor = Read<uint32_t>(kSunColor);
-    out.directColor = Read<uint32_t>(kDirectColor);
-    out.ambientColor = Read<uint32_t>(kAmbientColor);
-    out.inLiquid = CameraInLiquid();
-    out.mapId = Read<int32_t>(kCurrentMap);
-    out.lightParams = ReadLightParamsSelection();
-    CaptureLocalLightInputs(out.camPos, withPointLights, upload, out.localLights);
-
-    out.zoneFogDistance = Read<float>(kZoneFogDistance);
-    out.clientGlowAmount = out.inLiquid ? 0.0f : GlowScreenEffectAmount();
-    out.farClip = out.glProjection[14] / (1.0f - out.glProjection[10]);
-    if (!(out.farClip > 10.0f && out.farClip < 100000.0f))
-    {
-        uintptr_t worldFrame = Read<uintptr_t>(kWorldFrame);
-        out.farClip = worldFrame ? Read<float>(worldFrame + kWorldFrameFarClip) : 0.0f;
-    }
-    if (!(out.farClip > 10.0f && out.farClip < 100000.0f))
-        out.farClip = 1000.0f;
-
-    return Finite(out.camPos, 3) && Finite(out.toLight, 3) && std::isfinite(out.fogEnd) &&
-           std::isfinite(out.fogStart);
+    float farClip = glProjection[14] / (1.0f - glProjection[10]);
+    if (!(farClip > 10.0f && farClip < 100000.0f))
+        farClip = client::WorldFrameFarClip();
+    if (!(farClip > 10.0f && farClip < 100000.0f))
+        farClip = 1000.0f;
+    return farClip;
 }
-
-bool CodeBytesMatch(const CodeBytes& code)
-{
-    __try
-    {
-        return std::memcmp(reinterpret_cast<const void*>(code.address), code.bytes, code.size) == 0;
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER)
-    {
-        return false;
-    }
-}
-
-bool CopyCode(uintptr_t address, unsigned char* out, size_t size)
-{
-    __try
-    {
-        std::memcpy(out, reinterpret_cast<const void*>(address), size);
-        return true;
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER)
-    {
-        return false;
-    }
-}
-
-template <size_t N>
-bool AllCodeBytesMatch(const CodeBytes (&codes)[N], const char* what)
-{
-    for (const CodeBytes& code : codes)
-        if (!CodeBytesMatch(code))
-        {
-            VF_LOG_ERROR("%s: the client's %s at 0x%08X differs from the 12340 client", what, code.name,
-                         static_cast<unsigned>(code.address));
-            return false;
-        }
-    return true;
-}
-
-enum class LayoutCheck
-{
-    Unchecked,
-    Matches,
-    Differs,
-};
-
-LayoutCheck g_lightRecordLayout = LayoutCheck::Unchecked;
-
-bool LightRecordLayoutMatches()
-{
-    if (g_lightRecordLayout == LayoutCheck::Unchecked)
-        g_lightRecordLayout = AllCodeBytesMatch(kLightRecordStores, "water light colours") ? LayoutCheck::Matches
-                                                                                             : LayoutCheck::Differs;
-    return g_lightRecordLayout == LayoutCheck::Matches;
-}
-
-bool SlotHolds(uintptr_t slot, uintptr_t expected)
-{
-    __try
-    {
-        return Read<uintptr_t>(slot) == expected;
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER)
-    {
-        return false;
-    }
-}
-
-class GuardRangeList
-{
-public:
-    GuardRangeList(CodeRange* out, int capacity) : m_out(out), m_capacity(capacity) {}
-
-    template <size_t N>
-    void Add(const CodeBytes (&codes)[N])
-    {
-        for (const CodeBytes& code : codes)
-            Add(code.address, code.size);
-    }
-
-    void Add(uintptr_t address, size_t size)
-    {
-        if (m_count < m_capacity)
-            m_out[m_count] = {address, size};
-        ++m_count;
-    }
-
-    int Count() const { return m_count; }
-
-private:
-    CodeRange* m_out;
-    int m_capacity;
-    int m_count = 0;
-};
-
-void ReadColors(const uintptr_t* addresses, uint32_t* out, int count)
-{
-    for (int i = 0; i < count; ++i)
-        out[i] = Read<uint32_t>(addresses[i]);
-}
-
-bool ReadWaterColors(WaterInputs& out)
-{
-    __try
-    {
-        ReadColors(kLightSkyColors, out.skyColors, kSkyColorCount);
-        ReadColors(kLightRiverColors, out.riverColors, kWaterColorPair);
-        ReadColors(kLightOceanColors, out.oceanColors, kWaterColorPair);
-        return true;
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER)
-    {
-        return false;
-    }
-}
-
-struct SettingsBank
-{
-    uintptr_t entries;
-    uint32_t count;
-};
 
 struct LiquidDescription
 {
     bool inBank;
     bool hasRow;
     uint32_t id;
-    uint32_t flags;
-    uint32_t soundBank;
-    uint32_t materialId;
+    client::LiquidType row;
     char texture0[kLiquidSettingsTextureSlot];
 };
 
@@ -560,7 +147,7 @@ struct ClassifiedSettings
 
 struct ClassifiedSettingsCache
 {
-    SettingsBank bank;
+    uint32_t bankCount;
     int count;
     int next;
     ClassifiedSettings entries[kClassifiedSettingsCacheSize];
@@ -569,26 +156,13 @@ struct ClassifiedSettingsCache
 ClassifiedSettingsCache g_classified = {};
 uint32_t g_loggedLiquidTypes[kMaxLoggedLiquidTypes] = {};
 int g_loggedLiquidTypeCount = 0;
-bool g_loggedUnreadableSettings = false;
+bool g_loggedUnbankedSettings = false;
 
-bool ReadSettingsBank(SettingsBank& bank)
+bool FindLiquidTypeId(const void* settings, uint32_t& id)
 {
-    __try
-    {
-        bank.count = Read<uint32_t>(kLiquidSettingsBankCount);
-        bank.entries = Read<uintptr_t>(kLiquidSettingsBankEntries);
-        return bank.entries && bank.count <= kMaxLiquidSettingsBankCount;
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER)
-    {
-        return false;
-    }
-}
-
-bool FindLiquidTypeId(const SettingsBank& bank, const void* settings, uint32_t& id)
-{
-    for (uint32_t i = 0; i < bank.count; ++i)
-        if (Read<uintptr_t>(bank.entries + i * sizeof(uintptr_t)) == reinterpret_cast<uintptr_t>(settings))
+    const uint32_t count = client::LiquidSettingsCount();
+    for (uint32_t i = 0; i < count; ++i)
+        if (client::LiquidSettingsAt(i) == settings)
         {
             id = i;
             return true;
@@ -596,69 +170,33 @@ bool FindLiquidTypeId(const SettingsBank& bank, const void* settings, uint32_t& 
     return false;
 }
 
-uintptr_t LiquidTypeRow(uint32_t id)
-{
-    const int32_t minId = Read<int32_t>(kLiquidTypeMinId);
-    const int32_t maxId = Read<int32_t>(kLiquidTypeMaxId);
-    const uintptr_t rows = Read<uintptr_t>(kLiquidTypeRows);
-    const int64_t signedId = id;
-    if (!rows || signedId < minId || signedId > maxId)
-        return 0;
-    return Read<uintptr_t>(rows + static_cast<uintptr_t>(signedId - minId) * sizeof(uintptr_t));
-}
-
 void ReadTexture0(const void* settings, char* out)
 {
-    std::memcpy(out, static_cast<const char*>(settings) + kLiquidSettingsTexture0, kLiquidSettingsTextureSlot);
+    std::memcpy(out, settings, kLiquidSettingsTextureSlot);
     if (!std::memchr(out, 0, kLiquidSettingsTextureSlot))
         out[0] = 0;
 }
 
-void DescribeLiquidUnsafe(const SettingsBank& bank, const void* settings, LiquidDescription& d)
+void DescribeLiquid(const void* settings, LiquidDescription& d)
 {
-    d.inBank = FindLiquidTypeId(bank, settings, d.id);
+    d.inBank = FindLiquidTypeId(settings, d.id);
     if (!d.inBank)
         return;
-    const uintptr_t row = LiquidTypeRow(d.id);
-    d.hasRow = row != 0;
-    if (d.hasRow)
-    {
-        d.flags = Read<uint32_t>(row + kLiquidTypeFlags);
-        d.soundBank = Read<uint32_t>(row + kLiquidTypeSoundBank);
-        d.materialId = Read<uint32_t>(row + kLiquidTypeMaterialId);
-    }
+    d.hasRow = client::LiquidTypeRow(d.id, d.row);
     ReadTexture0(settings, d.texture0);
-}
-
-bool DescribeLiquid(const SettingsBank& bank, const void* settings, LiquidDescription& d)
-{
-    __try
-    {
-        DescribeLiquidUnsafe(bank, settings, d);
-        return true;
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER)
-    {
-        return false;
-    }
 }
 
 WaterClass ClassOf(const LiquidDescription& d)
 {
     if (!d.inBank || !d.hasRow)
         return WaterClass::None;
-    return ClassifyLiquid(d.id, d.soundBank, d.materialId, d.texture0);
+    return ClassifyLiquid(d.id, d.row.soundBank, d.row.materialId, d.texture0);
 }
 
-bool SameBank(const SettingsBank& a, const SettingsBank& b)
-{
-    return a.entries == b.entries && a.count == b.count;
-}
-
-void ForgetClassifiedSettings(const SettingsBank& bank)
+void ForgetClassifiedSettings(uint32_t bankCount)
 {
     g_classified = {};
-    g_classified.bank = bank;
+    g_classified.bankCount = bankCount;
 }
 
 const ClassifiedSettings* FindClassified(const void* settings)
@@ -686,14 +224,14 @@ bool MarkLiquidTypeLogged(uint32_t id)
     return true;
 }
 
-void LogNewLiquid(const void* settings, bool read, const LiquidDescription& d, WaterClass waterClass)
+void LogNewLiquid(const void* settings, const LiquidDescription& d, WaterClass waterClass)
 {
-    if (!read || !d.inBank)
+    if (!d.inBank)
     {
-        if (!g_loggedUnreadableSettings)
-            VF_LOG_INFO("water: liquid settings %p are %s; left to the client", settings,
-                        read ? "not in the client's settings bank" : "unreadable");
-        g_loggedUnreadableSettings = true;
+        if (!g_loggedUnbankedSettings)
+            VF_LOG_INFO("water: liquid settings %p are not in the client's settings bank; left to the client",
+                        settings);
+        g_loggedUnbankedSettings = true;
         return;
     }
     if (!MarkLiquidTypeLogged(d.id))
@@ -702,137 +240,91 @@ void LogNewLiquid(const void* settings, bool read, const LiquidDescription& d, W
         VF_LOG_INFO("water: liquid type %u -> %s (no LiquidType row)", d.id, WaterClassLabel(waterClass));
     else
         VF_LOG_INFO("water: liquid type %u -> %s (sound bank %u, material %u, flags 0x%X, texture %s)", d.id,
-                    WaterClassLabel(waterClass), d.soundBank, d.materialId, d.flags, d.texture0);
+                    WaterClassLabel(waterClass), d.row.soundBank, d.row.materialId, d.row.flags, d.texture0);
 }
 }
 
 bool IsSupportedClient()
 {
-    auto* base = reinterpret_cast<const unsigned char*>(GetModuleHandleA(nullptr));
-    auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
-    auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS*>(base + dos->e_lfanew);
-    return nt->FileHeader.TimeDateStamp == kClientTimestamp && nt->OptionalHeader.ImageBase == kClientImageBase;
+    return true;
 }
 
 void* GameD3DDevice()
 {
-    __try
-    {
-        uintptr_t gx = Read<uintptr_t>(kGxDevice);
-        return gx ? Read<void*>(gx + kGxD3DDevice) : nullptr;
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER)
-    {
-        return nullptr;
-    }
+    return client::D3DDevice();
 }
 
 bool CameraInLiquid()
 {
-    return Read<uint32_t>(kCameraInLiquid) != 0;
+    return client::CameraInLiquid();
 }
 
 ScreenEffects ReadScreenEffects()
 {
+    const client::ScreenEffects e = client::ReadScreenEffects();
     ScreenEffects effects;
-    __try
-    {
-        effects.current = Read<uintptr_t>(kCurrentScreenEffect);
-        effects.glow = Read<uintptr_t>(kGlowScreenEffect);
-        effects.death = Read<uintptr_t>(kDeathScreenEffect);
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER)
-    {
-        effects.current = effects.glow = effects.death = 0;
-    }
+    effects.current = e.current;
+    effects.glow = e.glow;
+    effects.death = e.death;
     return effects;
 }
 
 bool GlowScreenEffectRuns()
 {
-    __try
-    {
-        return GlowScreenEffectRunsUnsafe();
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER)
-    {
-        return false;
-    }
+    return GlowRunsIn(client::ReadScreenEffects());
 }
 
 bool GlowPassColourLayoutMatches()
 {
-    if (!AllCodeBytesMatch(kGlowPassColourLayout, "Forever glow unavailable"))
-        return false;
-    if (SlotHolds(kGlowSetParamSlot, kGlowSetParam))
-        return true;
-    VF_LOG_ERROR("Forever glow unavailable: the glow effect's SetParam slot 0x%08X differs from the 12340 client",
-                 static_cast<unsigned>(kGlowSetParamSlot));
-    return false;
+    return true;
 }
 
 bool GradingPlacementMatches()
 {
-    return AllCodeBytesMatch(kGradingPlacement, "colour grading unavailable");
+    return true;
 }
 
-int ForeverLookGuardRanges(CodeRange* out, int capacity)
+int ForeverLookGuardRanges(CodeRange*, int)
 {
-    GuardRangeList ranges(out, capacity);
-    ranges.Add(kGlowPassColourLayout);
-    ranges.Add(kGlowSetParamSlot, sizeof(uintptr_t));
-    ranges.Add(kGradingPlacement);
-    return ranges.Count();
+    return 0;
 }
 
 bool FindGlowCompositePasses(const ScreenEffects& effects, GlowCompositePasses& out)
 {
-    __try
-    {
-        return FindGlowCompositePassesUnsafe(effects, out);
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER)
-    {
+    if (!effects.glow || effects.current != effects.glow)
         return false;
-    }
+    for (int list = 0; list < kGlowPassLists; ++list)
+        if (!client::GlowCompositePass(effects.glow, list, out.pass[list]))
+            return false;
+    return true;
 }
 
 bool ReadGlowByte(uintptr_t pass, uint8_t& value)
 {
-    __try
-    {
-        value = Read<uint8_t>(pass + kPassColourAlpha);
-        return true;
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER)
-    {
+    const uint8_t* alpha = client::GlowPassColourAlpha(pass);
+    if (!alpha)
         return false;
-    }
+    value = *alpha;
+    return true;
 }
 
 bool WriteGlowByte(uintptr_t pass, uint8_t value)
 {
-    __try
-    {
-        *reinterpret_cast<volatile uint8_t*>(pass + kPassColourAlpha) = value;
-        return true;
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER)
-    {
+    uint8_t* alpha = client::GlowPassColourAlpha(pass);
+    if (!alpha)
         return false;
-    }
+    *alpha = value;
+    return true;
 }
 
 bool ReadClassicLightInputs(ClassicLightInputs& out)
 {
-    __try
-    {
-        return ReadClassicLightInputsUnsafe(out);
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER)
-    {
-        return false;
-    }
+    const client::DayNightState dn = client::ReadDayNight();
+    out.mapId = client::CurrentMapId();
+    client::CameraPosition(out.camPos);
+    out.dayFraction = dn.dayFraction;
+    out.lightParams = LightParamsSelectionOf(dn);
+    return Finite(out.camPos, 3) && std::isfinite(out.dayFraction);
 }
 
 StockFog ReadStockFog()
@@ -840,8 +332,9 @@ StockFog ReadStockFog()
     StockFog fog;
     for (int group = 0; group < kDayNightFogGroupCount; ++group)
     {
-        fog.start[group] = Read<float>(kFogGroupStart[group]);
-        fog.end[group] = Read<float>(kFogGroupEnd[group]);
+        const client::FogGroup g = client::ReadFogGroup(group);
+        fog.start[group] = g.start;
+        fog.end[group] = g.end;
     }
     return fog;
 }
@@ -849,25 +342,13 @@ StockFog ReadStockFog()
 void WriteStockFog(const StockFog& fog)
 {
     for (int group = 0; group < kDayNightFogGroupCount; ++group)
-    {
-        *reinterpret_cast<float*>(kFogGroupStart[group]) = fog.start[group];
-        *reinterpret_cast<float*>(kFogGroupEnd[group]) = fog.end[group];
-    }
+        client::WriteFogRange(group, fog.start[group], fog.end[group]);
 }
 
 void CaptureOpaqueState(IDirect3DDevice9* device)
 {
     OpaqueState state = {};
-    bool ok = false;
-    __try
-    {
-        ok = CaptureOpaqueStateUnsafe(device, state);
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER)
-    {
-        ok = false;
-    }
-    state.valid = ok;
+    state.valid = CaptureOpaqueStateFrom(device, state);
     g_opaque = state;
 }
 
@@ -902,86 +383,87 @@ bool BuildFrameInputs(FrameInputs& out, bool withPointLights, const PointLightUp
 {
     if (!g_opaque.valid)
         return false;
-    __try
-    {
-        return BuildFrameInputsUnsafe(out, withPointLights, upload);
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER)
-    {
-        return false;
-    }
+    std::memcpy(out.cameraRelativeView, g_opaque.cameraRelativeView, sizeof(out.cameraRelativeView));
+    std::memcpy(out.glProjection, g_opaque.glProjection, sizeof(out.glProjection));
+    out.viewport = g_opaque.viewport;
+    client::CameraPosition(out.camPos);
+    client::CameraTarget(out.camTarget);
+
+    const client::DayNightState dn = client::ReadDayNight();
+    out.dayFraction = dn.dayFraction;
+    out.lightIsMoon = LightIsMoon(out.dayFraction);
+    const float* body = out.lightIsMoon ? dn.moon : dn.sun;
+    for (int i = 0; i < 3; ++i)
+        out.toLight[i] = body[i] - dn.skyCentre[i];
+    Normalize(out.toLight);
+
+    const client::FogGroup fog = client::ReadFogGroup(kFrameInputsFogGroup);
+    out.fogColor = fog.colour;
+    out.fogStart = fog.start;
+    out.fogEnd = fog.end;
+    out.sunColor = dn.band.sun;
+    out.directColor = dn.band.diffuse;
+    out.ambientColor = dn.band.ambient;
+    out.inLiquid = CameraInLiquid();
+    out.mapId = client::CurrentMapId();
+    out.lightParams = LightParamsSelectionOf(dn);
+    CaptureLocalLightInputs(out.camPos, withPointLights, upload, out.localLights);
+
+    out.zoneFogDistance = dn.band.zoneFogDistance;
+    out.clientGlowAmount = out.inLiquid ? 0.0f : GlowScreenEffectAmount(dn.band.glow);
+    out.farClip = FarClipOf(out.glProjection);
+
+    return Finite(out.camPos, 3) && Finite(out.toLight, 3) && std::isfinite(out.fogEnd) &&
+           std::isfinite(out.fogStart);
 }
 
 bool BuildWaterInputs(WaterInputs& out)
 {
     out = {};
-    return LightRecordLayoutMatches() && ReadWaterColors(out);
+    const client::LightBand band = client::ReadDayNight().band;
+    for (int i = 0; i < kSkyColorCount; ++i)
+        out.skyColors[i] = band.sky[i];
+    out.riverColors[0] = band.riverClose;
+    out.riverColors[1] = band.riverFar;
+    out.oceanColors[0] = band.oceanClose;
+    out.oceanColors[1] = band.oceanFar;
+    return true;
 }
 
 bool TransparentLiquidsQueued(const void* liquidRenderer)
 {
-    if (!liquidRenderer)
-        return false;
-    __try
-    {
-        const uintptr_t bucket = reinterpret_cast<uintptr_t>(liquidRenderer) +
-                                 kTransparentLiquidPass * kLiquidBucketStride;
-        return Read<uint32_t>(bucket + kLiquidBucketCount) != 0;
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER)
-    {
-        return true;
-    }
+    return client::TransparentLiquidsQueued(liquidRenderer);
 }
 
 bool WaterClientLayoutMatches()
 {
-    return AllCodeBytesMatch(kWaterClientLayout, "water hooks");
+    return true;
 }
 
 bool TransparentFogClientLayoutMatches()
 {
-    return AllCodeBytesMatch(kTransparentFogClientLayout, "transparent fog hooks");
+    return true;
 }
 
 void DescribeGlarePassEntry(char* text, size_t size)
 {
-    unsigned char entry[kGlarePassEntrySize] = {};
-    if (!CopyCode(kGlarePassTarget, entry, sizeof(entry)))
-    {
-        std::snprintf(text, size, "unreadable");
-        return;
-    }
-    int32_t rel = 0;
-    std::memcpy(&rel, entry + 1, sizeof(rel));
-    uintptr_t target = 0;
-    std::memcpy(&target, entry + 1, sizeof(target));
-    if (std::memcmp(entry, kGlarePassEntry, sizeof(entry)) == 0)
-        std::snprintf(text, size, "the 12340 code (not detoured)");
-    else if (entry[0] == kJumpRel32Opcode)
-        std::snprintf(text, size, "a jump to 0x%08X (detoured)",
-                      static_cast<unsigned>(kGlarePassTarget + kJumpRel32Size + rel));
-    else if (entry[0] == kMoveEaxImm32Opcode && std::memcmp(entry + 5, kJumpEax, sizeof(kJumpEax)) == 0)
-        std::snprintf(text, size, "mov eax, 0x%08X; jmp eax (detoured)", static_cast<unsigned>(target));
-    else
-        std::snprintf(text, size, "%02X %02X %02X %02X %02X %02X %02X (unknown)", entry[0], entry[1], entry[2],
-                      entry[3], entry[4], entry[5], entry[6]);
+    std::snprintf(text, size, "called directly by the client");
 }
 
 WaterClass ClassifyWaterSettings(const void* liquidSettings)
 {
-    SettingsBank bank = {};
-    if (!liquidSettings || !ReadSettingsBank(bank))
+    if (!liquidSettings)
         return WaterClass::None;
-    if (!SameBank(bank, g_classified.bank))
-        ForgetClassifiedSettings(bank);
+    const uint32_t bankCount = client::LiquidSettingsCount();
+    if (bankCount != g_classified.bankCount)
+        ForgetClassifiedSettings(bankCount);
     if (const ClassifiedSettings* known = FindClassified(liquidSettings))
         return known->waterClass;
     LiquidDescription description = {};
-    const bool read = DescribeLiquid(bank, liquidSettings, description);
-    const WaterClass waterClass = read ? ClassOf(description) : WaterClass::None;
+    DescribeLiquid(liquidSettings, description);
+    const WaterClass waterClass = ClassOf(description);
     RememberClassified(liquidSettings, waterClass);
-    LogNewLiquid(liquidSettings, read, description, waterClass);
+    LogNewLiquid(liquidSettings, description, waterClass);
     return waterClass;
 }
 }

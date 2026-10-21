@@ -3,6 +3,7 @@
 #endif
 #line 1
 #include "PlayerName.h"
+#include "WoW/Source/VolFog/VolFog.h"
 #include <typeinfo>
 #include "Engine/Source/Base/CDataAllocator.h"
 #include "Engine/Source/Base/Handle.h"
@@ -377,6 +378,8 @@ void PLAYERNAMEDESC::Render() {
             GxuFontAddToBatch(s_playerNameBatch, this->m_string);
             position.z = this->m_zOffset + position.z;
             GxuFontSetStringPosition(this->m_string, position);
+            // CHANGED: the name quads keep their depth test but write no depth, so fog rays pass them.
+            VolFogWorldTextScope worldText;
             GxuFontRenderBatch(s_playerNameBatch);
         }
     } else if (this->m_string) {

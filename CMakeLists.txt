@@ -55,6 +55,15 @@ if (WOWDECOMP_DISABLE_SIGNATURE_CHECKS)
     add_compile_definitions(DISABLE_SIGNATURE_CHECKS=1)
 endif ()
 
+# CoAVolFog (WoW/Source/VolFog): volumetric fog and modern water drawn through the Direct3D 9 device. Windows only,
+# since its shaders are compiled with fxc from the Windows SDK.
+include(CMakeDependentOption)
+cmake_dependent_option(WOWDECOMP_VOLFOG "Build CoAVolFog (volumetric fog and modern water) into the client" ON
+    "WIN32" OFF)
+if (WOWDECOMP_VOLFOG)
+    add_compile_definitions(WOWDECOMP_VOLFOG=1)
+endif ()
+
 # Third-party code is linked, not decompiled, for now.
 if (EXISTS ${CMAKE_SOURCE_DIR}/ThirdParty/CMakeLists.txt)
     add_subdirectory(ThirdParty)
@@ -105,6 +114,9 @@ add_subdirectory(WoW/Source/Ui)
 add_subdirectory(WoW/Source/WorldClient)
 add_subdirectory(WoW/Source/WowServices)
 add_subdirectory(WoW/Source/WowSvcs)
+if (WOWDECOMP_VOLFOG)
+    add_subdirectory(WoW/Source/VolFog)
+endif ()
 add_subdirectory(WoW/Source)
 if (WIN32)
     add_subdirectory(Tools/WowClient)

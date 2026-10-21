@@ -1,4 +1,5 @@
 #include "Liquid.h"
+#include "WoW/Source/VolFog/VolFog.h"
 #include "Engine/Source/Gx/CGxDevice/CGxDevice.h"
 #include "Engine/Source/Gx/Gx.h"
 #include "Engine/Source/Model2/M2Light.h"
@@ -126,6 +127,9 @@ Liquid::CMaterialWaterFFP* Liquid::CMaterialWaterFFP::Create() {
 // VERIFY: a882be97 manual
 // OFFSET: 0x008A5590
 void Liquid::CMaterialWater::Render(Liquid::IEnvironment* environment, Liquid::IGeomFactory* geomFactory, Liquid::IWaveManager* waveManager, const C3Vector& cameraPos, const C44Matrix* transform, const CAaSphere* bounds, Liquid::CMaterialSettings* settings) {
+    // CHANGED: CoAVolFog tags this water draw while it is drawn.
+    VolFogWaterDrawScope waterDraw(settings);
+
     CGxTex* texture1 = settings->GetTexture(0, settings->GetInt(1));
 
     if (!texture1) {
@@ -205,6 +209,9 @@ void Liquid::CMaterialWater::Render(Liquid::IEnvironment* environment, Liquid::I
 // VERIFY: b899ce66 manual
 // OFFSET: 0x008A5900
 void Liquid::CMaterialWaterNoSpec::Render(Liquid::IEnvironment* environment, Liquid::IGeomFactory* geomFactory, Liquid::IWaveManager* waveManager, const C3Vector& cameraPos, const C44Matrix* transform, const CAaSphere* bounds, Liquid::CMaterialSettings* settings) {
+    // CHANGED: CoAVolFog tags this water draw while it is drawn.
+    VolFogWaterDrawScope waterDraw(settings);
+
     CGxTex* texture1 = settings->GetTexture(0, settings->GetInt(1));
 
     if (!texture1) {

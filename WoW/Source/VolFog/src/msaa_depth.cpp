@@ -93,12 +93,13 @@ Function NvapiFunction(NvapiQueryInterface query, unsigned id)
 NvapiD3D9 LoadNvapiD3D9()
 {
     NvapiD3D9 nvapi;
-    HMODULE library = LoadLibraryExW(L"nvapi.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    HMODULE library = LoadLibraryExW(sizeof(void*) == 8 ? L"nvapi64.dll" : L"nvapi.dll", nullptr,
+                                     LOAD_LIBRARY_SEARCH_SYSTEM32);
     const auto query =
         library ? reinterpret_cast<NvapiQueryInterface>(GetProcAddress(library, "nvapi_QueryInterface")) : nullptr;
     if (!query)
     {
-        nvapi.unavailable = "nvapi.dll is missing from the system folder";
+        nvapi.unavailable = "NVAPI is missing from the system folder";
         VF_LOG_INFO("NVAPI unavailable: %s", nvapi.unavailable);
         return nvapi;
     }

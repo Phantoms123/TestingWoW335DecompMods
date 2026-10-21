@@ -23,8 +23,6 @@ struct ClientCodeView
 
 namespace engine
 {
-constexpr uintptr_t kWaterRipplesCommandValue = 0x00ADF7F0;
-
 const ClientCodeGuard* ClientRippleGateGuards(size_t& count);
 bool ClientRippleGateCodeMatches(const ClientCodeView& code);
 }

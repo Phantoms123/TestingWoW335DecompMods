@@ -85,3 +85,8 @@ target_link_libraries(WowClient
         WowSvcs
         dbghelp
 )
+
+if (TARGET VolFog)
+    target_link_libraries(WowClient PRIVATE VolFog)
+    volfog_copy_runtime_files(WowClient)
+endif ()

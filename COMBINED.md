@@ -11,6 +11,7 @@ content support added. It is meant for a 3.3.5a TrinityCore server.
 | [arlyon/wowdecomp](https://github.com/arlyon/wowdecomp) `vulkan-next` | Linux/POSIX/SDL platform layer, native Vulkan (Slang) and DXVK-native backends |
 | [SatyPardus/wowdecomp15595](https://github.com/SatyPardus/wowdecomp15595) | Reference only: the 4.3.4 record layouts the converters follow |
 | [WarcraftXL](https://github.com/WarcraftXL) modules (GPL-3.0-or-later) | Reference for the model and terrain converters, rewritten against this tree's types |
+| [jealous-sound/coa-vfog](https://github.com/jealous-sound/coa-vfog) (GPL-3.0) | Volumetric fog and modern water, built into the client in `WoW/Source/VolFog` |
 
 Not merged: the Vulkan backend on SatyPardus/wowdecomp's `vulkan` branch (from WarcraftXL). It defines the same
 `CGxDeviceVulkan` class as arlyon's, so only one can be kept; arlyon's was kept because it supports Linux.
@@ -36,6 +37,12 @@ Every changed spot in the original sources is marked `// CHANGED:`.
   load exactly as before.
 - Liquid: types with no `LiquidType` record are drawn as water instead of crashing; vertex format 3 maps to 1.
 
+### Volumetric fog and water (WoW/Source/VolFog)
+- CoAVolFog's renderers, shaders, data and `CoAVolFog.ini` as upstream; its DLL loader, call-site patches and
+  address reads are replaced by calls from the client's world render and reads of the client's own globals.
+  `WoW/Source/VolFog/NATIVE.md` maps every upstream patch site and address to the source that replaces it.
+- Windows only, Direct3D 9 backend. Settings window: Ctrl+F7 in game.
+
 ### Build fixes after the merge
 - `WoW/Source/Game/Types.h`: `windows.h` guarded for non-Windows builds.
 - `WoW/Source/WowServices/Posix/Callbacks.cpp`: send functions return `WC_SEND_RESULT`, as `main` now declares.
@@ -47,13 +54,16 @@ Every changed spot in the original sources is marked `// CHANGED:`.
   standard shader. Exact results need the 4.x shaders ported too.
 - Split tiles are read synchronously when first needed, which can hitch while flying into new areas.
 - 4.x liquid types need matching `LiquidType.dbc` records to look right; until then they are water.
+- CoAVolFog has not been run in the client yet; it was written for Ascension's client, so if something looks off,
+  `CoAVolFog.log` next to the executable says which part stopped and why.
 - Still to port from WarcraftXL's model module: bone-budget splitting, the shadow bone-flag fix and hit-test
   ordering.
 
 ## Building
 
 Windows: as in README.md (Visual Studio 2022, CMake). Use `-DWOWDECOMP_DISABLE_SIGNATURE_CHECKS=ON` to load
-modified MPQs.
+modified MPQs. CoAVolFog needs `fxc.exe` from the Windows SDK (installed with Visual Studio's C++ workload) and
+internet access at configure time for Dear ImGui; `-DWOWDECOMP_VOLFOG=OFF` leaves it out.
 
 Linux (DXVK backend), with SDL2, DXVK-native, libvorbis and libcurl installed:
 

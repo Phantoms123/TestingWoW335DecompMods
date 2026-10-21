@@ -3,6 +3,7 @@
 #include <cstring>
 #include <malloc.h>
 #include "Engine/Source/Gx/CGxDeviceD3d/CGxDeviceD3d.h"
+#include "WoW/Source/VolFog/VolFog.h"
 #include "Engine/Source/Gx/Blit.h"
 #include "Engine/Source/Gx/CGxBuf.h"
 #include "Engine/Source/Gx/CGxPool.h"
@@ -517,7 +518,12 @@ int32_t CGxDeviceD3d::ILoadD3dLib(HINSTANCE& d3dLib, LPDIRECT3D9& d3d) {
         Direct3DCreate9Proc d3dCreateProc = reinterpret_cast<Direct3DCreate9Proc>(GetProcAddress(d3dLib, "Direct3DCreate9"));
 
         if (d3dCreateProc) {
+#if VOLFOG_ENABLED
+            // CHANGED: the Direct3D 9 object is wrapped so CoAVolFog can draw through the device it creates.
+            d3d = VolFog_CreateDirect3D9(reinterpret_cast<VolFogDirect3DCreate9Fn>(d3dCreateProc), D3D_SDK_VERSION);
+#else
             d3d = d3dCreateProc(D3D_SDK_VERSION);
+#endif
 
             if (d3d) {
                 return 1;

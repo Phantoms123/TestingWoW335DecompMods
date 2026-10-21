@@ -1,5 +1,6 @@
 #include "hooks.h"
 
+#include "client.h"
 #include "client_ripple_sprites.h"
 #include "config.h"
 #include "d3d9_wrap.h"
@@ -21,13 +22,6 @@
 
 namespace
 {
-using GetProcAddressFn = FARPROC(WINAPI*)(HMODULE, LPCSTR);
-using WaterMaterialRenderFn = void(__thiscall*)(void* material, void* environment, void* geometry, void* aux,
-                                                const float* cameraPosition, const float* world, const float* bounds,
-                                                void* liquidSettings);
-
-constexpr unsigned char kCallRel32Opcode = 0xE8;
-constexpr uintptr_t kCallRel32Size = 5;
 constexpr float kOutOfRangeStockFogStart = 50000.0f;
 constexpr DWORD kConfigReloadIntervalMs = 1000;
 constexpr int kEasternKingdomsMap = 0;
@@ -43,12 +37,10 @@ constexpr DWORD kTransparentFogStatsIntervalMs = 60000;
 constexpr size_t kGlarePassEntryTextSize = 64;
 constexpr double kPercent = 100.0;
 
-uintptr_t g_worldRenderTarget = engine::kWorldRenderTarget;
-uintptr_t g_opaqueM2PassTarget = engine::kOpaqueM2PassTarget;
-uintptr_t g_liquidSurfaceTarget = engine::kLiquidSurfaceTarget;
 FogDevice* g_liquidDepthWriteDevice = nullptr;
-uintptr_t g_screenEffectsTarget = engine::kScreenEffectsTarget;
 bool g_failed = false;
+bool g_engineHooksInstalled = false;
+bool g_farClipLifted = false;
 bool g_renderedLastFrame = false;
 bool g_renderedThisFrame = false;
 bool g_stockFogPushed = false;
@@ -59,8 +51,6 @@ const char* g_fogNotDrawnReason = "";
 StatusLog g_fogLog;
 StatusLog g_godRayLog;
 
-uintptr_t g_m2BatchFogTarget = engine::kM2BatchFogTarget;
-uintptr_t g_glarePassTarget = engine::kGlarePassTarget;
 int g_m2BatchFogObserved = 0;
 bool g_transparentFogHooksInstalled = false;
 bool g_transparentFogFailed = false;
@@ -105,11 +95,9 @@ TransparentFogStats g_transparentFogStats = {};
 DWORD g_transparentFogStatsTicks = 0;
 bool g_transparentFogStatsDue = false;
 
-uintptr_t g_waterPassTarget = engine::kWaterPassTarget;
 bool g_waterHooksInstalled = false;
 bool g_waterFailed = false;
 bool g_waterFaultLogged = false;
-bool g_waterPassBeginReusesArgumentSlot = false;
 FogDevice* g_waterPassDevice = nullptr;
 FogDevice* g_waterResourcesDevice = nullptr;
 bool g_waterPassRanThisFrame = false;
@@ -120,25 +108,6 @@ WaterFrameStatus g_waterStatus = {false, "waiting for the world to render"};
 StatusLog g_waterLog;
 unsigned g_drawnWaterClassesTextMask = 0;
 char g_drawnWaterClassesText[kDrawnWaterClassesTextSize] = "";
-
-FARPROC WINAPI GetProcAddressFilter(HMODULE module, LPCSTR name)
-{
-    FARPROC proc = GetProcAddress(module, name);
-    if (!proc || !name || IS_INTRESOURCE(name))
-        return proc;
-    if (std::strcmp(name, "Direct3DCreate9") == 0)
-    {
-        HMODULE pinned = nullptr;
-        GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_PIN | GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
-                           reinterpret_cast<LPCSTR>(proc), &pinned);
-        SetRealDirect3DCreate9(reinterpret_cast<Direct3DCreate9Fn>(proc));
-        VF_LOG_INFO("Direct3DCreate9 resolved at %p; wrapping", reinterpret_cast<void*>(proc));
-        return reinterpret_cast<FARPROC>(&WrappedDirect3DCreate9);
-    }
-    if (std::strcmp(name, "Direct3DCreate9Ex") == 0)
-        VF_LOG_INFO("Direct3DCreate9Ex requested; the D3D9Ex path is not wrapped (fog unavailable with gxApi d3d9ex)");
-    return proc;
-}
 
 FogDevice* GameFogDevice()
 {
@@ -358,11 +327,11 @@ void LogTransparentFogStats(const TransparentFogStats& s)
                  Share(s.modulateColours, batches), Share(s.modulate2xColours, batches),
                  Share(s.otherColours, batches));
     VF_LOG_DEBUG("  fog exponent 1: %.1f%%, below 1: %.1f%%, above 1: %.1f%% (lowest %.3f, highest %.3f); glare pass "
-                 "%u drawn before the fog, %u at its own call, %u own calls skipped; 0x%08X holds %s",
+                 "%u drawn before the fog, %u at its own call, %u own calls skipped; glare pass %s",
                  Share(s.linearExponents, batches), Share(s.lowerExponents, batches),
                  Share(s.higherExponents, batches), batches ? s.lowestExponent : 0.0f,
                  batches ? s.highestExponent : 0.0f, s.glareDrawnEarly, s.glareCallsPassed, s.glareCallsSkipped,
-                 static_cast<unsigned>(engine::kGlarePassTarget), GlarePassEntryText());
+                 GlarePassEntryText());
 }
 
 void LogTransparentFogStatsWhenDue()
@@ -639,7 +608,7 @@ void DrawGlareBeforeTheFog()
 {
     g_transparentFog.glareDrawn = true;
     ++g_transparentFogStats.glareDrawnEarly;
-    reinterpret_cast<void(__cdecl*)()>(g_glarePassTarget)();
+    client::RenderGlares();
 }
 
 void ArmTransparentFog(FogDevice* device)
@@ -1028,42 +997,8 @@ void EndWaterFrameGuarded()
     }
 }
 
-bool PatchCallSite(uintptr_t site, uintptr_t expectedTarget, const void* thunk)
-{
-    auto* bytes = reinterpret_cast<unsigned char*>(site);
-    int32_t rel;
-    std::memcpy(&rel, bytes + 1, sizeof(rel));
-    if (bytes[0] != kCallRel32Opcode || site + kCallRel32Size + rel != expectedTarget)
-    {
-        VF_LOG_ERROR("call site 0x%08X does not match (E8 -> 0x%08X expected); hooks not installed",
-                     static_cast<unsigned>(site), static_cast<unsigned>(expectedTarget));
-        return false;
-    }
-    int32_t newRel = static_cast<int32_t>(reinterpret_cast<uintptr_t>(thunk) - (site + kCallRel32Size));
-    DWORD old;
-    if (!VirtualProtect(bytes + 1, sizeof(newRel), PAGE_EXECUTE_READWRITE, &old))
-        return false;
-    std::memcpy(bytes + 1, &newRel, sizeof(newRel));
-    VirtualProtect(bytes + 1, sizeof(newRel), old, &old);
-    FlushInstructionCache(GetCurrentProcess(), bytes, kCallRel32Size);
-    return true;
-}
-
-bool SiteMatches(uintptr_t site, uintptr_t expectedTarget)
-{
-    auto* bytes = reinterpret_cast<const unsigned char*>(site);
-    int32_t rel;
-    std::memcpy(&rel, bytes + 1, sizeof(rel));
-    return bytes[0] == kCallRel32Opcode && site + kCallRel32Size + rel == expectedTarget;
-}
-
 float g_loggedFarClip = -1.0f;
 int g_loggedFarClipMap = -1;
-
-float ClientFarClipClamp(float farClipSetting, int mapId)
-{
-    return reinterpret_cast<engine::FarClipClampFn>(engine::kFarClipClamp)(farClipSetting, mapId);
-}
 
 bool IsContinentCappedByExtensionsDll(int mapId)
 {
@@ -1076,9 +1011,9 @@ const Config& ReloadedConfig()
     return GlobalConfig().Get();
 }
 
-float LiftedFarClipClamp(float farClipSetting, int mapId)
+float LiftedFarClipClamp(float clientFarClip, float farClipSetting, int mapId)
 {
-    float result = ClientFarClipClamp(farClipSetting, mapId);
+    float result = clientFarClip;
     const float farClipMax = ReloadedConfig().farClipMax;
     if (farClipMax > 0.0f && IsContinentCappedByExtensionsDll(mapId) && std::isfinite(farClipSetting))
         result = std::max(result,
@@ -1093,20 +1028,24 @@ float LiftedFarClipClamp(float farClipSetting, int mapId)
 }
 }
 
-extern "C" float __cdecl vf_far_clip_clamp(float farClipSetting, int mapId)
+extern "C" float __cdecl vf_far_clip_clamp(float clientFarClip, float farClipSetting, int mapId)
 {
+    if (!g_farClipLifted)
+        return clientFarClip;
     __try
     {
-        return LiftedFarClipClamp(farClipSetting, mapId);
+        return LiftedFarClipClamp(clientFarClip, farClipSetting, mapId);
     }
     __except (EXCEPTION_EXECUTE_HANDLER)
     {
-        return ClientFarClipClamp(farClipSetting, mapId);
+        return clientFarClip;
     }
 }
 
 extern "C" void __cdecl vf_on_frame_begin()
 {
+    if (!g_engineHooksInstalled)
+        return;
     __try
     {
         OnFrameBegin();
@@ -1119,6 +1058,8 @@ extern "C" void __cdecl vf_on_frame_begin()
 
 extern "C" void __cdecl vf_on_frame_end()
 {
+    if (!g_engineHooksInstalled)
+        return;
     EndWaterFrameGuarded();
     __try
     {
@@ -1133,6 +1074,8 @@ extern "C" void __cdecl vf_on_frame_end()
 
 extern "C" void __cdecl vf_on_water_pass_begin(const void* liquidRenderer)
 {
+    if (!g_waterHooksInstalled)
+        return;
     __try
     {
         OnWaterPassBegin(liquidRenderer);
@@ -1141,12 +1084,12 @@ extern "C" void __cdecl vf_on_water_pass_begin(const void* liquidRenderer)
     {
         FailWater();
     }
-    if (g_waterPassBeginReusesArgumentSlot)
-        *static_cast<const void* volatile*>(&liquidRenderer) = nullptr;
 }
 
 extern "C" void __cdecl vf_on_water_pass_end()
 {
+    if (!g_waterHooksInstalled)
+        return;
     __try
     {
         OnWaterPassEnd();
@@ -1159,6 +1102,8 @@ extern "C" void __cdecl vf_on_water_pass_end()
 
 extern "C" void __cdecl vf_on_liquid_begin()
 {
+    if (!g_engineHooksInstalled)
+        return;
     __try
     {
         OnLiquidSurfaceBegin();
@@ -1171,6 +1116,8 @@ extern "C" void __cdecl vf_on_liquid_begin()
 
 extern "C" void __cdecl vf_on_liquid_end()
 {
+    if (!g_engineHooksInstalled)
+        return;
     __try
     {
         OnLiquidSurfaceEnd();
@@ -1183,6 +1130,8 @@ extern "C" void __cdecl vf_on_liquid_end()
 
 extern "C" void __cdecl vf_on_transparents_begin()
 {
+    if (!g_transparentFogHooksInstalled)
+        return;
     __try
     {
         OnTransparentsBegin();
@@ -1196,6 +1145,8 @@ extern "C" void __cdecl vf_on_transparents_begin()
 
 extern "C" void __cdecl vf_on_m2_batch_fog(M2BatchFogArgs* args)
 {
+    if (!g_transparentFogHooksInstalled || !g_m2BatchFogObserved)
+        return;
     __try
     {
         OnM2BatchFog(*args);
@@ -1208,6 +1159,8 @@ extern "C" void __cdecl vf_on_m2_batch_fog(M2BatchFogArgs* args)
 
 extern "C" void __cdecl vf_on_opaque_done()
 {
+    if (!g_engineHooksInstalled)
+        return;
     __try
     {
         OnOpaqueDone();
@@ -1220,6 +1173,8 @@ extern "C" void __cdecl vf_on_opaque_done()
 
 extern "C" void __cdecl vf_on_world_done()
 {
+    if (!g_engineHooksInstalled)
+        return;
     ForeverLookAtWorldDone();
     __try
     {
@@ -1231,328 +1186,72 @@ extern "C" void __cdecl vf_on_world_done()
     }
 }
 
-__declspec(naked) static void WorldRenderThunk()
+extern "C" void __cdecl vf_on_glare_pass()
 {
-    __asm {
-        push ecx
-        call vf_on_frame_begin
-        pop ecx
-        call dword ptr [g_worldRenderTarget]
-        pushad
-        call vf_on_frame_end
-        popad
-        ret
-    }
-}
-
-__declspec(naked) static void OpaqueM2PassThunk()
-{
-    __asm {
-        push dword ptr [esp + 4]
-        call dword ptr [g_opaqueM2PassTarget]
-        pushad
-        call vf_on_opaque_done
-        popad
-        ret 4
-    }
-}
-
-__declspec(naked) static void LiquidSurfaceThunk()
-{
-    __asm {
-        pushad
-        call vf_on_liquid_begin
-        popad
-        call dword ptr [g_liquidSurfaceTarget]
-        pushad
-        call vf_on_liquid_end
-        call vf_on_transparents_begin
-        popad
-        ret
-    }
-}
-
-__declspec(naked) static void M2BatchFogThunk()
-{
-    __asm {
-        cmp dword ptr [g_m2BatchFogObserved], 0
-        je forward
-        pushad
-        lea eax, [esp + 0x24]
-        push eax
-        call vf_on_m2_batch_fog
-        add esp, 4
-        popad
-    forward:
-        jmp dword ptr [g_m2BatchFogTarget]
-    }
-}
-
-static void __cdecl GlarePassThunk()
-{
-    if (g_transparentFog.glareDrawn)
+    if (g_transparentFogHooksInstalled && g_transparentFog.glareDrawn)
     {
         ++g_transparentFogStats.glareCallsSkipped;
         return;
     }
     ++g_transparentFogStats.glareCallsPassed;
-    reinterpret_cast<void(__cdecl*)()>(g_glarePassTarget)();
+    client::RenderGlares();
 }
 
-const void* RetargetM2BatchFogThunk(uintptr_t target)
+extern "C" int __cdecl vf_on_water_draw_begin(void* liquidSettings)
 {
-    g_m2BatchFogTarget = target;
-    return reinterpret_cast<const void*>(&M2BatchFogThunk);
+    return g_waterHooksInstalled && TagArmedWaterDraw(liquidSettings) ? 1 : 0;
 }
 
-const void* RetargetGlarePassThunk(uintptr_t target)
+extern "C" void __cdecl vf_on_water_draw_end(int tagged)
 {
-    g_glarePassTarget = target;
-    return reinterpret_cast<const void*>(&GlarePassThunk);
+    if (tagged)
+        UntagArmedWaterDraw();
 }
 
-__declspec(naked) static void ScreenEffectsThunk()
+namespace
 {
-    __asm {
-        pushad
-        call vf_on_world_done
-        popad
-        jmp dword ptr [g_screenEffectsTarget]
-    }
+FogDevice* g_worldTextDevice = nullptr;
 }
 
-__declspec(naked) static void WaterPassThunk()
+extern "C" void __cdecl vf_on_world_text_begin()
 {
-    __asm {
-        push ecx
-        push ecx
-        call vf_on_water_pass_begin
-        add esp, 4
-        pop ecx
-        push dword ptr [esp + 8]
-        push dword ptr [esp + 8]
-        call dword ptr [g_waterPassTarget]
-        pushad
-        call vf_on_water_pass_end
-        popad
-        ret 8
-    }
-}
-
-const void* RetargetWaterPassThunk(uintptr_t target)
-{
-    g_waterPassTarget = target;
-    return reinterpret_cast<const void*>(&WaterPassThunk);
-}
-
-void ReuseWaterPassBeginArgumentSlot(bool reuse)
-{
-    g_waterPassBeginReusesArgumentSlot = reuse;
-}
-
-template <uintptr_t Render>
-static void __fastcall WaterMaterialRenderHook(void* material, void*, void* environment, void* geometry, void* aux,
-                                               const float* cameraPosition, const float* world, const float* bounds,
-                                               void* liquidSettings)
-{
-    const bool tagged = TagArmedWaterDraw(liquidSettings);
-    __try
-    {
-        reinterpret_cast<WaterMaterialRenderFn>(Render)(material, environment, geometry, aux, cameraPosition, world,
-                                                        bounds, liquidSettings);
-    }
-    __finally
-    {
-        if (tagged)
-            UntagArmedWaterDraw();
-    }
-}
-
-static void __cdecl WorldTextDrawThunk(void* batch)
-{
-    FogDevice* device = nullptr;
+    g_worldTextDevice = nullptr;
+    if (!g_engineHooksInstalled)
+        return;
     __try
     {
         if (!g_failed && GlobalConfig().Get().enable)
-            device = GameFogDevice();
-        SuppressDepthWrite(device, true);
+            g_worldTextDevice = GameFogDevice();
+        SuppressDepthWrite(g_worldTextDevice, true);
     }
     __except (GuardFilter(GetExceptionCode(), "world text depth hook"))
     {
         g_failed = true;
     }
-    __try
-    {
-        reinterpret_cast<void(__cdecl*)(void*)>(engine::kWorldTextDrawTarget)(batch);
-    }
-    __finally
-    {
-        SuppressDepthWrite(device, false);
-    }
 }
 
-namespace
+extern "C" void __cdecl vf_on_world_text_end()
 {
-struct CallSite
-{
-    uintptr_t site;
-    uintptr_t originalTarget;
-    const void* thunk;
-};
-
-struct PointerSlot
-{
-    uintptr_t slot;
-    uintptr_t original;
-    const void* hook;
-};
-
-uintptr_t SlotValue(uintptr_t slot)
-{
-    return *reinterpret_cast<const uintptr_t*>(slot);
-}
-
-bool ExchangeSlot(uintptr_t slot, uintptr_t expected, uintptr_t replacement)
-{
-    DWORD old;
-    if (!VirtualProtect(reinterpret_cast<void*>(slot), sizeof(uintptr_t), PAGE_READWRITE, &old))
-        return false;
-    const LONG previous = InterlockedCompareExchange(reinterpret_cast<volatile LONG*>(slot),
-                                                     static_cast<LONG>(replacement), static_cast<LONG>(expected));
-    VirtualProtect(reinterpret_cast<void*>(slot), sizeof(uintptr_t), old, &old);
-    return static_cast<uintptr_t>(previous) == expected;
-}
-
-void RestoreSlots(const PointerSlot* slots, int count)
-{
-    for (int i = 0; i < count; ++i)
-        ExchangeSlot(slots[i].slot, reinterpret_cast<uintptr_t>(slots[i].hook), slots[i].original);
-}
-
-template <size_t N>
-bool SitesHoldTheClientCalls(const CallSite (&sites)[N], const char* what)
-{
-    for (const CallSite& s : sites)
-        if (!SiteMatches(s.site, s.originalTarget))
-        {
-            VF_LOG_ERROR("%s call site 0x%08X differs from the 12340 client; hooks not installed", what,
-                         static_cast<unsigned>(s.site));
-            return false;
-        }
-    return true;
-}
-
-template <size_t N>
-bool PatchCallSites(const CallSite (&sites)[N])
-{
-    int patched = 0;
-    for (const CallSite& s : sites)
-    {
-        if (!PatchCallSite(s.site, s.originalTarget, s.thunk))
-        {
-            while (patched-- > 0)
-                PatchCallSite(sites[patched].site, reinterpret_cast<uintptr_t>(sites[patched].thunk),
-                              reinterpret_cast<const void*>(sites[patched].originalTarget));
-            return false;
-        }
-        ++patched;
-    }
-    return true;
-}
-
-template <size_t N>
-bool SlotsHoldTheClientRenders(const PointerSlot (&slots)[N])
-{
-    for (const PointerSlot& s : slots)
-        if (SlotValue(s.slot) != s.original)
-        {
-            VF_LOG_ERROR("water material slot 0x%08X holds 0x%08X (expected 0x%08X); water hooks not installed",
-                         static_cast<unsigned>(s.slot), static_cast<unsigned>(SlotValue(s.slot)),
-                         static_cast<unsigned>(s.original));
-            return false;
-        }
-    return true;
-}
-
-template <size_t N>
-bool ReplaceSlots(const PointerSlot (&slots)[N])
-{
-    int replaced = 0;
-    for (const PointerSlot& s : slots)
-    {
-        if (!ExchangeSlot(s.slot, s.original, reinterpret_cast<uintptr_t>(s.hook)))
-        {
-            RestoreSlots(slots, replaced);
-            VF_LOG_ERROR("water material slot 0x%08X could not be replaced; water hooks not installed",
-                         static_cast<unsigned>(s.slot));
-            return false;
-        }
-        ++replaced;
-    }
-    return true;
-}
+    SuppressDepthWrite(g_worldTextDevice, false);
+    g_worldTextDevice = nullptr;
 }
 
 bool InstallEngineHooks()
 {
-    auto* slot = reinterpret_cast<GetProcAddressFn*>(engine::kGetProcAddressSlot);
-    uintptr_t current = reinterpret_cast<uintptr_t>(*slot);
-    if (current != engine::kGetProcAddressThunk)
-    {
-        VF_LOG_ERROR("GetProcAddress slot holds 0x%08X (expected the loader thunk 0x%08X); hooks not installed",
-                     static_cast<unsigned>(current), static_cast<unsigned>(engine::kGetProcAddressThunk));
-        return false;
-    }
-    const CallSite sites[] = {
-        {engine::kWorldRenderSite, engine::kWorldRenderTarget, &WorldRenderThunk},
-        {engine::kOpaqueM2PassSite, engine::kOpaqueM2PassTarget, &OpaqueM2PassThunk},
-        {engine::kLiquidSurfaceSite, engine::kLiquidSurfaceTarget, &LiquidSurfaceThunk},
-        {engine::kWorldTextDrawSite, engine::kWorldTextDrawTarget, &WorldTextDrawThunk},
-        {engine::kScreenEffectsSite, engine::kScreenEffectsTarget, &ScreenEffectsThunk},
-    };
-    if (!SitesHoldTheClientCalls(sites, "world render") || !PatchCallSites(sites))
-        return false;
-    *slot = &GetProcAddressFilter;
-    VF_LOG_INFO("engine hooks installed: GetProcAddress filter, world render 0x%08X, opaque 0x%08X, liquid 0x%08X, "
-                "world done 0x%08X, world text 0x%08X",
-                static_cast<unsigned>(engine::kWorldRenderSite), static_cast<unsigned>(engine::kOpaqueM2PassSite),
-                static_cast<unsigned>(engine::kLiquidSurfaceSite),
-                static_cast<unsigned>(engine::kScreenEffectsSite), static_cast<unsigned>(engine::kWorldTextDrawSite));
+    g_engineHooksInstalled = true;
+    VF_LOG_INFO("engine hooks: called directly by the client's world render");
     return true;
 }
 
 void EnableForeverLookOnHookedClient()
 {
-    const bool worldDoneHooked =
-        SiteMatches(engine::kScreenEffectsSite, reinterpret_cast<uintptr_t>(&ScreenEffectsThunk));
-    const bool frameEndHooked = SiteMatches(engine::kWorldRenderSite, reinterpret_cast<uintptr_t>(&WorldRenderThunk));
-    if (!worldDoneHooked || !frameEndHooked)
-        VF_LOG_ERROR("the world render (0x%08X) or world done (0x%08X) call no longer reaches the DLL; Forever glow "
-                     "and colour grading unavailable",
-                     static_cast<unsigned>(engine::kWorldRenderSite),
-                     static_cast<unsigned>(engine::kScreenEffectsSite));
-    const bool glow = worldDoneHooked && frameEndHooked && engine::GlowPassColourLayoutMatches();
-    const bool grading = worldDoneHooked && frameEndHooked && engine::GradingPlacementMatches();
-    EnableForeverLook(&GameFogDevice, glow, grading);
+    EnableForeverLook(&GameFogDevice, engine::GlowPassColourLayoutMatches(), engine::GradingPlacementMatches());
 }
 
 bool InstallTransparentFogHooks()
 {
-    const CallSite sites[] = {
-        {engine::kM2BatchFogSite, engine::kM2BatchFogTarget, &M2BatchFogThunk},
-        {engine::kGlarePassSite, engine::kGlarePassTarget, &GlarePassThunk},
-    };
-    if (!engine::TransparentFogClientLayoutMatches())
-    {
-        VF_LOG_ERROR("transparent fog hooks not installed: the client's M2 fog or glare code differs from the 12340 "
-                     "client; the fog is drawn after the world");
-        return false;
-    }
-    if (!SitesHoldTheClientCalls(sites, "transparent fog") || !PatchCallSites(sites))
-        return false;
     g_transparentFogHooksInstalled = true;
-    VF_LOG_INFO("transparent fog hooks installed: M2 batch fog 0x%08X, glare pass 0x%08X (TransparentFog=%d)",
-                static_cast<unsigned>(engine::kM2BatchFogSite), static_cast<unsigned>(engine::kGlarePassSite),
+    VF_LOG_INFO("transparent fog: M2 batch fog and glare pass called directly by the client (TransparentFog=%d)",
                 GlobalConfig().Get().transparentFog ? 1 : 0);
     return true;
 }
@@ -1570,64 +1269,18 @@ void InstallFarClipHooks()
 {
     if (GlobalConfig().Get().farClipMax <= kFarClipMaxKeepsClientCap)
     {
-        VF_LOG_INFO("far clip hooks not installed (FarClipMax=0)");
+        VF_LOG_INFO("far clip left to the client (FarClipMax=0)");
         return;
     }
-    const uintptr_t sites[] = {engine::kFarClipCVarSetSite, engine::kFarClipMapLoadSite};
-    for (uintptr_t site : sites)
-        if (!SiteMatches(site, engine::kFarClipClamp))
-        {
-            VF_LOG_ERROR("far clip call site 0x%08X differs from the 12340 client; far clip left alone",
-                         static_cast<unsigned>(site));
-            return;
-        }
-    if (!PatchCallSite(sites[0], engine::kFarClipClamp, reinterpret_cast<const void*>(&vf_far_clip_clamp)))
-        return;
-    if (!PatchCallSite(sites[1], engine::kFarClipClamp, reinterpret_cast<const void*>(&vf_far_clip_clamp)))
-    {
-        PatchCallSite(sites[0], reinterpret_cast<uintptr_t>(&vf_far_clip_clamp),
-                      reinterpret_cast<const void*>(engine::kFarClipClamp));
-        return;
-    }
-    VF_LOG_INFO("far clip hooks installed at 0x%08X and 0x%08X (FarClipMax %.0f)", static_cast<unsigned>(sites[0]),
-                static_cast<unsigned>(sites[1]), GlobalConfig().Get().farClipMax);
+    g_farClipLifted = true;
+    VF_LOG_INFO("far clip lifted up to %.0f", GlobalConfig().Get().farClipMax);
 }
 
 bool InstallWaterHooks()
 {
-    const PointerSlot slots[] = {
-        {engine::kWaterMaterialRenderSlot, engine::kWaterMaterialRender,
-         reinterpret_cast<const void*>(&WaterMaterialRenderHook<engine::kWaterMaterialRender>)},
-        {engine::kWaterNoSpecMaterialRenderSlot, engine::kWaterNoSpecMaterialRender,
-         reinterpret_cast<const void*>(&WaterMaterialRenderHook<engine::kWaterNoSpecMaterialRender>)},
-    };
-    if (!engine::WaterClientLayoutMatches())
-    {
-        VF_LOG_ERROR("water hooks not installed: the client's liquid code differs from the 12340 client");
-        return false;
-    }
-    if (!SiteMatches(engine::kWaterPassSite, engine::kWaterPassTarget))
-    {
-        VF_LOG_ERROR("water pass call site 0x%08X differs from the 12340 client; water hooks not installed",
-                     static_cast<unsigned>(engine::kWaterPassSite));
-        return false;
-    }
-    if (!SlotsHoldTheClientRenders(slots) || !ReplaceSlots(slots))
-        return false;
-    if (!PatchCallSite(engine::kWaterPassSite, engine::kWaterPassTarget,
-                       reinterpret_cast<const void*>(&WaterPassThunk)))
-    {
-        RestoreSlots(slots, static_cast<int>(sizeof(slots) / sizeof(slots[0])));
-        VF_LOG_ERROR("water pass call site 0x%08X could not be patched; water hooks not installed",
-                     static_cast<unsigned>(engine::kWaterPassSite));
-        return false;
-    }
     g_waterHooksInstalled = true;
-    VF_LOG_INFO("water hooks installed: water pass 0x%08X, material render slots 0x%08X and 0x%08X",
-                static_cast<unsigned>(engine::kWaterPassSite), static_cast<unsigned>(engine::kWaterMaterialRenderSlot),
-                static_cast<unsigned>(engine::kWaterNoSpecMaterialRenderSlot));
-    GlobalClientRippleSprites().Bind(reinterpret_cast<volatile int32_t*>(engine::kWaterRipplesCommandValue),
-                                     ClientCodeView());
+    VF_LOG_INFO("water: liquid pass and water materials called directly by the client");
+    GlobalClientRippleSprites().Bind(client::WaterRipplesValue(), ClientCodeView());
     return true;
 }
 

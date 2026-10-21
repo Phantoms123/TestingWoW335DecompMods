@@ -3,6 +3,7 @@
 #endif
 #line 1
 #include "World.h"
+#include "WoW/Source/VolFog/VolFog.h"
 #include <cstdlib>
 #include <new>
 #include <algorithm>
@@ -1345,7 +1346,8 @@ float World::ValidateFarClip(float farClip, int32_t mapID) {
 // VERIFY: 1f595043 auto
 // OFFSET: 0x00780800
 void World::SetFarClip(float farClip) {
-    float validated = World::ValidateFarClip(farClip, s_mapId);
+    // CHANGED: CoAVolFog's FarClipMax can raise the clamp.
+    float validated = vf_far_clip_clamp(World::ValidateFarClip(farClip, s_mapId), farClip, s_mapId);
 
     if (World::s_farClip != validated) {
         World::s_prevFarClip = World::s_farClip;
@@ -1360,7 +1362,8 @@ void World::SetFarClip(float farClip) {
 // VERIFY: 833d137a auto
 // OFFSET: 0x00781430
 void CWorld::LoadMap(const char* mapName, C3Vector* position, int32_t zoneID, int32_t unused_a4) {
-    World::s_farClip = World::ValidateFarClip(CWorldParam::cvar_farClip->m_floatValue, zoneID);
+    // CHANGED: CoAVolFog's FarClipMax can raise the clamp.
+    World::s_farClip = vf_far_clip_clamp(World::ValidateFarClip(CWorldParam::cvar_farClip->m_floatValue, zoneID), CWorldParam::cvar_farClip->m_floatValue, zoneID);
     World::s_nearClip = 0.2f;
     World::s_prevFarClip = World::s_farClip;
 
@@ -1933,7 +1936,10 @@ void CWorldScene::RenderLiquidPass() {
     CWorldScene::ApplyFogState();
 
     if ((CWorld::enables & Enable_Water) && CWorldScene::s_liquidRenderer) {
+        // CHANGED: CoAVolFog shades the transparent water drawn by this pass.
+        vf_on_water_pass_begin(CWorldScene::s_liquidRenderer);
         CWorldScene::s_liquidRenderer->Flush(CWorldScene::s_activeWorldView, 1);
+        vf_on_water_pass_end();
     }
 
     CMap::RenderWaterRipples();

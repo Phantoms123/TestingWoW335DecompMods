@@ -1,6 +1,7 @@
 #include <cmath>
 #include <cstdint>
 #include "Engine/Source/Model2/CM2SceneRender.h"
+#include "WoW/Source/VolFog/VolFog.h"
 #include "Engine/Source/Gx/CGxBuf.h"
 #include "Engine/Source/Gx/CGxDevice/CGxDevice.h"
 #include "Engine/Source/Gx/Gx.h"
@@ -242,7 +243,10 @@ void CM2SceneRender::SetupLighting() {
                 break;
         }
 
-        CShaderEffect::SetFogParams(this->m_curLighting->m_fogStart, this->m_curLighting->m_fogEnd, this->m_curLighting->m_fogDensity, *reinterpret_cast<CImVector*>(&color));
+        // CHANGED: CoAVolFog may refit the linear fog of see-through models to its volumetric fog.
+        VolFogM2BatchFog fog = { this->m_curLighting->m_fogStart, this->m_curLighting->m_fogEnd, this->m_curLighting->m_fogDensity, reinterpret_cast<const uint32_t*>(&color) };
+        vf_on_m2_batch_fog(&fog);
+        CShaderEffect::SetFogParams(fog.start, fog.end, fog.exponent, *reinterpret_cast<const CImVector*>(fog.colour));
         CShaderEffect::SetFogEnabled(1);
     } else {
         CShaderEffect::SetFogEnabled(0);

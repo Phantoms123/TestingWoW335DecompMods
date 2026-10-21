@@ -99,3 +99,8 @@ target_link_libraries(Wow
 if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_link_libraries(Wow PRIVATE "-Wl,--end-group")
 endif ()
+
+if (TARGET VolFog)
+    target_link_libraries(Wow PRIVATE VolFog)
+    volfog_copy_runtime_files(Wow)
+endif ()

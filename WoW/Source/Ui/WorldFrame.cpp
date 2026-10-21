@@ -1,4 +1,5 @@
 #include "WorldFrame.h"
+#include "WoW/Source/VolFog/VolFog.h"
 #include "Engine/Source/Base/ConvertUTF.h"
 #include <cstring>
 #include <typeinfo>
@@ -1744,6 +1745,8 @@ void CGWorldFrame::OnWorldRender() {
     scene->SetFloat18(-CWorld::s_unk_CD7758);
     scene->m_passMask = CWorld::m_M2PassMask;
     scene->Draw(M2PASS_0);
+    // CHANGED: CoAVolFog captures the camera and depth range after the opaque models.
+    vf_on_opaque_done();
 
     if (s_spellShadowStyle < 2) {
         DrawSpellCursorShadow(0x200122);
@@ -1761,7 +1764,11 @@ void CGWorldFrame::OnWorldRender() {
         scene->Draw(M2PASS_2);
     } else {
         scene->Draw(M2PASS_2);
+        // CHANGED: CoAVolFog writes liquid depth, then may composite the fog before the see-through models.
+        vf_on_liquid_begin();
         CWorldScene::RenderLiquidPass();
+        vf_on_liquid_end();
+        vf_on_transparents_begin();
         CWorldScene::RenderWeather();
         CWorldScene::RenderBarriers(this->m_elapsedSec);
         scene->Draw(M2PASS_1);
@@ -1778,7 +1785,12 @@ void CGWorldFrame::OnWorldRender() {
     CWorldScene::RenderParticulate();
     GxuSortDrawList(GxuCat_1, GxuSort_B2F, *World::GetCamPos());
     GxuFlushDrawList(GxuCat_1, *World::GetCamPos());
+#if VOLFOG_ENABLED
+    // CHANGED: skipped when CoAVolFog already drew the glare before its early fog composite.
+    vf_on_glare_pass();
+#else
     DayNight::RenderGlares();
+#endif
     PlayerNameUpdateLate();
 
     if (CWorld::enables & 0x20000000) {
@@ -1789,6 +1801,8 @@ void CGWorldFrame::OnWorldRender() {
     SmartScreenRectClearGrid(1);
     CGChatBubbleFrame::OnWorldRender(this);
     GxXformSetViewport(minX, maxX, minY, maxY, minZ, maxZ);
+    // CHANGED: CoAVolFog draws the fog over the finished world, before the screen effects.
+    vf_on_world_done();
     FFX::Finish();
     CVehiclePassenger_C::PostRenderUpdateAll();
 }
@@ -2099,7 +2113,10 @@ void CGWorldFrame::RenderWorld(void* param) {
 
     worldFrame->OnWorldUpdate();
     PlayerNameUpdateWorldText();
+    // CHANGED: CoAVolFog frame begin/end around the world render.
+    vf_on_frame_begin();
     worldFrame->OnWorldRender();
+    vf_on_frame_end();
     WorldTextRenderBatch();
 
     g_theGxDevicePtr->XformSetProjection(projection);

@@ -49,38 +49,6 @@ struct WaterInputs
 
 namespace engine
 {
-constexpr uint32_t kClientTimestamp = 0x4C2452FE;
-
-constexpr uintptr_t kGetProcAddressSlot = 0x00B2ED98;
-constexpr uintptr_t kGetProcAddressThunk = 0x0041C654;
-
-constexpr uintptr_t kWorldRenderSite = 0x004FB03D;
-constexpr uintptr_t kWorldRenderTarget = 0x004F8EA0;
-constexpr uintptr_t kOpaqueM2PassSite = 0x004F911D;
-constexpr uintptr_t kOpaqueM2PassTarget = 0x00823CB0;
-constexpr uintptr_t kLiquidSurfaceSite = 0x004F9170;
-constexpr uintptr_t kLiquidSurfaceTarget = 0x0077F020;
-constexpr uintptr_t kWorldTextDrawSite = 0x007E5818;
-constexpr uintptr_t kWorldTextDrawTarget = 0x006BCE40;
-constexpr uintptr_t kScreenEffectsSite = 0x004F9281;
-constexpr uintptr_t kScreenEffectsTarget = 0x008C1010;
-
-constexpr uintptr_t kM2BatchFogSite = 0x0081FD15;
-constexpr uintptr_t kM2BatchFogTarget = 0x00873210;
-constexpr uintptr_t kGlarePassSite = 0x004F9213;
-constexpr uintptr_t kGlarePassTarget = 0x007F0870;
-
-constexpr uintptr_t kWaterPassSite = 0x00790AA2;
-constexpr uintptr_t kWaterPassTarget = 0x008A2240;
-constexpr uintptr_t kWaterMaterialRenderSlot = 0x00A5954C;
-constexpr uintptr_t kWaterMaterialRender = 0x008A5590;
-constexpr uintptr_t kWaterNoSpecMaterialRenderSlot = 0x00A59580;
-constexpr uintptr_t kWaterNoSpecMaterialRender = 0x008A5900;
-
-using FarClipClampFn = float(__cdecl*)(float farClipSetting, int mapId);
-constexpr uintptr_t kFarClipClamp = 0x00780770;
-constexpr uintptr_t kFarClipCVarSetSite = 0x00780810;
-constexpr uintptr_t kFarClipMapLoadSite = 0x00781444;
 
 constexpr int kGlowPassLists = 2;
 
