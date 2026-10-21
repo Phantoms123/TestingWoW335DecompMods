@@ -116,19 +116,19 @@ WowConnection::WowConnection(int32_t sock, const NETADDR* addr, WowConnectionRes
 }
 
 // OFFSET: 0x004675F0
-int32_t WowConnection::SendPacket(CDataStore* msg, int32_t headroom) {
+WC_SEND_RESULT WowConnection::SendPacket(CDataStore* msg, int32_t headroom) {
     int32_t size = msg->m_size;
     void* data;
     msg->GetDataInSitu(data, size);
 
     __atomic_fetch_add(&WowConnection::s_sendBytes, size, __ATOMIC_RELAXED);
 
-    int32_t result = 2;
+    WC_SEND_RESULT result = WC_SEND_ERROR;
 
     this->m_lock.Enter();
 
     if (size <= 0) {
-        result = 2;
+        result = WC_SEND_ERROR;
     } else if (this->m_connState == WOWC_CONNECTED) {
         if (WowConnection::s_lagTestDelayMin || this->m_sendList.Head()) {
             WowConnection::SENDNODE* node = this->NewSendNodePacket(data, size, false);
@@ -150,7 +150,7 @@ int32_t WowConnection::SendPacket(CDataStore* msg, int32_t headroom) {
 
             if (this->m_sendDepth >= this->m_maxSendDepth) {
                 this->SetState(WOWC_DISCONNECTING);
-                result = 2;
+                result = WC_SEND_ERROR;
 
                 if (this->m_response) {
                     this->m_response->NotifySendDepthExceeded(this);
@@ -160,7 +160,7 @@ int32_t WowConnection::SendPacket(CDataStore* msg, int32_t headroom) {
                 this->PeerAddrToStr(peer, sizeof(peer));
                 DebugLog("WowConnection: MaxSendDepth Reached! m_sendDepth=%d, m_maxSendDepth=%d, Dropping connection to %s", this->m_sendDepth, this->m_maxSendDepth, peer);
             } else {
-                result = 1;
+                result = WC_SEND_QUEUED;
             }
         } else {
             WowConnection::SENDNODE* node;
@@ -198,7 +198,7 @@ int32_t WowConnection::SendPacket(CDataStore* msg, int32_t headroom) {
                     this->FreeSendNode(node);
                 }
 
-                result = 0;
+                result = WC_SEND_SENT;
             } else {
                 bool wouldBlock = WSAGetLastError() == WSAEWOULDBLOCK;
 
@@ -208,10 +208,10 @@ int32_t WowConnection::SendPacket(CDataStore* msg, int32_t headroom) {
 
                 if (sent > 0) {
                     node->m_offset += sent;
-                    result = 1;
+                    result = WC_SEND_QUEUED;
                 } else if (!wouldBlock) {
                     this->SetState(WOWC_DISCONNECTING);
-                    result = 2;
+                    result = WC_SEND_ERROR;
                 }
 
                 this->m_sendList.LinkToTail(node);
@@ -220,7 +220,7 @@ int32_t WowConnection::SendPacket(CDataStore* msg, int32_t headroom) {
 
                 if (this->m_sendDepth >= this->m_maxSendDepth) {
                     this->SetState(WOWC_DISCONNECTING);
-                    result = 2;
+                    result = WC_SEND_ERROR;
 
                     if (this->m_response) {
                         this->m_response->NotifySendDepthExceeded(this);
@@ -242,11 +242,11 @@ int32_t WowConnection::SendPacket(CDataStore* msg, int32_t headroom) {
 }
 
 // OFFSET: 0x00467990
-int32_t WowConnection::Send(uint8_t* data, int32_t size, bool raw) {
+WC_SEND_RESULT WowConnection::Send(uint8_t* data, int32_t size, bool raw) {
 
     __atomic_fetch_add(&WowConnection::s_sendBytes, size, __ATOMIC_RELAXED);
 
-    int32_t result = 2;
+    WC_SEND_RESULT result = WC_SEND_ERROR;
 
     this->m_lock.Enter();
 
@@ -266,7 +266,7 @@ int32_t WowConnection::Send(uint8_t* data, int32_t size, bool raw) {
 
             if (sent == size) {
                 this->m_lock.Leave();
-                return 0;
+                return WC_SEND_SENT;
             }
 
             if (sent < 0) {
@@ -277,18 +277,18 @@ int32_t WowConnection::Send(uint8_t* data, int32_t size, bool raw) {
 
                     this->SetState(WOWC_DISCONNECTING);
                     this->m_lock.Leave();
-                    return 2;
+                    return WC_SEND_ERROR;
                 }
             }
 
             WowConnection::SENDNODE* node = this->NewSendNodePacket(data + sent, size - sent, true);
             this->m_sendList.LinkToTail(node);
-            result = 1;
+            result = WC_SEND_QUEUED;
             this->m_sendDepth++;
             this->m_sendBytes += node->m_size;
             WowConnection::s_network->PlatformChangeState(this, this->m_connState);
         } else {
-            result = 1;
+            result = WC_SEND_QUEUED;
 
             WowConnection::SENDNODE* node = this->NewSendNodePacket(data, size, true);
             this->m_sendList.LinkToTail(node);
@@ -307,7 +307,7 @@ int32_t WowConnection::Send(uint8_t* data, int32_t size, bool raw) {
                 DebugLog("WowConnection: MaxSendDepth Reached! m_sendDepth=%d, m_maxSendDepth=%d, Dropping connection to %s", this->m_sendDepth, this->m_maxSendDepth, peer);
 
                 this->m_lock.Leave();
-                return 2;
+                return WC_SEND_ERROR;
             }
 
             WowConnection::s_network->PlatformChangeState(this, this->m_connState);
