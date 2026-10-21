@@ -106,7 +106,7 @@ Every changed spot in the original sources is marked `// CHANGED:`.
   beyond a third of `reflectionDistance` (default 200 yards) fades into the fog by that depth, so distant terrain,
   buildings and trees neither stand out nor appear abruptly. With reflectionMode 3 the models (trees, characters, all three passes, geometry only;
   creatures; `reflectionModels 0` leaves them out; models beyond `reflectionDistance`, wholly below the water or
-  smaller than `reflectionModelSize` (default 0.01) of their distance are skipped) are drawn too: their matrices already hold the view, so they are
+  smaller than `reflectionModelSize` (default 0.004) of their distance are skipped) are drawn too: their matrices already hold the view, so they are
   mirrored through the projection (the view-space mirror in front of it), which keeps the same clip plane
   (CM2Scene::s_keepClipPlane stops models in liquid from setting their own). The chunks considered for culling
   also reach a screen's height above the view.
@@ -169,8 +169,9 @@ Every changed spot in the original sources is marked `// CHANGED:`.
 - Frame statistics: start the client with `WOW_STATS=1` in the environment and it prints, every 5 seconds,
   "D3D11 stats" (fps, draws, time in draws, present, buffers, textures, render targets) and, while water
   reflections draw, "Reflection stats" and "Terrain stats".
-- Open: the reflection's clip plane reaches only fixed-function draws on Direct3D 11 (shader draws need an
-  oblique projection instead).
+- User clip planes (the water reflection's) on shader draws: Direct3D 9 applies them in clip space; here a
+  geometry shader (`Shaders/ClipPlanes.hlsl`) passes the client's shaders' triangles through and adds the clip
+  distances. All of the client's vs_4_0 shaders write the same 12 outputs, which it takes.
 
 ### Volumetric fog and water (WoW/Source/VolFog)
 - CoAVolFog's renderers, shaders, data and `CoAVolFog.ini` as upstream; its DLL loader, call-site patches and

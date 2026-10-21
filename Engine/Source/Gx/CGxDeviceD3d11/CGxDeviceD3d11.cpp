@@ -28,6 +28,7 @@
 namespace {
 #include "Engine/Source/Gx/CGxDeviceD3d11/Shaders/vkd3d/blit_ps.h"
 #include "Engine/Source/Gx/CGxDeviceD3d11/Shaders/vkd3d/blit_vs.h"
+#include "Engine/Source/Gx/CGxDeviceD3d11/Shaders/vkd3d/clipplanes_gs.h"
 #include "Engine/Source/Gx/CGxDeviceD3d11/Shaders/vkd3d/depthcopy_ps.h"
 #include "Engine/Source/Gx/CGxDeviceD3d11/Shaders/vkd3d/ffp_ps.h"
 #include "Engine/Source/Gx/CGxDeviceD3d11/Shaders/vkd3d/ffp_vs.h"
@@ -278,6 +279,16 @@ void ParseDxbc(const uint8_t* code, size_t size, CGxDeviceD3d11::Shader& shader)
                 if (element[2] == 0) {
                     shader.m_inputs.push_back(input);
                 }
+            }
+        } else if (!memcmp(chunk, "OSGN", 4) && chunkSize >= 8) {
+            // The client's shaders: 12 outputs, position, two colours, eight texture coordinates, then FOG in 11.
+            uint32_t count;
+            memcpy(&count, data, 4);
+
+            if (count == 12 && 8 + 24 * 12 <= chunkSize) {
+                uint32_t element[6];
+                memcpy(element, data + 8 + 24 * 11, 24);
+                shader.m_clipOutputs = element[0] < chunkSize && element[4] == 11 && !SStrCmpI(reinterpret_cast<const char*>(data + element[0]), "FOG", STORM_MAX_STR);
             }
         } else if (!memcmp(chunk, "SHDR", 4) || !memcmp(chunk, "SHEX", 4)) {
             const uint32_t* tokens = reinterpret_cast<const uint32_t*>(data);
@@ -843,6 +854,8 @@ int32_t CGxDeviceD3d11::ICreateD3dDevice(const CGxFormat& format) {
     this->m_device->CreateBuffer(&cb, nullptr, &this->m_ffpConstants);
     cb.ByteWidth = 16;
     this->m_device->CreateBuffer(&cb, nullptr, &this->m_blitConstants);
+    cb.ByteWidth = 7 * 16;
+    this->m_device->CreateBuffer(&cb, nullptr, &this->m_clipGsConstants);
 
     D3D11_BUFFER_DESC zero = {};
     zero.ByteWidth = 64;
@@ -857,6 +870,7 @@ int32_t CGxDeviceD3d11::ICreateD3dDevice(const CGxFormat& format) {
     this->m_device->CreateVertexShader(g_blit_vs, sizeof(g_blit_vs), nullptr, &this->m_blitVs);
     this->m_device->CreatePixelShader(g_blit_ps, sizeof(g_blit_ps), nullptr, &this->m_blitPs);
     this->m_device->CreatePixelShader(g_depthcopy_ps, sizeof(g_depthcopy_ps), nullptr, &this->m_depthCopyPs);
+    this->m_device->CreateGeometryShader(g_clipplanes_gs, sizeof(g_clipplanes_gs), nullptr, &this->m_clipGs);
     this->m_ffpVsInfo = Shader();
     this->m_ffpVsInfo.m_object = this->m_ffpVs;
     this->m_ffpVsInfo.m_code.assign(g_ffp_vs, g_ffp_vs + sizeof(g_ffp_vs));
@@ -962,6 +976,8 @@ void CGxDeviceD3d11::ISetCaps(const CGxFormat& format) {
 
 void CGxDeviceD3d11::IStateSetDefaults() {
     this->m_ctx->ClearState();
+    this->m_hwGs = nullptr;
+    this->m_clipGsDirty = true;
     this->m_hwBlend = ~0ull;
     this->m_hwDepth = ~0ull;
     this->m_hwRaster = ~0ull;
@@ -1041,6 +1057,7 @@ void CGxDeviceD3d11::IDestroyD3d() {
     SafeRelease(this->m_constants[1]);
     SafeRelease(this->m_ffpConstants);
     SafeRelease(this->m_blitConstants);
+    SafeRelease(this->m_clipGsConstants);
     SafeRelease(this->m_zeroBuffer);
     SafeRelease(this->m_fanIndices);
     this->m_fanIndicesSize = 0;
@@ -1050,6 +1067,7 @@ void CGxDeviceD3d11::IDestroyD3d() {
     SafeRelease(this->m_blitPs);
     SafeRelease(this->m_stretchSampler);
     SafeRelease(this->m_depthCopyPs);
+    SafeRelease(this->m_clipGs);
     this->m_ffpVsInfo = Shader();
     for (RtDepth& rtDepth : this->m_rtDepths) {
         SafeRelease(rtDepth.m_dsv);
@@ -1984,6 +2002,7 @@ int32_t CGxDeviceD3d11::DeviceCopySampledDepth(CGxTex* texture) {
     this->m_ctx->IASetInputLayout(nullptr);
     this->m_ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     this->m_ctx->VSSetShader(this->m_blitVs, nullptr, 0);
+    this->m_ctx->GSSetShader(nullptr, nullptr, 0);
     this->m_ctx->PSSetShader(this->m_depthCopyPs, nullptr, 0);
     this->m_ctx->PSSetConstantBuffers(0, 1, &this->m_blitConstants);
     ID3D11ShaderResourceView* views[2] = { this->m_samples > 1 ? nullptr : this->m_backDepthSrv, this->m_samples > 1 ? this->m_backDepthSrv : nullptr };
@@ -2000,6 +2019,7 @@ int32_t CGxDeviceD3d11::DeviceCopySampledDepth(CGxTex* texture) {
 
 // After the device drew something of its own: everything is sent again before the next draw.
 void CGxDeviceD3d11::IStateInvalidate() {
+    this->m_hwGs = reinterpret_cast<void*>(~uintptr_t(0));
     this->m_hwBlend = this->m_hwDepth = this->m_hwRaster = ~0ull;
     this->m_stateDirty = true;
     this->m_hwVs = nullptr;
@@ -2225,6 +2245,7 @@ int32_t CGxDeviceD3d11::TexStretch(CGxTex* dest, const CiRect* destRect, const C
         this->m_ctx->IASetInputLayout(nullptr);
         this->m_ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         this->m_ctx->VSSetShader(this->m_blitVs, nullptr, 0);
+        this->m_ctx->GSSetShader(nullptr, nullptr, 0);
         this->m_ctx->VSSetConstantBuffers(0, 1, &this->m_blitConstants);
         this->m_ctx->PSSetShader(this->m_blitPs, nullptr, 0);
         this->m_ctx->PSSetShaderResources(0, 1, &copyView);
@@ -2883,6 +2904,7 @@ void CGxDeviceD3d11::IRsSendToHw(EGxRenderState which) {
         case GxRs_ClipPlaneMask:
             this->m_clipEnable = value.m_data.u[0];
             this->m_ffpDirty = true;
+            this->m_clipGsDirty = true;
             break;
 
         case GxRs_Multisample:
@@ -3430,6 +3452,44 @@ void CGxDeviceD3d11::IStateSyncShaders() {
         this->m_texturesDirty = true;
     }
 
+    // Direct3D 9 clips shader draws by the user clip planes, given in clip space then; the client's shaders
+    // cannot, so a geometry shader adds the clip distances to their triangles (the fixed-function shader does
+    // its own, in world space).
+    void* hwGs = nullptr;
+
+    if (this->m_clipGs && (this->m_clipEnable & 0x3F) && vs && vs->m_clipOutputs && this->m_drawTriangles) {
+        hwGs = this->m_clipGs;
+
+        if (this->m_clipGsDirty) {
+            float constants[7][4] = {};
+
+            for (uint32_t i = 0; i < 6; i++) {
+                memcpy(constants[i], &this->m_clipPlane[i], sizeof(float) * 4);
+            }
+
+            int32_t mask = static_cast<int32_t>(this->m_clipEnable & 0x3F);
+            memcpy(&constants[6][0], &mask, 4);
+            D3D11_MAPPED_SUBRESOURCE mapped;
+
+            if (SUCCEEDED(this->m_ctx->Map(this->m_clipGsConstants, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+                memcpy(mapped.pData, constants, sizeof(constants));
+                this->m_ctx->Unmap(this->m_clipGsConstants, 0);
+            }
+
+            this->m_clipGsDirty = false;
+        }
+    }
+
+    if (hwGs != this->m_hwGs) {
+        this->m_ctx->GSSetShader(static_cast<ID3D11GeometryShader*>(hwGs), nullptr, 0);
+
+        if (hwGs) {
+            this->m_ctx->GSSetConstantBuffers(0, 1, &this->m_clipGsConstants);
+        }
+
+        this->m_hwGs = hwGs;
+    }
+
     ID3D11Buffer* vsBuffers[2] = { this->m_constants[0], this->m_ffpConstants };
     ID3D11Buffer* psBuffers[2] = { this->m_constants[1], this->m_ffpConstants };
     this->m_ctx->VSSetConstantBuffers(0, 2, vsBuffers);
@@ -3620,6 +3680,7 @@ void CGxDeviceD3d11::IStateSync() {
     if (this->m_clipPlaneMask) {
         this->m_clipPlaneMask = 0;
         this->m_ffpDirty = true;
+        this->m_clipGsDirty = true;
     }
 
     this->IStateSyncShaders();
@@ -3648,6 +3709,7 @@ void CGxDeviceD3d11::Draw(CGxBatch* batch, int32_t count) {
         }
     } timer = { this, NowNs() };
 
+    this->m_drawTriangles = batch->m_primType >= GxPrim_Triangles;
     this->IStateSync();
 
     D3D11_PRIMITIVE_TOPOLOGY topology = s_topology[batch->m_primType];

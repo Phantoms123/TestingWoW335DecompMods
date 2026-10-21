@@ -63,6 +63,7 @@ class CGxDeviceD3d11 : public CGxDevice {
         };
         std::vector<Input> m_inputs;          // vertex shaders: the input signature
         std::vector<uint8_t> m_code;          // vertex shaders: kept for input layouts
+        bool m_clipOutputs = false;           // vertex shaders: writes the outputs ClipPlanes.hlsl takes
     };
 
     // What a CGxPool's m_apiSpecific points to.
@@ -166,6 +167,13 @@ class CGxDeviceD3d11 : public CGxDevice {
     ID3D11ShaderResourceView* m_resolveSrv = nullptr;
     ID3D11SamplerState* m_stretchSampler = nullptr;
     ID3D11PixelShader* m_depthCopyPs = nullptr;
+    // Clip planes for shader draws (Shaders/ClipPlanes.hlsl): bound while planes are on and a client shader draws
+    // triangles.
+    struct ID3D11GeometryShader* m_clipGs = nullptr;
+    ID3D11Buffer* m_clipGsConstants = nullptr;
+    void* m_hwGs = nullptr;
+    bool m_clipGsDirty = true;
+    bool m_drawTriangles = true;
     // A depth buffer for drawing into textures without their own.
     // Depth buffers for texture targets without one, one per size (the effects switch sizes many times a frame).
     struct RtDepth {

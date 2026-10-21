@@ -76,7 +76,7 @@ static CTexture* s_realReflectionTemp;
 static CTexture* s_realReflectionDepth;
 static float s_reflectionDistance = 200.0f;
 // Models smaller than this part of their distance are left out of the reflection (reflectionModelSize).
-static float s_reflectionModelSize = 0.01f;
+static float s_reflectionModelSize = 0.004f;
 // How many screens' height above the view the culling reaches for the reflection (reflectionCullHeight).
 static float s_reflectionCullHeight = 2.0f;
 static bool s_reflectionDepthBound;

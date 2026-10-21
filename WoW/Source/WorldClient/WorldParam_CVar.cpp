@@ -956,8 +956,8 @@ void CWorldParam::Initialize() {
     Liquid::Cata::SetReflectionModels(!reflectionModels || reflectionModels->m_intValue != 0);
     CVar* reflectionDistance = CVar::Register("reflectionDistance", "How far the water's real reflections show, in yards (they fade out from a third of it on; 0 no fade)", 1, "200", ReflectionDistanceCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     Liquid::Cata::SetReflectionDistance(reflectionDistance ? reflectionDistance->m_floatValue : 200.0f);
-    CVar* reflectionModelSize = CVar::Register("reflectionModelSize", "Models smaller than this part of their distance are left out of the water's reflections (0 none, default 0.01)", 1, "0.01", ReflectionModelSizeCallback, CATEGORY_GRAPHICS, false, nullptr, false);
-    Liquid::Cata::SetReflectionModelSize(reflectionModelSize ? reflectionModelSize->m_floatValue : 0.01f);
+    CVar* reflectionModelSize = CVar::Register("reflectionModelSize", "Models smaller than this part of their distance are left out of the water's reflections (0 none, default 0.004)", 1, "0.004", ReflectionModelSizeCallback, CATEGORY_GRAPHICS, false, nullptr, false);
+    Liquid::Cata::SetReflectionModelSize(reflectionModelSize ? reflectionModelSize->m_floatValue : 0.004f);
     CVar* reflectionCullHeight = CVar::Register("reflectionCullHeight", "How many screens' height above the view the world is also drawn for the water's reflections (0-4, default 2)", 1, "2", ReflectionCullHeightCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     Liquid::Cata::SetReflectionCullHeight(reflectionCullHeight ? reflectionCullHeight->m_floatValue : 2.0f);
     CVar* reflectionDownscale = CVar::Register("reflectionDownscale", "Water reflection texture downscale (0-4)", 1, "0", ReflectionDownscaleCallback, CATEGORY_GRAPHICS, false, nullptr, false);
