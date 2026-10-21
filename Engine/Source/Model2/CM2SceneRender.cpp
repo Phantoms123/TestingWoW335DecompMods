@@ -928,6 +928,32 @@ void CM2SceneRender::DrawCallback() {
     CM2SceneRender::EndFixed();
     CShaderEffect::UpdateProjMatrix();
 }
+// CHANGED: not in the original client. Whether a water reflection leaves a model out: farther away than the
+// reflection reaches (it has faded there), wholly below the water, or too small at its distance to show in it.
+// The model's matrix holds the view, so its translation is its position relative to the camera.
+static bool ReflectionCulled(CM2Model* model) {
+    if (!model || !model->m_shared || !(model->m_shared->m_flags & 1) || !model->m_shared->m_data) {
+        return false;
+    }
+
+    const C44Matrix& m = model->m_matrixF4;
+    C3Vector viewPos(m.d0, m.d1, m.d2);
+    float scale = std::sqrt(m.a0 * m.a0 + m.a1 * m.a1 + m.a2 * m.a2);
+    float radius = model->m_shared->m_data->m_bounds.m_radius * scale;
+    float distance = std::sqrt(viewPos.SquaredMag());
+
+    if (CM2Scene::s_reflectionCullDistance > 0.0f && distance - radius > CM2Scene::s_reflectionCullDistance) {
+        return true;
+    }
+
+    if (radius < distance * CM2Scene::s_reflectionCullMinSize) {
+        return true;
+    }
+
+    C3Vector world = viewPos * model->m_scene->m_viewInv;
+    return world.z + radius < CM2Scene::s_reflectionCullPlaneZ;
+}
+
 
 // VERIFY: ae7d8da4 manual
 // OFFSET: 0x00823130
@@ -975,9 +1001,23 @@ void CM2SceneRender::Draw(M2PASS pass, M2Element* elements, uint32_t* indices, u
     }
 
     this->m_pass = pass;
+    CM2Model* cullModel = nullptr;
+    bool culled = false;
 
     for (uint32_t i = 0; i < count; i++) {
         M2Element* element = &elements[indices[i]];
+
+        // CHANGED: a water reflection leaves out the models it would barely show (see ReflectionCulled).
+        if (CM2Scene::s_keepClipPlane) {
+            if (element->m_model != cullModel) {
+                cullModel = element->m_model;
+                culled = ReflectionCulled(cullModel);
+            }
+
+            if (culled) {
+                continue;
+            }
+        }
 
         // CHANGED: a water reflection also draws models outside the view (0x2000), which it may mirror.
         if (!CM2Scene::s_keepClipPlane && element->m_type != 2 && (element->m_model->m_fFlags & 0x2000) && element->m_type != 4) {

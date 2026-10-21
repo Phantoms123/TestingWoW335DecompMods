@@ -90,6 +90,12 @@ class CM2Scene {
     // CHANGED: not in the original client. Set while the scene draws into a water reflection, whose clip plane the
     // models must keep (instead of setting their own for models standing in liquid); only geometry is drawn then.
     static bool s_keepClipPlane;
+    // CHANGED: which models a water reflection leaves out (set by Liquid::Cata while s_keepClipPlane is): those
+    // farther than s_reflectionCullDistance (0: none), wholly below s_reflectionCullPlaneZ, or smaller than
+    // s_reflectionCullMinSize of their distance.
+    static float s_reflectionCullDistance;
+    static float s_reflectionCullPlaneZ;
+    static float s_reflectionCullMinSize;
 
     static void AnimateThread(void* param);
     static void __stdcall ComputeElementShaders(M2Element* element);

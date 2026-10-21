@@ -44,6 +44,7 @@ namespace Liquid {
         void SetShorelineSoftness(float softness);
         // How far the real reflection shows (yards; it fades out over the second half, 0 = no fade).
         void SetReflectionDistance(float distance);
+        void SetReflectionModelSize(float size);
         uint32_t GetWaterDetail();
 
         // Whether the ripple simulation runs (water 4.3.4, rippleDetail 1 or 2, and its maps and shaders made).

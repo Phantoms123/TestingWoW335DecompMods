@@ -31,6 +31,9 @@ const uint32_t s_blendModes[3][7] = { { 0, 1, 2, 10, 3, 4, 5 }, { 2, 2, 2, 10, 3
 // STATIC: 0x00AF5898
 // CHANGED: not in the original client (see M2Scene.h).
 bool CM2Scene::s_keepClipPlane;
+float CM2Scene::s_reflectionCullDistance;
+float CM2Scene::s_reflectionCullPlaneZ;
+float CM2Scene::s_reflectionCullMinSize;
 
 uint32_t CM2Scene::s_optFlags = 0xFFFFFFFF;
 

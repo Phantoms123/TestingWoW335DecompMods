@@ -75,6 +75,8 @@ static CTexture* s_realReflectionTex;
 static CTexture* s_realReflectionTemp;
 static CTexture* s_realReflectionDepth;
 static float s_reflectionDistance = 200.0f;
+// Models smaller than this part of their distance are left out of the reflection (reflectionModelSize).
+static float s_reflectionModelSize = 0.01f;
 static bool s_reflectionDepthBound;
 static CTexture* s_blurredBackTex;
 static CTexture* s_blurTempTex;
@@ -355,6 +357,10 @@ void Liquid::Cata::SetRippleDetail(uint32_t detail) {
 
 void Liquid::Cata::SetReflectionMode(uint32_t mode) {
     s_reflectionMode = mode > 3 ? 3 : mode;
+}
+
+void Liquid::Cata::SetReflectionModelSize(float size) {
+    s_reflectionModelSize = size < 0.0f ? 0.0f : size;
 }
 
 void Liquid::Cata::SetReflectionDistance(float distance) {
@@ -1274,6 +1280,9 @@ bool Liquid::Cata::BeginModelReflection() {
     device->XformSetView(s_reflectionSavedView);
     CShaderEffect::UpdateProjMatrix();
     CM2Scene::s_keepClipPlane = true;
+    CM2Scene::s_reflectionCullDistance = s_reflectionDistance;
+    CM2Scene::s_reflectionCullPlaneZ = s_reflectionPlaneZ;
+    CM2Scene::s_reflectionCullMinSize = s_reflectionModelSize;
     return true;
 }
 
@@ -1508,7 +1517,11 @@ bool Liquid::Cata::RenderWater(IEnvironment* environment, IGeomFactory* geomFact
 
     // Water types without the 4.3.4 textures (an older LiquidType.dbc) draw the 3.3.5 way.
     if (!depthTint || !bump || !foam) {
-        LogOnce(6, "a water type has no 4.3.4 textures (depth tint %d, bump %d, foam %d); is patch-C.MPQ's LiquidType.dbc loaded?", depthTint ? 1 : 0, bump ? 1 : 0, foam ? 1 : 0);
+        // A texture still loading leaves it out for this frame only; one the type does not have, for good.
+        if (!settings->m_textures[1].Count() || !settings->m_textures[2].Count() || !settings->m_textures[3].Count()) {
+            LogOnce(6, "a water type has no 4.3.4 textures (depth tint '%s', bump '%s', foam '%s'); is patch-C.MPQ's LiquidType.dbc loaded?", settings->m_textureNames[1], settings->m_textureNames[2], settings->m_textureNames[3]);
+        }
+
         return false;
     }
 
@@ -1741,7 +1754,10 @@ bool Liquid::Cata::RenderMagma(IEnvironment* environment, IGeomFactory* geomFact
 
     // Liquid types without the 4.3.4 layers (an older LiquidType.dbc) draw the 3.3.5 way.
     if (!layers[0] || !layers[1] || !layers[2] || !noise) {
-        LogOnce(19, "a magma type has no 4.3.4 layers; is patch-C.MPQ's LiquidType.dbc loaded?");
+        if (!settings->m_textures[1].Count() || !settings->m_textures[2].Count() || !settings->m_textures[3].Count()) {
+            LogOnce(19, "a magma type has no 4.3.4 layers ('%s', '%s', '%s'); is patch-C.MPQ's LiquidType.dbc loaded?", settings->m_textureNames[1], settings->m_textureNames[2], settings->m_textureNames[3]);
+        }
+
         return false;
     }
 
