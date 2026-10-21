@@ -1,3 +1,4 @@
+#include <chrono>
 #include <cfloat>
 #include <cstdio>
 #include "CWorldSceneRender.h"
@@ -288,19 +289,37 @@ void CWorldScene::BuildViewMatrices(const C3Vector& position) {
 
 // CHANGED: not in the original client. The terrain (and, with reflectionMode 3, the map objects) seen in the water,
 // drawn through Liquid::Cata's mirrored view into its reflection texture.
+// Times of the reflection's parts (milliseconds summed over the frames since the last print), printed every
+// 5 seconds while reflections draw, to see where a slow reflection spends its time.
+static double s_reflectionMs[6];
+static uint32_t s_reflectionFrames;
+static std::chrono::steady_clock::time_point s_reflectionPrinted;
+
+static double MsSince(std::chrono::steady_clock::time_point& start) {
+    std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+    double ms = std::chrono::duration<double, std::milli>(now - start).count();
+    start = now;
+    return ms;
+}
+
 void CWorldScene::RenderReflection() {
     uint32_t mode = 0;
+    std::chrono::steady_clock::time_point t = std::chrono::steady_clock::now();
 
     if (!Liquid::Cata::BeginReflection(CWorldScene::s_activeWorldView, mode)) {
         return;
     }
 
+    s_reflectionMs[0] += MsSince(t);
     CWorldScene::s_reflectionPass = true;
     CWorldScene::RenderChunks();
+    s_reflectionMs[1] += MsSince(t);
 
     if (mode >= 3) {
         CWorldScene::RenderMapObjDefGroups();
     }
+
+    s_reflectionMs[2] += MsSince(t);
 
     // Once, what the reflection takes in, for the terminal.
     static bool s_reported;
@@ -319,6 +338,23 @@ void CWorldScene::RenderReflection() {
         Liquid::Cata::EndModelReflection();
     }
 
+    s_reflectionMs[3] += MsSince(t);
     CWorldScene::s_reflectionPass = false;
     Liquid::Cata::EndReflection();
+    s_reflectionMs[4] += MsSince(t);
+    s_reflectionFrames++;
+
+    if (s_reflectionPrinted.time_since_epoch().count() == 0) {
+        s_reflectionPrinted = t;
+    } else if (std::chrono::duration<double>(t - s_reflectionPrinted).count() >= 5.0) {
+        double frames = s_reflectionFrames ? s_reflectionFrames : 1;
+        fprintf(stderr, "Reflection stats: %.1f ms a frame (begin %.1f, terrain %.1f, buildings %.1f, models %.1f, end %.1f), %u model elements\n", (s_reflectionMs[0] + s_reflectionMs[1] + s_reflectionMs[2] + s_reflectionMs[3] + s_reflectionMs[4]) / frames, s_reflectionMs[0] / frames, s_reflectionMs[1] / frames, s_reflectionMs[2] / frames, s_reflectionMs[3] / frames, s_reflectionMs[4] / frames, World::s_m2Scene ? World::s_m2Scene->m_passElements[0].m_count + World::s_m2Scene->m_doodadElements.m_count : 0u);
+
+        for (double& ms : s_reflectionMs) {
+            ms = 0.0;
+        }
+
+        s_reflectionFrames = 0;
+        s_reflectionPrinted = t;
+    }
 }
