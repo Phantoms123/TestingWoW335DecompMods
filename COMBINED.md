@@ -30,6 +30,11 @@ Every changed spot in the original sources is marked `// CHANGED:`.
 - `CM2Shared::GetEffect`: unknown special shader ids no longer crash (null shader names reached `strcpy`).
 - Particle blend modes past 6 get an additive material instead of keeping the opaque alpha-tested one
   (which drew as solid quads).
+- 4.x batches that draw three textures (special effect 3, used by many glowing spell models) are drawn with
+  their first two: this client's shaders read two, and its texture setup broke past the second.
+- Checked on 117 real 4.3.4 models (spells, particles, cameras): every converted particle emitter and camera
+  matches its source record, every array stays inside the file, and every skin batch indexes valid
+  materials, textures and combos.
 
 ### Terrain (WoW/Source/WorldClient)
 - `AdtCompat.cpp`: a tile with a `_tex0.adt` file is stored the 4.x way. Root, `_tex0` and `_obj0` are merged in
@@ -53,7 +58,8 @@ Every changed spot in the original sources is marked `// CHANGED:`.
 
 ## Known limits
 
-- Nothing here has been run against game data yet. Test with your own 4.x models and maps.
+- The converters are checked against real 4.3.4 files, but the client itself has not been run on them yet.
+- No sample model used 4.x special effects 0-2 or compressed gravity, so those two conversions are untested.
 - 4.x models whose effects need shaders that 3.3.5a's shader archive does not contain draw with the closest
   standard shader. Exact results need the 4.x shaders ported too.
 - Split tiles are read synchronously when first needed, which can hitch while flying into new areas.

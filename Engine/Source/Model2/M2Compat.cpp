@@ -364,11 +364,20 @@ static uint16_t CompatEffectToShader(const CompatShaderEffect& effect) {
     return shader;
 }
 
+static const uint16_t BATCH_TEXTURES_MAX = 2;
+
 void M2CompatTranslateSkinShaders(M2SkinProfile* skin) {
     static const uint32_t effectCount = sizeof(s_compatEffects) / sizeof(s_compatEffects[0]);
 
     for (uint32_t i = 0; i < skin->m_batches.m_count; i++) {
         M2Batch* batch = &skin->m_batches[i];
+
+        // 4.x effects can draw three or four textures. Every shader this client has reads two, and
+        // CM2SceneRender::SetupTextures steps a 4-bit shift per texture, which goes negative past the
+        // second and also writes texture matrix constants past the two stages the shaders reserve.
+        if (batch->m_textureCount > BATCH_TEXTURES_MAX) {
+            batch->m_textureCount = BATCH_TEXTURES_MAX;
+        }
 
         if (!(batch->m_shader & 0x8000)) {
             continue;
