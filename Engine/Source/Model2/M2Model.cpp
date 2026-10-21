@@ -7426,6 +7426,13 @@ int32_t CM2Model::InitializeLoaded() {
                     material.m_blendMode = 5;
                     material.m_flags &= ~4u;
                     break;
+
+                default:
+                    // CHANGED: modes past 6 come from newer content. Without a case they kept the opaque,
+                    // alpha-tested material and drew as solid quads; additive is the nearest stock blend.
+                    material.m_blendMode = GxBlend_Add;
+                    material.m_flags &= ~4u;
+                    break;
             }
 
             material.m_flags = (material.m_flags & ~1u) | ((flags & 1) ? 0 : 1);

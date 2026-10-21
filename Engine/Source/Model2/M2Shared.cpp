@@ -15,6 +15,7 @@
 #include "Engine/Source/Gx/CGxTexFlags.h"
 #include "Engine/Source/Gx/Gx.h"
 #include "Engine/Source/Model2/M2Cache.h"
+#include "Engine/Source/Model2/M2Compat.h"
 #include "Engine/Source/Model2/M2Model.h"
 #include "Engine/Source/Os/TimeManager.h"
 #include "Engine/Source/Services/AsyncFile.h"
@@ -741,7 +742,8 @@ CShaderEffect* CM2Shared::GetEffect(M2Batch* batch) {
                 alphaOp = static_cast<EGxTexOp>(3);
                 break;
             default:
-                break;
+                // CHANGED: the original fell through with null shader names and crashed in strcpy.
+                return this->GetEffect(batch->m_textureCount, 0x11, batch->m_textureCoordComboIndex);
         }
 
         char effectName[256];
@@ -1175,8 +1177,14 @@ int32_t CM2Shared::InitializeSkinProfile() {
         memset(this->m_effects, 0, sizeof(CShaderEffect*) * this->m_skinData->m_batches.m_count);
     }
 
-    this->SubstituteSimpleShaders();
-    this->SubstituteSpecializedShaders();
+    // CHANGED: a 4.x skin stores final shader bits and that client had neither substitution pass, so
+    // its effect ids are translated instead of rewritten from the texture combiner table.
+    if (M2CompatIsNewer(*this->m_data)) {
+        M2CompatTranslateSkinShaders(this->m_skinData);
+    } else {
+        this->SubstituteSimpleShaders();
+        this->SubstituteSpecializedShaders();
+    }
 
     if (this->m_skinData->m_indices.m_count) {
         for (uint32_t i = 0; i < this->m_skinData->m_batches.m_count; i++) {
@@ -1539,7 +1547,8 @@ int32_t M2Init(uint8_t* base, uint32_t size, M2Data& data) {
         return 0;
     }
 
-    if (data.m_version < 0x108 || data.m_version > 0x108) {
+    // CHANGED: also accepts models authored for 4.x clients; M2CompatNormalize has already reshaped them.
+    if (data.m_version < M2_VERSION_CLIENT || data.m_version > M2_VERSION_COMPAT_MAX) {
         return 0;
     }
 
@@ -1729,6 +1738,12 @@ int32_t CM2Shared::Initialize() {
 int32_t CM2Shared::FinishLoading() {
     if (this->m_flags & 1) {
         return 1;
+    }
+
+    // CHANGED: reshape records from newer model versions before the arrays are relocated.
+    if (!M2CompatNormalize(reinterpret_cast<uint8_t*>(this->m_data), this->m_fileSize, *this->m_data)) {
+        DebugLog("Corrupt model data: %s", this->m_fileName);
+        return 0;
     }
 
     if (!M2Init(reinterpret_cast<uint8_t*>(this->m_data), this->m_fileSize, *this->m_data)) {
