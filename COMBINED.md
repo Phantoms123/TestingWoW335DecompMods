@@ -130,6 +130,17 @@ Every changed spot in the original sources is marked `// CHANGED:`.
 - The panels themselves are Waystone's VideoOptionsPanels (FrameXML and GlueXML) and GraphicsQualityLevels.lua in
   the patch MPQ, with shadow quality mapped onto 3.3.5's `extShadowQuality` and the view distance slider to 2500.
 
+### 4.3.4 shadows (Engine/Source/ShaderEffect/ShadowCache.cpp, WoW/Source/WorldClient/ShadowQuery.cpp)
+- 4.3.4 kept 3.3.5's shadow cache (the same textures, shaders and PCF kernel) and gave it new settings, which
+  are added here on top of it: `shadowMode` 0-3 with `shadowTextureSize` 1024 or 2048 picks one of
+  `extShadowQuality`'s six levels (1: dynamic shadows near the player, 2: environment shadows too, 3: cascaded
+  shadow maps); -1, the default, leaves `extShadowQuality` and the video options in charge, and setting
+  `extShadowQuality` puts `shadowMode` back to -1. `shadowTextureSize` 0 sizes by quality as 3.3.5 does.
+- `shadowSoftness` scales the PCF kernel (1 = original, 0.25-6, clamped as 4.3.4/Waystone do).
+- `shadowFollowSun` 1 casts the shadows from the sky's sun, or the moon at night, instead of the zone light's
+  fixed direction (Waystone's steps: light kept at least 0.2 below level, shadows only rebuilt once it has
+  turned about half a degree). 0, the default, is 3.3.5's direction.
+
 ### Volumetric fog and water (WoW/Source/VolFog)
 - CoAVolFog's renderers, shaders, data and `CoAVolFog.ini` as upstream; its DLL loader, call-site patches and
   address reads are replaced by calls from the client's world render and reads of the client's own globals.

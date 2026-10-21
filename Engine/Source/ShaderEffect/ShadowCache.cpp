@@ -49,6 +49,36 @@ uint32_t CShadowCache::s_shadowSize;
 // STATIC: 0x00D43154
 EShadowMode CShadowCache::s_shadowMode;
 
+// CHANGED: 4.3.4's shadowSoftness (scales the PCF kernel, 1 = original) and shadowTextureSize (0 = by quality).
+float CShadowCache::s_softness = 1.0f;
+uint32_t CShadowCache::s_sizeOverride = 0;
+
+void CShadowCache::SetSoftness(float softness) {
+    // Clamped like 4.3.4's.
+    if (!(softness >= 0.25f)) {
+        softness = 0.25f;
+    } else if (softness > 6.0f) {
+        softness = 6.0f;
+    }
+
+    CShadowCache::s_softness = softness;
+
+    if (CShadowCache::s_shadowSize) {
+        CShadowCache::InitPcfOffsets();
+    }
+}
+
+void CShadowCache::SetTextureSizeOverride(uint32_t size) {
+    if (size != 0 && size != 1024 && size != 2048) {
+        size = 0;
+    }
+
+    if (size != CShadowCache::s_sizeOverride) {
+        CShadowCache::s_sizeOverride = size;
+        CShadowCache::s_recreateTextures = 1;
+    }
+}
+
 // STATIC: 0x00D43158
 ShadowMatrixCallback CShadowCache::s_matrixCallback;
 
@@ -309,7 +339,7 @@ void CShadowCache::InitPcfOffsets() {
     CShadowCache::s_textureSize[0] = size;
     CShadowCache::s_textureSize[1] = size;
 
-    float texel = 1.0 / size;
+    float texel = CShadowCache::s_softness / size;
 
     CShadowCache::s_pcfOffsets[0].x = 0.8f * texel;
     CShadowCache::s_pcfOffsets[0].y = -1.0f * texel;
@@ -864,6 +894,10 @@ void CShadowCache::Init() {
 
     if (CShadowCache::s_shadowMode >= SHADOW_HIGH || CShadowCache::s_shadowMode == SHADOW_MEDIUM) {
         CShadowCache::s_shadowSize = 2048;
+    }
+
+    if (CShadowCache::s_sizeOverride) {
+        CShadowCache::s_shadowSize = CShadowCache::s_sizeOverride;
     }
 
     CShadowCache::InitPcfOffsets();

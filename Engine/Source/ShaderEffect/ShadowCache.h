@@ -82,6 +82,11 @@ class CShadowCache {
     static C3Vector s_sunDir;
     static C4Vector s_sunDirViewSpace;
     static float s_textureSize[2];
+    // CHANGED: 4.3.4's shadow settings (shadowSoftness, shadowTextureSize); 1 and 0 keep the 3.3.5 behaviour.
+    static float s_softness;
+    static uint32_t s_sizeOverride;
+    static void SetSoftness(float softness);
+    static void SetTextureSizeOverride(uint32_t size);
 
     static void ClearBandTextures();
     static void Destroy();

@@ -7,6 +7,7 @@
 #include "Engine/Source/ShaderEffect/ShaderEffect.h"
 #include "Engine/Source/ShaderEffect/ShadowCache.h"
 #include "Engine/Source/ShaderEffect/SunShafts.h"
+#include "WoW/Source/WorldClient/ShadowQuery.h"
 #include "WoW/Source/LiquidSystem/CataWater.h"
 #include "WoW/Common/AaBsp.h"
 #include "WoW/Source/UIUtil/PortraitButton.h"
@@ -460,6 +461,10 @@ bool CWorldParam::EnvironmentDetailCallback(CVar* var, const char* oldValue, con
     return true;
 }
 
+// CHANGED: 4.3.4's shadowMode (see RegisterCataShadows).
+static CVar* s_shadowModeVar;
+static bool s_applyingShadowMode;
+
 // VERIFY: 782f4c26 manual
 // OFFSET: 0x0078DCB0
 bool CWorldParam::ExtShadowQualityCallback(CVar* var, const char* oldValue, const char* value, void* arg) {
@@ -471,6 +476,11 @@ bool CWorldParam::ExtShadowQualityCallback(CVar* var, const char* oldValue, cons
     }
 
     CShadowCache::SetShadowMode(static_cast<EShadowMode>(mode));
+
+    // CHANGED: setting extShadowQuality itself (the video options do) hands shadows back from shadowMode to it.
+    if (!s_applyingShadowMode && s_shadowModeVar && s_shadowModeVar->m_intValue >= 0) {
+        s_shadowModeVar->Set("-1", true, false, false, true);
+    }
 
     return true;
 }
@@ -783,6 +793,116 @@ static bool ReflectionDistanceCallback(CVar* var, const char* oldValue, const ch
     return true;
 }
 
+// CHANGED: 4.3.4's shadow settings. 4.3.4 kept 3.3.5's shadow cache and renamed its settings: shadowMode 0-3
+// with shadowTextureSize 1024 or 2048 picks one of extShadowQuality's six levels. shadowMode -1 (the default)
+// leaves extShadowQuality (the 3.3.5 setting, and the video options) in charge.
+static const char* s_cataShadowModeDescs[4] = {
+    "0 - Precomputed terrain shadows, blob shadows.",
+    "1 - Precomputed terrain shadows, dynamic shadows near player.",
+    "2 - Static environment shadows, dynamic shadows near player.",
+    "3 - Full dynamic shadows.",
+};
+
+static bool ApplyCataShadowMode(int32_t mode) {
+    if (mode < 0 || mode > 3 || !CWorldParam::cvar_extShadowQuality) {
+        return mode < 0;
+    }
+
+    bool lowRes = CShadowCache::s_sizeOverride == 1024;
+    int32_t quality = 0;
+
+    switch (mode) {
+        case 1:
+            quality = lowRes ? SHADOW_LOW : SHADOW_MEDIUM;
+            break;
+        case 2:
+            quality = lowRes ? SHADOW_MEDIUM_HIGH : SHADOW_HIGH;
+            break;
+        case 3:
+            quality = SHADOW_VERY_HIGH;
+            break;
+    }
+
+    if (!CShadowCache::ValidateShadowMode(static_cast<EShadowMode>(quality))) {
+        return false;
+    }
+
+    s_applyingShadowMode = true;
+    CWorldParam::cvar_extShadowQuality->Set(quality, true, false, false, true);
+    s_applyingShadowMode = false;
+
+    return true;
+}
+
+static bool ShadowModeCallback(CVar* var, const char* oldValue, const char* value, void* arg) {
+    int32_t mode = SStrToInt(value);
+
+    if (mode < 0) {
+        return true;
+    }
+
+    if (mode > 3 || !ApplyCataShadowMode(mode)) {
+        ConsoleWrite("Unsupported shadow mode.", DEFAULT_COLOR);
+        return false;
+    }
+
+    char buffer[256];
+    SStrPrintf(buffer, sizeof(buffer), "Shadow mode changed to %s", s_cataShadowModeDescs[mode]);
+    ConsoleWrite(buffer, DEFAULT_COLOR);
+
+    return true;
+}
+
+static bool ShadowTextureSizeCallback(CVar* var, const char* oldValue, const char* value, void* arg) {
+    int32_t size = SStrToInt(value);
+
+    if (size != 0 && size != 1024 && size != 2048) {
+        ConsoleWrite("Unsupported shadow texture size.", DEFAULT_COLOR);
+        return false;
+    }
+
+    CShadowCache::SetTextureSizeOverride(static_cast<uint32_t>(size));
+
+    if (s_shadowModeVar && s_shadowModeVar->m_intValue >= 0) {
+        ApplyCataShadowMode(s_shadowModeVar->m_intValue);
+    }
+
+    char buffer[256];
+    SStrPrintf(buffer, sizeof(buffer), "Shadow texture size changed to %d.", size);
+    ConsoleWrite(buffer, DEFAULT_COLOR);
+
+    return true;
+}
+
+static bool ShadowSoftnessCallback(CVar* var, const char* oldValue, const char* value, void* arg) {
+    CShadowCache::SetSoftness(SStrToFloat(value));
+    return true;
+}
+
+static bool ShadowFollowSunCallback(CVar* var, const char* oldValue, const char* value, void* arg) {
+    CShadowQuery::s_followSun = SStrToInt(value) != 0;
+    CShadowCache::s_needsRebuild = 1;
+    return true;
+}
+
+static void RegisterCataShadows() {
+    CVar* size = CVar::Register("shadowTextureSize", "Shadow texture size (1024 or 2048; 0 by shadow quality, as 3.3.5)", 1, "0", ShadowTextureSizeCallback, CATEGORY_GRAPHICS, false, nullptr, false);
+    int32_t sizeValue = size ? size->m_intValue : 0;
+    CShadowCache::SetTextureSizeOverride(sizeValue == 1024 || sizeValue == 2048 ? static_cast<uint32_t>(sizeValue) : 0);
+
+    CVar* softness = CVar::Register("shadowSoftness", "Shadow edge softness (1 = original, 0.25-6)", 1, "1.0", ShadowSoftnessCallback, CATEGORY_GRAPHICS, false, nullptr, false);
+    CShadowCache::SetSoftness(softness ? softness->m_floatValue : 1.0f);
+
+    CVar* followSun = CVar::Register("shadowFollowSun", "Shadows follow the sun and moon position (0 off as 3.3.5, 1 on)", 1, "0", ShadowFollowSunCallback, CATEGORY_GRAPHICS, false, nullptr, false);
+    CShadowQuery::s_followSun = followSun && followSun->m_intValue != 0;
+
+    s_shadowModeVar = CVar::Register("shadowMode", "Quality of shadows, as 4.3.4 (0-3; -1 extShadowQuality decides)", 1, "-1", ShadowModeCallback, CATEGORY_GRAPHICS, false, nullptr, false);
+
+    if (s_shadowModeVar && s_shadowModeVar->m_intValue >= 0) {
+        ApplyCataShadowMode(s_shadowModeVar->m_intValue);
+    }
+}
+
 static bool SunShaftsCallback(CVar* var, const char* oldValue, const char* value, void* arg) {
     int32_t mode = SStrToInt(value);
     SunShafts::SetMode(mode > 0 ? static_cast<uint32_t>(mode) : 0);
@@ -844,6 +964,7 @@ void CWorldParam::Initialize() {
     CWorldParam::cvar_projectedTextures = CVar::Register("projectedTextures", "Projected Textures", 1, "0", CWorldParam::ProjectedTexturesCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     CWorldParam::cvar_gxTextureCacheSize = CVar::Register("gxTextureCacheSize", "GX Texture Cache Size", 1, "0", CWorldParam::GxTextureCacheSizeCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     CVar::Register("spellEffectLevel", "Video Option: Spell Effects", 1, "9", nullptr, CATEGORY_GRAPHICS, false, nullptr, false);
+    RegisterCataShadows();
 
     AddConsoleDeviceDefaultCallback(CWorldParam::SetDefaults);
 

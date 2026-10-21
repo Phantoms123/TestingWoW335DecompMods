@@ -25,6 +25,9 @@ class CShadowQuery {
     static float s_cutoffHeight;
 
     static void Update();
+    // CHANGED: 4.3.4's shadowFollowSun: cast the shadows from the sky's sun, or the moon at night, instead of
+    // the zone light's fixed direction.
+    static int32_t s_followSun;
 
     static void FreeBuffers();
     static void AllocBuffers();

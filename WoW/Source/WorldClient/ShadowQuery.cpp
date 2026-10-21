@@ -11,6 +11,7 @@
 #include "WoW/Source/Ui/WorldFrame.h"
 #include "WoW/Source/WorldClient/CPortalView.h"
 #include "WoW/Source/WorldClient/DayNight__DNInfo.h"
+#include "WoW/Source/WorldClient/DayNight.h"
 #include "WoW/Source/WorldClient/Map.h"
 #include "WoW/Source/WorldClient/MapLight.h"
 #include "WoW/Source/WorldClient/World.h"
@@ -45,6 +46,72 @@ static uint32_t s_maxUntexturedBatches;
 
 // STATIC: 0x00D25304
 float CShadowQuery::s_cutoffHeight;
+
+int32_t CShadowQuery::s_followSun;
+
+// CHANGED: 4.3.4's shadowFollowSun (Waystone's shadow light, the same steps and limits). Picks the sun while it
+// is above the horizon, else the moon; keeps the light at least 0.2 below level so shadows stay finite; and only
+// moves the shadows once the light has turned noticeably, so the cached bands are not rebuilt every frame.
+static bool GetSkyShadowDirection(C3Vector& direction) {
+    static C3Vector s_last;
+    static int32_t s_haveLast;
+    static float s_lastFade = -1.0f;
+
+    const C3Vector& camera = DayNight::GetInfo()->m_cameraPos;
+    const C3Vector* planets[2] = { &DayNight::g_planets.m_sun.m_position, &DayNight::g_planets.m_moon.m_position };
+    C3Vector dirs[2];
+    float fades[2] = { 0.0f, 0.0f };
+
+    for (int32_t i = 0; i < 2; i++) {
+        C3Vector d(planets[i]->x - camera.x, planets[i]->y - camera.y, planets[i]->z - camera.z);
+        float length = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
+        dirs[i] = C3Vector(0.0f, 0.0f, 1.0f);
+
+        if (length > 0.001f) {
+            dirs[i] = C3Vector(d.x / length, d.y / length, d.z / length);
+            float t = dirs[i].z / 0.18f;
+            t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+            fades[i] = (3.0f - 2.0f * t) * t * t;
+        }
+    }
+
+    int32_t pick = fades[0] > 0.0f ? 0 : 1;
+    float fade = pick == 0 ? fades[0] : fades[1] * 0.5f;
+    C3Vector light(-dirs[pick].x, -dirs[pick].y, -dirs[pick].z);
+
+    if (fades[pick] <= 0.0f) {
+        if (!s_haveLast) {
+            return false;
+        }
+
+        light = s_last;
+    }
+
+    if (light.z > -0.2f) {
+        float flat = std::sqrt(light.x * light.x + light.y * light.y);
+        float scale = flat > 0.0001f ? std::sqrt(0.96f) / flat : 0.0f;
+        light.x *= scale;
+        light.y *= scale;
+        light.z = -0.2f;
+    }
+
+    bool moved = false;
+
+    if (!s_haveLast || light.x * s_last.x + light.y * s_last.y + light.z * s_last.z < 0.99996f) {
+        s_last = light;
+        moved = true;
+    }
+
+    s_haveLast = 1;
+
+    if (moved || std::fabs(fade - s_lastFade) > 0.02f) {
+        s_lastFade = fade;
+        CShadowCache::s_needsRebuild = 1;
+    }
+
+    direction = s_last;
+    return true;
+}
 
 // STATIC: 0x00D25320
 ShadowQueryBuffers CShadowQuery::s_bandBuffers[3];
@@ -112,6 +179,11 @@ void CShadowQuery::Update() {
     direction.x = direction.x * inv;
     direction.y = direction.y * inv;
     direction.z = z * inv;
+
+    if (CShadowQuery::s_followSun) {
+        GetSkyShadowDirection(direction);
+    }
+
     CShadowCache::PreUpdate(direction);
     C3Vector viewer(0.0f, 0.0f, 0.0f);
     GetViewerPosition(&viewer);
