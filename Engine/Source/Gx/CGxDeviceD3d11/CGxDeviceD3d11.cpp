@@ -1823,6 +1823,16 @@ void CGxDeviceD3d11::IBindTargets() {
     CGxTex* depth = this->m_textureTarget[GxBuffers_Depth].m_texture;
     bool colorTexture = false;
 
+    // A texture drawn into before it was ever drawn with (the unit portraits) is made now, as Direct3D 9 makes it
+    // when set as the target; drawing would otherwise go to the back buffer and the texture stay empty.
+    if (color && (color->m_needsCreation || !color->m_apiSpecificData)) {
+        this->ITexCreate(color);
+    }
+
+    if (depth && (depth->m_needsCreation || !depth->m_apiSpecificData)) {
+        this->ITexCreate(depth);
+    }
+
     // The sampled depth texture stands in for the back buffer's (single-sampled back buffers only).
     if (this->m_sampledDepth && this->m_samples == 1) {
         Texture* tex = static_cast<Texture*>(this->m_sampledDepth->m_apiSpecificData);
@@ -3080,7 +3090,8 @@ ID3D11SamplerState* CGxDeviceD3d11::ISampler(CGxTex* texId, bool comparison) {
 
     desc.AddressU = texId->m_flags.m_wrapU ? D3D11_TEXTURE_ADDRESS_WRAP : D3D11_TEXTURE_ADDRESS_CLAMP;
     desc.AddressV = texId->m_flags.m_wrapV ? D3D11_TEXTURE_ADDRESS_WRAP : D3D11_TEXTURE_ADDRESS_CLAMP;
-    desc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+    // Direct3D 9's default (Gx sets only U and V): volume textures (the magma noise) repeat in depth too.
+    desc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
     desc.MaxAnisotropy = std::min<uint32_t>(anisotropy, 16);
     desc.MinLOD = 0.0f;
     desc.MaxLOD = mips ? D3D11_FLOAT32_MAX : 0.0f;

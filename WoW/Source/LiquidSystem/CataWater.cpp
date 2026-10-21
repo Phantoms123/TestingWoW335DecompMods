@@ -1567,7 +1567,9 @@ bool Liquid::Cata::RenderWater(IEnvironment* environment, IGeomFactory* geomFact
     // A real reflection when one was drawn this frame for water at this height, else the sky reflection;
     // underwater 4.3.4 draws the surface from below without one.
     CGxTex* realReflection = GxTexOf(s_realReflectionTex);
-    bool real = s_realReady && realReflection && fabsf(bounds->c.z - s_planeHeight) < 2.0f;
+    // Within a few yards of the reflected level (the chunks of a sloping river): the small offset shows far less
+    // than a chunk switching to the sky reflection beside its neighbours.
+    bool real = s_realReady && realReflection && fabsf(bounds->c.z - s_planeHeight) < 6.0f;
     uint32_t reflectionKind = real ? 1 : 0;
     CGxShader* pixelShader = s_cameraUnderwater ? s_belowPixelShaders[BelowPermutation(reflectionKind)] : s_abovePixelShaders[AbovePermutation(reflectionKind)];
     CGxShader* vertexShader = s_vertexShaders[s_rippleDetail * 4];
@@ -1623,11 +1625,12 @@ bool Liquid::Cata::RenderWater(IEnvironment* environment, IGeomFactory* geomFact
     // the shader compares (its own, through the view matrix's z column in c5-c8, and the scene's, through c22) are
     // both scaled down for distant water: the fade and the shore foam then cover more of the shallows, while the
     // depth ratios and comparisons it also makes stay the same.
+    // The scale is the same for every chunk in a frame (a chunk's own distance gave neighbouring chunks different
+    // ones, a visible step along their edge): it follows the camera's height above the water instead, which is how
+    // far off the shores seen are.
     {
-        C3Vector toWater = bounds->c - cameraPos;
-        float distance = sqrtf(toWater.x * toWater.x + toWater.y * toWater.y + toWater.z * toWater.z) - bounds->r;
-        distance = distance > 0.0f ? distance : 0.0f;
-        float scale = s_shorelineSoftness > 0.0f ? 1.0f / (1.0f + s_shorelineSoftness * (0.4f + distance / 80.0f)) : 1.0f;
+        float aboveWater = s_planeValid ? fabsf(cameraPos.z - s_planeHeight) : 0.0f;
+        float scale = s_shorelineSoftness > 0.0f ? 1.0f / (1.0f + s_shorelineSoftness * (0.4f + aboveWater / 20.0f)) : 1.0f;
 
         for (uint32_t reg = 5; reg <= 8; reg++) {
             s_ps[reg * 4 + 2] *= scale;
