@@ -1,3 +1,4 @@
+#include <chrono>
 #include "MapRenderChunk.h"
 #include <cmath>
 #include <cstring>
@@ -689,9 +690,20 @@ void CMapRenderChunk::UseStreamingBufs() {
 
 // VERIFY: fdc9dc29 manual
 // OFFSET: 0x007D04A0
+// CHANGED: time spent in RenderSetup (ms, summed), for the reflection statistics.
+double g_chunkSetupMs;
+double g_chunkTexturesMs;
+
 void CMapRenderChunk::RenderSetup(int32_t a2) {
+    std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
+    struct Sum {
+        std::chrono::steady_clock::time_point start;
+        ~Sum() { g_chunkSetupMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count(); }
+    } sum = { start };
+
     this->m_lastUpdateTime = 0.0f;
     this->AllocLayerTextures();
+    g_chunkTexturesMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
 
     if (!a2 || !CMap::enableTerrainShaderVertex) {
         C44Matrix world;

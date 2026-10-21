@@ -292,6 +292,8 @@ void CWorldScene::BuildViewMatrices(const C3Vector& position) {
 // Times of the reflection's parts (milliseconds summed over the frames since the last print), printed every
 // 5 seconds while reflections draw, to see where a slow reflection spends its time.
 static double s_reflectionMs[6];
+extern double g_chunkSetupMs;
+extern double g_chunkTexturesMs;
 static uint32_t s_reflectionFrames;
 static std::chrono::steady_clock::time_point s_reflectionPrinted;
 
@@ -348,6 +350,9 @@ void CWorldScene::RenderReflection() {
         s_reflectionPrinted = t;
     } else if (std::chrono::duration<double>(t - s_reflectionPrinted).count() >= 5.0) {
         double frames = s_reflectionFrames ? s_reflectionFrames : 1;
+        fprintf(stderr, "Terrain stats: chunk setup %.1f ms a frame (layer textures %.1f), both passes\n", g_chunkSetupMs / frames, g_chunkTexturesMs / frames);
+        g_chunkSetupMs = 0.0;
+        g_chunkTexturesMs = 0.0;
         fprintf(stderr, "Reflection stats: %.1f ms a frame (begin %.1f, terrain %.1f, buildings %.1f, models %.1f, end %.1f), %u model elements\n", (s_reflectionMs[0] + s_reflectionMs[1] + s_reflectionMs[2] + s_reflectionMs[3] + s_reflectionMs[4]) / frames, s_reflectionMs[0] / frames, s_reflectionMs[1] / frames, s_reflectionMs[2] / frames, s_reflectionMs[3] / frames, s_reflectionMs[4] / frames, World::s_m2Scene ? World::s_m2Scene->m_passElements[0].m_count + World::s_m2Scene->m_doodadElements.m_count : 0u);
 
         for (double& ms : s_reflectionMs) {

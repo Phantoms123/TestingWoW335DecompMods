@@ -99,6 +99,14 @@ static uint64_t NowNs() {
     return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
+// Adds the time until the end of the scope to a statistics counter.
+struct StatScope {
+    uint64_t& total;
+    uint64_t start;
+    explicit StatScope(uint64_t& counter) : total(counter), start(NowNs()) {}
+    ~StatScope() { total += NowNs() - start; }
+};
+
 const char* const s_attribSemantic[GxVAs_Last] = { "POSITION", "BLENDWEIGHT", "BLENDINDICES", "NORMAL", "COLOR", "COLOR", "TEXCOORD", "TEXCOORD", "TEXCOORD", "TEXCOORD", "TEXCOORD", "TEXCOORD", "TEXCOORD", "TEXCOORD" };
 const uint32_t s_attribSemanticIndex[GxVAs_Last] = { 0, 0, 0, 0, 0, 1, 0, 1, 2, 3, 4, 5, 6, 7 };
 
@@ -1306,6 +1314,7 @@ void CGxDeviceD3d11::IUploadPool(CGxPool* pool, uint32_t offset, uint32_t size) 
     }
 
     size = std::min<uint32_t>(size, static_cast<uint32_t>(api->m_mirror.size()) - offset);
+    this->m_statUploadBytes += (api->m_dynamic && api->m_discard && pool->m_usage != GxPoolUsage_Stream) ? api->m_mirror.size() : size;
 
     if (api->m_dynamic) {
         D3D11_MAPPED_SUBRESOURCE mapped;
@@ -1344,6 +1353,7 @@ void CGxDeviceD3d11::PoolDestroy(CGxPool* pool) {
 }
 
 char* CGxDeviceD3d11::BufLock(CGxBuf* buf) {
+    StatScope scope(this->m_statBufNs);
     CGxDevice::BufLock(buf);
     CGxPool* pool = buf->m_pool;
 
@@ -1378,6 +1388,7 @@ char* CGxDeviceD3d11::BufLock(CGxBuf* buf) {
 }
 
 int32_t CGxDeviceD3d11::BufUnlock(CGxBuf* buf, uint32_t size) {
+    StatScope scope(this->m_statBufNs);
     CGxDevice::BufUnlock(buf, size);
     CGxPool* pool = buf->m_pool;
     EmergencyMem& emergencyMem = this->m_emergencyMem[pool->m_target];
@@ -1410,6 +1421,8 @@ void CGxDeviceD3d11::BufData(CGxBuf* buf, const void* data, uint32_t size, uint3
 static void ReleaseTexture(CGxTex* texId);
 
 void CGxDeviceD3d11::ITexCreate(CGxTex* texId) {
+    StatScope scope(this->m_statTexNs);
+    this->m_statTexCreates++;
     // Made again (m_needsCreation set while it still has one): the old one goes first, unbound everywhere.
     if (texId->m_apiSpecificData && this->m_ctx) {
         ID3D11ShaderResourceView* none[24] = {};
@@ -1541,6 +1554,8 @@ ID3D11RenderTargetView* CGxDeviceD3d11::ITexRtv(CGxTex* texId, uint32_t plane) {
 }
 
 void CGxDeviceD3d11::ITexUpload(CGxTex* texId) {
+    StatScope scope(this->m_statTexNs);
+    this->m_statTexUploads++;
     uint32_t texelStrideInBytes;
     const void* texels = nullptr;
     texId->m_userFunc(GxTex_Lock, texId->m_width, texId->m_height, 0, 0, texId->m_userArg, texelStrideInBytes, texels);
@@ -1781,6 +1796,8 @@ void CGxDeviceD3d11::IBindTargets() {
     if (!this->m_ctx) {
         return;
     }
+
+    StatScope scope(this->m_statTargetNs);
 
     ID3D11RenderTargetView* rtv = this->m_backRtv;
     ID3D11DepthStencilView* dsv = this->m_backDsv;
@@ -2350,6 +2367,7 @@ void CGxDeviceD3d11::ScenePresent() {
                 double frames = this->m_statFrames ? this->m_statFrames : 1;
                 double seconds = (presentEnd - this->m_statStartNs) / 1e9;
                 fprintf(stderr, "D3D11 stats: %.1f fps, %.0f draws a frame, %.1f ms a frame in draws, %.1f ms in present, %.1f ms a frame in all\n", this->m_statFrames / seconds, this->m_statDraws / frames, this->m_statDrawNs / 1e6 / frames, this->m_statPresentNs / 1e6 / frames, seconds * 1000.0 / frames);
+                fprintf(stderr, "D3D11 stats: buffers %.1f ms (%.2f MB uploaded), textures %.1f ms (%.1f made, %.1f filled), targets %.1f ms a frame\n", this->m_statBufNs / 1e6 / frames, this->m_statUploadBytes / 1048576.0 / frames, this->m_statTexNs / 1e6 / frames, this->m_statTexCreates / frames, this->m_statTexUploads / frames, this->m_statTargetNs / 1e6 / frames);
             }
 
             this->m_statStartNs = presentEnd;
@@ -2357,6 +2375,12 @@ void CGxDeviceD3d11::ScenePresent() {
             this->m_statDraws = 0;
             this->m_statDrawNs = 0;
             this->m_statPresentNs = 0;
+            this->m_statBufNs = 0;
+            this->m_statUploadBytes = 0;
+            this->m_statTexNs = 0;
+            this->m_statTexCreates = 0;
+            this->m_statTexUploads = 0;
+            this->m_statTargetNs = 0;
         }
 
         static uint32_t s_presentFailures;

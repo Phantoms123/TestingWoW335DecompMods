@@ -180,6 +180,12 @@ class CGxDeviceD3d11 : public CGxDevice {
     uint64_t m_statDraws = 0;
     uint64_t m_statDrawNs = 0;
     uint64_t m_statPresentNs = 0;
+    uint64_t m_statBufNs = 0;            // locking and unlocking buffers (uploads included)
+    uint64_t m_statUploadBytes = 0;
+    uint64_t m_statTexNs = 0;            // making and filling textures
+    uint64_t m_statTexCreates = 0;
+    uint64_t m_statTexUploads = 0;
+    uint64_t m_statTargetNs = 0;         // binding render targets
     uint32_t m_statFrames = 0;
     uint64_t m_statStartNs = 0;
     uint32_t m_rtDepthClock = 0;
