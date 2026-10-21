@@ -74,7 +74,7 @@ static CTexture* s_fakeReflectionTex;
 static CTexture* s_realReflectionTex;
 static CTexture* s_realReflectionTemp;
 static CTexture* s_realReflectionDepth;
-static float s_reflectionDistance = 300.0f;
+static float s_reflectionDistance = 200.0f;
 static bool s_reflectionDepthBound;
 static CTexture* s_blurredBackTex;
 static CTexture* s_blurTempTex;
@@ -1308,11 +1308,11 @@ void Liquid::Cata::EndReflection() {
     if (depth) {
         GxRenderTargetSet(GxBuffers_Depth, nullptr, 0);
 
-        // What lies far off fades into the fog over the second half of reflectionDistance, so distant hills,
+        // What lies far off fades into the fog from a third of reflectionDistance on, so distant hills,
         // buildings and trees do not stand out in the water or appear in it abruptly.
         if (s_reflectionDistance > 0.0f) {
             C4Vector view = ViewSettings::Params(s_zNear, s_zFar, s_viewportFarClip);
-            PostEffects::FadeByDepth(reflection, depth, view, s_viewportFarClip * 0.99999f, s_reflectionDistance * 0.5f, s_reflectionDistance, info->m_fog.m_color);
+            PostEffects::FadeByDepth(reflection, depth, view, s_viewportFarClip * 0.99999f, s_reflectionDistance * 0.35f, s_reflectionDistance, info->m_fog.m_color);
         }
     }
 

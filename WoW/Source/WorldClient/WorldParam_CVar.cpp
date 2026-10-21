@@ -824,8 +824,8 @@ void CWorldParam::Initialize() {
     Liquid::Cata::SetShorelineSoftness(shorelineSoftness ? shorelineSoftness->m_floatValue : 1.0f);
     CVar* reflectionModels = CVar::Register("reflectionModels", "Reflect trees, characters and creatures in the water with reflectionMode 3 (0 off, 1 on)", 1, "1", ReflectionModelsCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     Liquid::Cata::SetReflectionModels(!reflectionModels || reflectionModels->m_intValue != 0);
-    CVar* reflectionDistance = CVar::Register("reflectionDistance", "How far the water's real reflections show, in yards (they fade out over the second half; 0 no fade)", 1, "300", ReflectionDistanceCallback, CATEGORY_GRAPHICS, false, nullptr, false);
-    Liquid::Cata::SetReflectionDistance(reflectionDistance ? reflectionDistance->m_floatValue : 300.0f);
+    CVar* reflectionDistance = CVar::Register("reflectionDistance", "How far the water's real reflections show, in yards (they fade out from a third of it on; 0 no fade)", 1, "200", ReflectionDistanceCallback, CATEGORY_GRAPHICS, false, nullptr, false);
+    Liquid::Cata::SetReflectionDistance(reflectionDistance ? reflectionDistance->m_floatValue : 200.0f);
     CVar* reflectionDownscale = CVar::Register("reflectionDownscale", "Water reflection texture downscale (0-4)", 1, "0", ReflectionDownscaleCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     Liquid::Cata::SetReflectionDownscale(reflectionDownscale ? static_cast<uint32_t>(reflectionDownscale->m_intValue) : 0);
     RegisterPostEffects();

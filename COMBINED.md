@@ -103,8 +103,8 @@ Every changed spot in the original sources is marked `// CHANGED:`.
   (about a third of a second) instead of switching. Outdoors, the culling reaches a screen's height above the view
   while reflections are on, so what the water mirrors does not pop as the camera turns, and the reflection is
   softened slightly (as 4.3.4's blurredReflection). The reflection draws into its own INTZ depth texture, and what lies
-  beyond half of `reflectionDistance` (default 300 yards) fades into the fog by that depth, so distant terrain,
-  buildings and trees neither stand out nor appear abruptly. With reflectionMode 3 the opaque models (trees, characters,
+  beyond a third of `reflectionDistance` (default 200 yards) fades into the fog by that depth, so distant terrain,
+  buildings and trees neither stand out nor appear abruptly. With reflectionMode 3 the models (trees, characters, all three passes, geometry only;
   creatures; `reflectionModels 0` leaves them out) are drawn too: their matrices already hold the view, so they are
   mirrored through the projection (the view-space mirror in front of it), which keeps the same clip plane
   (CM2Scene::s_keepClipPlane stops models in liquid from setting their own). The chunks considered for culling

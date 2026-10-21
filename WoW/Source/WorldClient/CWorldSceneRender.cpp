@@ -307,9 +307,12 @@ void CWorldScene::RenderReflection() {
         fprintf(stderr, "Liquid (4.3.4 water): real reflections with reflectionMode %u (3 also reflects buildings and models), %u opaque models in view\n", mode, World::s_m2Scene ? World::s_m2Scene->m_passElements[0].m_count + World::s_m2Scene->m_doodadElements.m_count : 0u);
     }
 
-    // The opaque models: trees, characters, creatures.
+    // The models: trees, characters, creatures. The see-through passes too, as models fading in with distance and
+    // the player's own character (faded when the camera is close) are drawn there; only their geometry.
     if (World::s_m2Scene && Liquid::Cata::BeginModelReflection()) {
         World::s_m2Scene->Draw(M2PASS_0);
+        World::s_m2Scene->Draw(M2PASS_1);
+        World::s_m2Scene->Draw(M2PASS_2);
         Liquid::Cata::EndModelReflection();
     }
 
