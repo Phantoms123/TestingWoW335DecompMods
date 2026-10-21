@@ -863,6 +863,7 @@ class CGUnit_C : public CGObject_C, public CGUnit {
     void UpdateModelTint(uint32_t time);
     void ProcessEmoteQueue();
     void CreateRipple(uint32_t a2);
+    void UpdateCataRipple(float liquidHeight);
     void SmoothFacingAngle(float facing);
     void RotateWheels();
     int32_t CanPlayTurnAnim();

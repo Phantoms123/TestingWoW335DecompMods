@@ -74,13 +74,21 @@ Every changed spot in the original sources is marked `// CHANGED:`.
   ProcWaterBelow and FourTapBlur shaders with the constants and textures 4.3.4 gives them: refraction of the frame
   drawn so far, depth tint and shoreline fade from the scene depth, animated normal maps, sun specular, foam, a
   blurred screen-space reflection, and a sky reflection rendered from the mirrored camera.
-- `/console waterDetail 2` (default) is the 4.3.4 water, `0` the 3.3.5 water. `rippleDetail`, `reflectionMode`
-  and `reflectionDownscale` are registered too (downscale shrinks the sky reflection texture).
+- `/console waterDetail 2` (default) is the 4.3.4 water, `0` the 3.3.5 water. `reflectionMode` and
+  `reflectionDownscale` are registered too (downscale shrinks the sky reflection texture).
 - Needs, in a patch MPQ: the shaders above under `Shaders\Cata\...`, `XTextures\ocean\newoceanbump.blp`,
   `XTextures\foam\waterchop7bw.blp` and a `DBFilesClient\LiquidType.dbc` with 4.3.4's water values (the 3.3.5
   file with textures 2-3 and floats 3-15 filled in; classic fields unchanged). Water types without them draw the
   3.3.5 way. Needs the depth texture; with multisampling it is copied with RESZ (DXVK, AMD drivers).
-- Not ported yet: real reflections of terrain and buildings (waterDetail 3), the ripple simulation, 4.3.4 magma.
+- 4.3.4's ripple simulation (`/console rippleDetail 1`, default; `2` adds a second level and steps the first at
+  25 ms): 1024x1024 two-channel float height maps covering 128 yards around the camera, moved in whole texels,
+  stepped with 4.3.4's PropagateDisplMap wave shader every 50 ms and disturbed with PerturbDisplMap splats of
+  `XTextures\Ripples\perturbTex.blp` by units in water (CGUnit_C::CreateRipple, as 4.3.4: strongest half
+  submerged, scaled by speed, pulsing every 800 ms) and by rain heavier than 0.2. The water shaders read them as
+  4.3.4's do (vertex c51-c52, pixel c29-c31, textures 4 and 8). With it on, units make no 3.3.5 ripple sprites;
+  `rippleDetail 0` brings those back. Needs the DisplMap shaders and perturbTex in the patch MPQ.
+- Not ported yet: real reflections of terrain and buildings (waterDetail 3), ripples from the collision meshes of
+  moving objects (4.3.4's PerturbDisplMapMesh), 4.3.4 magma.
 
 ### Volumetric fog and water (WoW/Source/VolFog)
 - CoAVolFog's renderers, shaders, data and `CoAVolFog.ini` as upstream; its DLL loader, call-site patches and

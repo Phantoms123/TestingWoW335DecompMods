@@ -143,6 +143,7 @@
 #include "WoW/Source/WorldClient/FrameTime.h"
 #include "WoW/Source/WorldClient/Map.h"
 #include "WoW/Source/WowSvcs/WowSvcsClient/ClientServices.h"
+#include "WoW/Source/LiquidSystem/CataWater.h"
 
 // STATIC: 0x00ADAC04
 static INVENTORY_SLOTS s_virtualItemInvSlots[2] = { INVSLOT_MAINHAND, INVSLOT_OFFHAND };
@@ -1963,6 +1964,13 @@ void CGUnit_C::CreateRipple(uint32_t a2) {
         return;
     }
 
+    // CHANGED: with 4.3.4's ripple simulation running, a unit disturbs the water's ripple maps instead of making
+    // 3.3.5 ripple sprites, as 4.3.4's CGUnit_C::CreateRipple does.
+    if (Liquid::Cata::RipplesActive()) {
+        this->UpdateCataRipple(liquidHeight);
+        return;
+    }
+
     uint32_t type = 0;
 
     if (a2) {
@@ -2079,6 +2087,51 @@ void CGUnit_C::CreateRipple(uint32_t a2) {
     } else {
         this->m_nextRippleTime = static_cast<uint32_t>((static_cast<uint64_t>(CRandom::uint32_(g_rndSeed)) * 50) >> 32) + time + 400;
     }
+}
+
+// CHANGED: not in the original client. 4.3.4's ripple disturbance for a unit in water: strongest when the model
+// is half under the surface (sin of the submerged fraction), scaled by speed while moving, pulsing every 800 ms,
+// and as wide as a tenth of the model's bounding sphere plus 0.2 yards.
+void CGUnit_C::UpdateCataRipple(float liquidHeight) {
+    CM2Model* model = this->GetObjectModel();
+
+    if (!model) {
+        return;
+    }
+
+    uint32_t flags = this->m_movement->m_flags;
+    bool moving = (flags & 0x3F) != 0;
+    bool falling = (flags & MOVEMENTFLAG_FALLING) != 0;
+    bool swimming = (flags & MOVEMENTFLAG_SWIMMING) != 0;
+    bool spline = this->m_movement->m_spline && !(this->m_movement->m_spline->m_flags & 0x400);
+    float strength = 0.0f;
+
+    if (moving || falling || swimming || spline) {
+        CAaBox box = model->GetCurrentBoundingBox();
+
+        if (box.IsInverted() || box.t.z - box.b.z <= 0.0001f) {
+            strength = 0.0f;
+        } else {
+            float submerged = (liquidHeight - box.b.z) / (box.t.z - box.b.z);
+
+            if (submerged > 0.0f) {
+                strength = sinf((submerged < 1.0f ? submerged : 1.0f) * 3.1415927f);
+            }
+
+            if (!falling) {
+                if (swimming && !moving && !spline) {
+                    strength = 0.0f;
+                } else {
+                    float speed = this->m_movement->m_currentSpeed * 0.083333336f + 0.5f;
+                    strength *= speed < 0.0f ? 0.0f : (speed > 1.0f ? 1.0f : speed);
+                }
+            }
+        }
+    }
+
+    CAaSphere sphere = model->GetCurrentBoundingSphere();
+    C3Vector position = this->GetPosition();
+    Liquid::Cata::SetUnitRipple(this, position, sphere.r * 0.1f + 0.2f, strength, this->m_obj->m_guid == CGUnit_C::s_activeMover);
 }
 
 // VERIFY: 1f29ad42 manual

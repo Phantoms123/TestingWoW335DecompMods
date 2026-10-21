@@ -1772,6 +1772,9 @@ void CGWorldFrame::OnWorldRender() {
         Liquid::Cata::SetView(camera->m_nearZ, camera->m_farZ, CWorld::s_unk_ADEEE4);
     }
 
+    // CHANGED: 4.3.4's water ripples step before the liquids draw.
+    Liquid::Cata::UpdateRipples(*World::GetCamPos());
+
     if (World::SceneCamLiquidStatus(nullptr)) {
         CWorldScene::RenderBarriers(this->m_elapsedSec);
         scene->Draw(M2PASS_1);

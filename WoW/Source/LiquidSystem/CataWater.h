@@ -10,8 +10,11 @@
 // space) with a mirrored render of the sky behind it. Needs LiquidType.dbc with the 4.3.4 water values and
 // textures (newoceanbump, waterchop7bw); without them, or with waterDetail 0, water draws as before.
 //
-// Not ported yet: real reflections of terrain and buildings (waterDetail 3 draws like 2) and the ripple
-// simulation (rippleDetail).
+// With rippleDetail 1 or 2 the surface is also bent by 4.3.4's ripple simulation: height maps around the camera,
+// stepped with a wave equation and disturbed by units moving in water and by rain.
+//
+// Not ported yet: real reflections of terrain and buildings (waterDetail 3 draws like 2), and the ripples
+// 4.3.4 makes from the collision meshes of moving objects (boats and the like).
 
 #include <cstdint>
 
@@ -33,6 +36,15 @@ namespace Liquid {
         void SetReflectionMode(uint32_t mode);
         void SetReflectionDownscale(uint32_t downscale);
         uint32_t GetWaterDetail();
+
+        // Whether the ripple simulation runs (water 4.3.4, rippleDetail 1 or 2, and its maps and shaders made).
+        bool RipplesActive();
+        // A unit's own disturbance of the water, renewed every frame it is in water (4.3.4's CGUnit_C::CreateRipple
+        // with ripples on); force keeps it past the limit (the active player).
+        void SetUnitRipple(const void* owner, const C3Vector& position, float radius, float strength, bool force);
+        // Once a frame before the liquids draw: moves the ripple maps with the camera, adds rain and units, steps
+        // the waves.
+        void UpdateRipples(const C3Vector& camera);
 
         // Once a frame before the world draws (creates or frees what the current setting needs).
         void BeginFrame();

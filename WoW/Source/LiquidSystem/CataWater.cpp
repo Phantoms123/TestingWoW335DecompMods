@@ -2,7 +2,9 @@
 #include <cmath>
 #include <cstdarg>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <vector>
 #include "Engine/Source/Base/Handle.h"
 #include "Engine/Source/Gx/CGxDevice/CGxDevice.h"
 #include "Engine/Source/Gx/CGxDevice/CGxShader.h"
@@ -24,6 +26,8 @@
 #include "WoW/Source/LiquidSystem/Liquid.h"
 #include "WoW/Source/WorldClient/DayNight.h"
 #include "WoW/Source/WorldClient/DayNight__DNInfo.h"
+#include "WoW/Source/WorldClient/MapWeather.h"
+#include "WoW/Source/WorldClient/World.h"
 
 // Register layout of 4.3.4's ProcWater vertex shader and ProcWaterAbove/ProcWaterBelow pixel shaders, as 4.3.4's
 // Liquid::CMaterialWater fills it (vertex c0-c52, pixel c0-c31).
@@ -46,6 +50,8 @@ static const uint32_t DEPTH_MODE = 3;
 static uint32_t s_requestedDetail = 2;
 static uint32_t s_detail;
 static uint32_t s_rippleDetail;
+static uint32_t s_requestedRipple = 1;
+static bool s_rippleFailed;
 static uint32_t s_reflectionMode;
 static uint32_t s_reflectionDownscale;
 static bool s_failed;
@@ -156,7 +162,11 @@ static void DestroyTargets() {
     s_reflectionHeight = 0;
 }
 
+static void DestroyRipples();
+static void UpdateRippleResources();
+
 static void Destroy() {
+    DestroyRipples();
     for (CGxShader*& shader : s_vertexShaders) {
         ReleaseShader(shader);
     }
@@ -218,9 +228,9 @@ static bool CreateShaders() {
     return ok;
 }
 
-static CTexture* CreateTarget(EGxTexTarget target, uint32_t width, uint32_t height, const char* name) {
+static CTexture* CreateTarget(EGxTexTarget target, uint32_t width, uint32_t height, const char* name, EGxTexFormat format = GxTex_Argb8888) {
     CGxTexFlags flags(GxTex_Linear, 0, 0, 0, 0, 1);
-    CTexture* texture = TextureCreate(target, width, height, 0, GxTex_Argb8888, GxTex_Argb8888, flags, nullptr, GxTexNullUserFunc, name, 0);
+    CTexture* texture = TextureCreate(target, width, height, 0, format, format, flags, nullptr, GxTexNullUserFunc, name, 0);
 
     if (texture && !TextureGetGxTex(texture, 1, nullptr)) {
         ReleaseTexture(texture);
@@ -289,9 +299,8 @@ void Liquid::Cata::SetWaterDetail(uint32_t detail) {
 }
 
 void Liquid::Cata::SetRippleDetail(uint32_t detail) {
-    // The ripple simulation is not ported; its shader permutations need it, so ripples stay at 0.
-    (void)detail;
-    s_rippleDetail = 0;
+    s_requestedRipple = detail > 2 ? 2 : detail;
+    s_rippleFailed = false;
 }
 
 void Liquid::Cata::SetReflectionMode(uint32_t mode) {
@@ -314,6 +323,7 @@ void Liquid::Cata::BeginFrame() {
     }
 
     if (wanted == s_detail) {
+        UpdateRippleResources();
         return;
     }
 
@@ -321,6 +331,7 @@ void Liquid::Cata::BeginFrame() {
         Destroy();
         DepthCache::Release();
         s_detail = 0;
+        s_rippleDetail = 0;
         return;
     }
 
@@ -337,6 +348,7 @@ void Liquid::Cata::BeginFrame() {
 
     s_detail = wanted;
     LogOnce(2, "on (waterDetail %u)", wanted);
+    UpdateRippleResources();
 }
 
 void Liquid::Cata::SetView(float zNear, float zFar, float viewportFarClip) {
@@ -515,6 +527,522 @@ static bool PreparePass() {
 
     s_passReady = true;
     return true;
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Ripples (rippleDetail 1 and 2), as 4.3.4's Liquid displacement maps do them: a height field around the camera,
+// stepped with a wave equation at a fixed rate (PropagateDisplMap) and disturbed by units in water and rain drops
+// (PerturbDisplMap). The water shaders read it (vertex c51-c52, pixel c29-c31, textures 4 and 8) and bend their
+// normals with it.
+//
+// Each level is two ping-pong maps (x = height now, y = height one step ago) covering RIPPLE_SIZE yards, moved
+// with the camera in whole texels. rippleDetail 1: one level stepped every 50 ms. rippleDetail 2: a second level,
+// and the first steps every 25 ms. Units and rain disturb the first level; 4.3.4 disturbs the second with the
+// collision meshes of moving objects (boats and the like), which is not ported, so it stays calm.
+
+static const uint32_t RIPPLE_LEVELS = 2;
+static const uint32_t RIPPLE_RES = 1024;
+static const float RIPPLE_SIZE = 128.0f;
+static const uint32_t RIPPLE_MAX_PERTURBATIONS = 256;
+static const float s_rippleStrengthScale[RIPPLE_LEVELS] = { 1.25f, 0.25f };
+
+struct RipplePerturbation {
+    const void* owner;
+    C3Vector position;
+    float radius;
+    float strength;
+    uint32_t period;
+    uint32_t frame;
+};
+
+struct RippleLevel {
+    CTexture* maps[2];
+    uint32_t current;
+    uint32_t stepMs;
+    uint32_t lastStep;
+    float fraction;
+    C3Vector origin;
+    C3Vector mapOrigin;
+    std::vector<RipplePerturbation> drops;
+    std::vector<RipplePerturbation> persistent;
+};
+
+static RippleLevel s_ripples[RIPPLE_LEVELS];
+static uint32_t s_rippleLevels;
+static bool s_rippleClear;
+static uint32_t s_rippleStartMs;
+static uint32_t s_rippleFrame;
+static uint32_t s_rainLastMs;
+static CGxShader* s_propagateVs;
+static CGxShader* s_propagatePs;
+static CGxShader* s_perturbVs;
+static CGxShader* s_perturbPs;
+static CTexture* s_perturbTex;
+
+static void DestroyRipples() {
+    for (RippleLevel& level : s_ripples) {
+        ReleaseTexture(level.maps[0]);
+        ReleaseTexture(level.maps[1]);
+        level.drops.clear();
+        level.persistent.clear();
+    }
+
+    ReleaseShader(s_propagateVs);
+    ReleaseShader(s_propagatePs);
+    ReleaseShader(s_perturbVs);
+    ReleaseShader(s_perturbPs);
+    ReleaseTexture(s_perturbTex);
+    s_rippleLevels = 0;
+    s_rippleDetail = 0;
+}
+
+static bool CreateRipples(uint32_t detail) {
+    CGxDevice* device = g_theGxDevicePtr;
+
+    if (!device->Caps().m_rttFormat[GxTex_Gr1616F]) {
+        LogOnce(9, "ripples off, the device cannot render to a two-channel float texture");
+        return false;
+    }
+
+    device->ShaderCreate(&s_propagateVs, GxSh_Vertex, SHADER_COMPAT_VERTEX_PATH, "PropagateDisplMap", 1);
+    device->ShaderCreate(&s_propagatePs, GxSh_Pixel, SHADER_COMPAT_PIXEL_PATH, "PropagateDisplMap", 1);
+    device->ShaderCreate(&s_perturbVs, GxSh_Vertex, SHADER_COMPAT_VERTEX_PATH, "PerturbDisplMap", 1);
+    device->ShaderCreate(&s_perturbPs, GxSh_Pixel, SHADER_COMPAT_PIXEL_PATH, "PerturbDisplMap", 1);
+
+    if (!Valid(s_propagateVs) || !Valid(s_propagatePs) || !Valid(s_perturbVs) || !Valid(s_perturbPs)) {
+        LogOnce(10, "ripples off, Shaders\\Cata\\...\\PropagateDisplMap.bls or PerturbDisplMap.bls did not load (is the new patch-C.MPQ in Data?)");
+        return false;
+    }
+
+    CGxTexFlags flags;
+    flags.m_filter = GxTex_Linear;
+    flags.m_wrapU = 0;
+    flags.m_wrapV = 0;
+    CStatus status;
+    s_perturbTex = TextureCreate("XTextures\\Ripples\\perturbTex.blp", flags, &status, 0);
+
+    if (!s_perturbTex) {
+        LogOnce(11, "ripples off, XTextures\\Ripples\\perturbTex.blp did not load");
+        return false;
+    }
+
+    s_rippleLevels = detail >= 2 ? 2 : 1;
+
+    for (uint32_t i = 0; i < s_rippleLevels; i++) {
+        RippleLevel& level = s_ripples[i];
+        level.maps[0] = CreateTarget(GxTex_2d, RIPPLE_RES, RIPPLE_RES, "Liquid DisplMap", GxTex_Gr1616F);
+        level.maps[1] = CreateTarget(GxTex_2d, RIPPLE_RES, RIPPLE_RES, "Liquid DisplMap", GxTex_Gr1616F);
+
+        if (!level.maps[0] || !level.maps[1]) {
+            LogOnce(12, "ripples off, the ripple maps could not be created");
+            return false;
+        }
+
+        level.current = 0;
+        level.fraction = 0.0f;
+        // 4.3.4: one level steps every 50 ms; with two, the first every 25 ms and the second every 50 ms.
+        level.stepMs = s_rippleLevels == 2 && i == 0 ? 25 : 50;
+    }
+
+    s_rippleClear = true;
+    s_rippleStartMs = OsGetAsyncTimeMs();
+    s_rainLastMs = s_rippleStartMs;
+    LogOnce(13, "ripples on (rippleDetail %u)", detail);
+    return true;
+}
+
+// Called by BeginFrame once the water detail is settled.
+static void UpdateRippleResources() {
+    uint32_t wanted = s_detail >= 2 && !s_rippleFailed ? s_requestedRipple : 0;
+
+    if (wanted == s_rippleDetail) {
+        return;
+    }
+
+    DestroyRipples();
+    s_rippleDetail = 0;
+
+    if (wanted && CreateRipples(wanted)) {
+        s_rippleDetail = wanted;
+    } else if (wanted) {
+        DestroyRipples();
+        s_rippleFailed = true;
+    }
+}
+
+bool Liquid::Cata::RipplesActive() {
+    return s_rippleDetail != 0;
+}
+
+void Liquid::Cata::SetUnitRipple(const void* owner, const C3Vector& position, float radius, float strength, bool force) {
+    if (!s_rippleDetail) {
+        return;
+    }
+
+    std::vector<RipplePerturbation>& list = s_ripples[0].persistent;
+    RipplePerturbation* entry = nullptr;
+
+    for (RipplePerturbation& perturbation : list) {
+        if (perturbation.owner == owner) {
+            entry = &perturbation;
+            break;
+        }
+    }
+
+    if (!entry) {
+        // 4.3.4 only starts one for a unit that disturbs the water, and keeps the active player's past the limit.
+        if (strength <= 0.0f || (!force && list.size() >= RIPPLE_MAX_PERTURBATIONS)) {
+            return;
+        }
+
+        list.push_back(RipplePerturbation());
+        entry = &list.back();
+        entry->owner = owner;
+    }
+
+    entry->position = position;
+    entry->radius = radius;
+    entry->strength = strength;
+    entry->period = 800;
+    entry->frame = s_rippleFrame;
+}
+
+static void AddDrop(uint32_t levelIndex, const C3Vector& position, float radius, float strength) {
+    RippleLevel& level = s_ripples[levelIndex < s_rippleLevels ? levelIndex : s_rippleLevels - 1];
+
+    if (level.drops.size() >= RIPPLE_MAX_PERTURBATIONS) {
+        return;
+    }
+
+    RipplePerturbation drop;
+    drop.owner = nullptr;
+    drop.position = position;
+    drop.radius = radius;
+    drop.strength = strength;
+    drop.period = 0;
+    drop.frame = s_rippleFrame;
+    level.drops.push_back(drop);
+}
+
+// 4.3.4's rain on water: every 33 ms of rain heavier than 0.2, twenty drops within 50 yards of the camera.
+static void AddRainDrops(const C3Vector& camera, uint32_t now) {
+    uint32_t elapsed = now - s_rainLastMs;
+
+    if (elapsed <= 32) {
+        return;
+    }
+
+    uint32_t ticks = elapsed / 33;
+
+    if (ticks < 4) {
+        s_rainLastMs += ticks * 33;
+    } else {
+        ticks = 4;
+        s_rainLastMs = now;
+    }
+
+    Weather* weather = World::s_weather;
+
+    if (!weather || weather->GetType() != 1 || !(weather->m_intensity > 0.2f)) {
+        return;
+    }
+
+    for (uint32_t i = 0; i < ticks * 20; i++) {
+        float strength = static_cast<float>(rand() % 200) * 0.001f + 0.2f;
+        C3Vector position;
+        position.x = (static_cast<float>(rand() % 1000) * 0.002f - 1.0f) * 50.0f + camera.x;
+        position.y = (static_cast<float>(rand() % 1000) * 0.002f - 1.0f) * 50.0f + camera.y;
+        position.z = camera.z;
+        AddDrop(0, position, 0.3f, -strength);
+    }
+}
+
+struct PerturbVertex {
+    C3Vector position;
+    C2Vector texCoord;
+};
+
+// Splats perturbTex, scaled by each perturbation's strength, into the level's current map (additively).
+static void DrawPerturbations(uint32_t levelIndex, const std::vector<RipplePerturbation>& list, uint32_t now, bool persistent) {
+    RippleLevel& level = s_ripples[levelIndex];
+    CGxTex* perturbTex = GxTexOf(s_perturbTex);
+
+    if (list.empty() || !perturbTex) {
+        return;
+    }
+
+    static std::vector<PerturbVertex> vertices;
+    static std::vector<uint16_t> indices;
+    vertices.clear();
+    indices.clear();
+
+    float res = static_cast<float>(RIPPLE_RES);
+    float texel = 1.0f / res;
+    bool halfTexel = g_theGxDevicePtr->DeviceApi() != GxApi_OpenGl;
+    uint32_t elapsed = now - s_rippleStartMs;
+
+    for (const RipplePerturbation& perturbation : list) {
+        // A unit's perturbation counts only in a frame its unit updated it.
+        if (persistent && s_rippleFrame - perturbation.frame > 1) {
+            continue;
+        }
+
+        if (fabsf(perturbation.strength) < 0.001f) {
+            continue;
+        }
+
+        float radiusX = floorf(perturbation.radius / RIPPLE_SIZE * res);
+        radiusX = (radiusX > 0.5f ? radiusX : 0.5f) * texel;
+        float radiusY = radiusX;
+        float u = floorf((perturbation.position.x - level.mapOrigin.x) / RIPPLE_SIZE * res) * texel;
+        float v = floorf((perturbation.position.y - level.mapOrigin.y) / RIPPLE_SIZE * res) * texel;
+
+        if (u + radiusX < 0.0f || v + radiusY < 0.0f || u - radiusX > 1.0f || v - radiusY > 1.0f) {
+            continue;
+        }
+
+        if (halfTexel) {
+            u -= texel * 0.5f;
+            v -= texel * 0.5f;
+        }
+
+        float strength = perturbation.strength * s_rippleStrengthScale[levelIndex];
+        strength = strength < -1.0f ? -1.0f : (strength > 1.0f ? 1.0f : strength);
+
+        if (perturbation.period) {
+            strength *= sinf(static_cast<float>(elapsed % perturbation.period) * 6.2831855f / static_cast<float>(perturbation.period));
+        }
+
+        float x = (u - 0.5f) * 2.0f;
+        float y = (0.5f - v) * 2.0f;
+        float dx = radiusX * 2.0f;
+        float dy = radiusY * 2.0f;
+        uint16_t base = static_cast<uint16_t>(vertices.size());
+
+        vertices.push_back({ C3Vector(x - dx, y + dy, strength), C2Vector(0.0f, 0.0f) });
+        vertices.push_back({ C3Vector(x + dx, y + dy, strength), C2Vector(1.0f, 0.0f) });
+        vertices.push_back({ C3Vector(x - dx, y - dy, strength), C2Vector(0.0f, 1.0f) });
+        vertices.push_back({ C3Vector(x + dx, y - dy, strength), C2Vector(1.0f, 1.0f) });
+
+        const uint16_t quad[6] = { 0, 2, 1, 1, 2, 3 };
+
+        for (uint16_t index : quad) {
+            indices.push_back(static_cast<uint16_t>(base + index));
+        }
+
+        if (vertices.size() >= 0xFFF0) {
+            break;
+        }
+    }
+
+    if (vertices.empty()) {
+        return;
+    }
+
+    CGxDevice* device = g_theGxDevicePtr;
+    GxRsSet(GxRs_BlendingMode, GxBlend_Add);
+    device->RsSet(GxRs_VertexShader, s_perturbVs);
+    device->RsSet(GxRs_PixelShader, s_perturbPs);
+    device->RsSet(GxRs_Texture0, perturbTex);
+
+    float c0[4] = { texel, texel, texel * 0.5f, texel * 0.5f };
+    device->ShaderConstantsSet(GxSh_Vertex, 0, c0, 1);
+
+    GxRenderTargetSet(GxBuffers_Color, GxTexOf(level.maps[level.current]), 0);
+    GxXformSetViewport(0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f);
+
+    CGxBatch batch;
+    batch.m_primType = GxPrim_Triangles;
+    batch.m_start = 0;
+    batch.m_count = static_cast<uint32_t>(indices.size());
+    batch.m_minIndex = 0;
+    batch.m_maxIndex = static_cast<uint16_t>(vertices.size() - 1);
+    GxPrimVertexPtr(static_cast<uint32_t>(vertices.size()), &vertices[0].position, sizeof(PerturbVertex), nullptr, 0, nullptr, 0, &vertices[0].texCoord, sizeof(PerturbVertex), nullptr, 0);
+    GxPrimIndexPtr(static_cast<uint32_t>(indices.size()), indices.data());
+    device->Draw(&batch, 1);
+}
+
+// One wave step: the other map gets 0.97 * (half the four neighbours - the height a step ago), faded towards the
+// edges, read through the camera's movement since the last step.
+static void Propagate(uint32_t levelIndex) {
+    RippleLevel& level = s_ripples[levelIndex];
+    uint32_t source = level.current;
+    uint32_t target = source ^ 1;
+
+    float offsetX = level.origin.x - level.mapOrigin.x;
+    float offsetY = level.origin.y - level.mapOrigin.y;
+
+    // A jump (a teleport) starts the maps over rather than sliding them.
+    if (offsetX * offsetX + offsetY * offsetY >= 10000.0f) {
+        offsetX = 0.0f;
+        offsetY = 0.0f;
+    }
+
+    level.mapOrigin = level.origin;
+
+    float texel = 1.0f / RIPPLE_RES;
+    float c0[4] = { texel, texel, texel * 0.5f, texel * 0.5f };
+    float c1[4] = { offsetX / RIPPLE_SIZE, offsetY / RIPPLE_SIZE, 0.0f, 0.0f };
+
+    CGxDevice* device = g_theGxDevicePtr;
+    GxRsSet(GxRs_BlendingMode, GxBlend_Opaque);
+    device->RsSet(GxRs_VertexShader, s_propagateVs);
+    device->RsSet(GxRs_PixelShader, s_propagatePs);
+    device->RsSet(GxRs_Texture0, GxTexOf(level.maps[source]));
+    device->ShaderConstantsSet(GxSh_Vertex, 0, c0, 1);
+    device->ShaderConstantsSet(GxSh_Vertex, 1, c1, 1);
+
+    GxRenderTargetSet(GxBuffers_Color, GxTexOf(level.maps[target]), 0);
+    GxXformSetViewport(0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f);
+    DrawQuad();
+
+    level.current = target;
+}
+
+void Liquid::Cata::UpdateRipples(const C3Vector& camera) {
+    if (!s_rippleDetail) {
+        return;
+    }
+
+    for (uint32_t i = 0; i < s_rippleLevels; i++) {
+        if (!GxTexOf(s_ripples[i].maps[0]) || !GxTexOf(s_ripples[i].maps[1])) {
+            return;
+        }
+    }
+
+    uint32_t now = OsGetAsyncTimeMs();
+    float texelsPerYard = RIPPLE_RES / RIPPLE_SIZE;
+
+    // The maps follow the camera in whole texels.
+    for (uint32_t i = 0; i < s_rippleLevels; i++) {
+        RippleLevel& level = s_ripples[i];
+        level.origin.x = floorf((camera.x - RIPPLE_SIZE * 0.5f) * texelsPerYard) / texelsPerYard;
+        level.origin.y = floorf((camera.y - RIPPLE_SIZE * 0.5f) * texelsPerYard) / texelsPerYard;
+        level.origin.z = camera.z;
+    }
+
+    AddRainDrops(camera, now);
+
+    CGxDevice* device = g_theGxDevicePtr;
+    CGxTex* savedColor = nullptr;
+    device->DeviceGetRenderTarget(GxBuffers_Color, savedColor);
+    float minX, maxX, minY, maxY, minZ, maxZ;
+    GxXformViewport(minX, maxX, minY, maxY, minZ, maxZ);
+    float savedVs[8];
+    memcpy(savedVs, CGxDevice::s_shadowConstants[1].constants, sizeof(savedVs));
+
+    device->RsPush();
+    GxRsSet(GxRs_Culling, 0);
+    GxRsSet(GxRs_DepthTest, 0);
+    GxRsSet(GxRs_DepthWrite, 0);
+    GxRsSet(GxRs_Fog, 0);
+    GxRsSet(GxRs_Lighting, 0);
+    GxRsSet(GxRs_AlphaRef, 0);
+
+    if (s_rippleClear) {
+        CImVector black = { 0, 0, 0, 0 };
+
+        for (uint32_t i = 0; i < s_rippleLevels; i++) {
+            RippleLevel& level = s_ripples[i];
+
+            for (CTexture* map : level.maps) {
+                GxRenderTargetSet(GxBuffers_Color, GxTexOf(map), 0);
+                GxXformSetViewport(0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f);
+                GxSceneClear(GxBufferBit_Color, black);
+            }
+
+            level.current = 0;
+            level.mapOrigin = level.origin;
+            level.lastStep = now - level.stepMs;
+        }
+
+        s_rippleClear = false;
+    }
+
+    // Drops land at once; units' perturbations go in with every step.
+    for (uint32_t i = 0; i < s_rippleLevels; i++) {
+        DrawPerturbations(i, s_ripples[i].drops, now, false);
+        s_ripples[i].drops.clear();
+    }
+
+    for (uint32_t i = 0; i < s_rippleLevels; i++) {
+        RippleLevel& level = s_ripples[i];
+        uint32_t elapsed = now - level.lastStep;
+        uint32_t steps = elapsed / level.stepMs;
+        level.fraction = static_cast<float>(elapsed % level.stepMs) / static_cast<float>(level.stepMs);
+
+        if (!steps) {
+            continue;
+        }
+
+        // At most two steps a frame; a long frame drops the rest.
+        if (steps >= 2) {
+            steps = 2;
+            level.lastStep = now;
+        } else {
+            level.lastStep += level.stepMs;
+        }
+
+        for (uint32_t step = 0; step < steps; step++) {
+            DrawPerturbations(i, level.persistent, now, true);
+            Propagate(i);
+        }
+    }
+
+    device->RsPop();
+    GxRenderTargetSet(GxBuffers_Color, savedColor, 0);
+    GxXformSetViewport(minX, maxX, minY, maxY, minZ, maxZ);
+    device->ShaderConstantsSet(GxSh_Vertex, 0, savedVs, 2);
+
+    // Forget units that have not updated theirs for a while (gone, or out of the water).
+    for (uint32_t i = 0; i < s_rippleLevels; i++) {
+        std::vector<RipplePerturbation>& list = s_ripples[i].persistent;
+
+        for (size_t j = 0; j < list.size();) {
+            if (s_rippleFrame - list[j].frame > 300) {
+                list[j] = list.back();
+                list.pop_back();
+            } else {
+                j++;
+            }
+        }
+    }
+
+    s_rippleFrame++;
+}
+
+// The water shaders' ripple constants: vertex c51-c52 (map origin, relative to the camera when the world is drawn
+// camera-relative, and 1 / size), pixel c29-c30 (texel sizes) and c31 (how far each level is into its next step).
+static void SetRippleConstants(const C3Vector& cameraPos) {
+    if (!s_rippleDetail) {
+        return;
+    }
+
+    bool relative = Liquid::UseCameraRelativeCoords();
+    float texel = 1.0f / RIPPLE_RES;
+
+    for (uint32_t i = 0; i < s_rippleLevels; i++) {
+        const RippleLevel& level = s_ripples[i];
+        float x = level.mapOrigin.x - (relative ? cameraPos.x : 0.0f);
+        float y = level.mapOrigin.y - (relative ? cameraPos.y : 0.0f);
+        SetVs(51 + i, x, y, 1.0f / RIPPLE_SIZE, 1.0f / RIPPLE_SIZE);
+        SetPs(29 + i, texel, texel, texel * 0.5f, texel * 0.5f);
+    }
+
+    SetPs(31, s_ripples[0].fraction, s_rippleLevels > 1 ? s_ripples[1].fraction : 0.0f, 0.0f, 0.0f);
+}
+
+static void BindRippleMaps() {
+    if (!s_rippleDetail) {
+        return;
+    }
+
+    CGxDevice* device = g_theGxDevicePtr;
+    device->RsSet(GxRs_Texture4, GxTexOf(s_ripples[0].maps[s_ripples[0].current]));
+
+    if (s_rippleLevels > 1) {
+        device->RsSet(GxRs_Texture8, GxTexOf(s_ripples[1].maps[s_ripples[1].current]));
+    }
 }
 
 void Liquid::Cata::BeginLiquidPass(bool cameraUnderwater) {
@@ -734,7 +1262,7 @@ bool Liquid::Cata::RenderWater(IEnvironment* environment, IGeomFactory* geomFact
     float phase = static_cast<float>(timeMs % 10000) * 0.0001f * 3.1415927f;
     float wave = settings->GetFloat(7) * 0.35f;
     SetVs(50, phase, wave, 1.0f, settings->GetFloat(8));
-    // Ripple maps (vertex c51-c52, pixel c29-c31) stay zero without the ripple simulation.
+    SetRippleConstants(cameraPos);
 
     SetPs(17, cameraPos.x, cameraPos.y, cameraPos.z, 1.0f);
     SetWaterFog();
@@ -756,6 +1284,7 @@ bool Liquid::Cata::RenderWater(IEnvironment* environment, IGeomFactory* geomFact
     device->RsSet(GxRs_Texture5, bump);
     device->RsSet(GxRs_Texture6, depth);
     device->RsSet(GxRs_Texture7, foam);
+    BindRippleMaps();
 
     device->ShaderConstantsSet(GxSh_Vertex, 0, s_vs, VS_REGISTERS);
     device->ShaderConstantsSet(GxSh_Pixel, 0, s_ps, PS_REGISTERS);
