@@ -702,7 +702,19 @@ void CMapRenderChunk::RenderSetup(int32_t a2) {
     } sum = { start };
 
     this->m_lastUpdateTime = 0.0f;
-    this->AllocLayerTextures();
+
+    // CHANGED: the water reflection sets the chunk up before the real pass in the same frame. AllocLayerTextures
+    // clears the "wants the half-size texture" flag (0x10, set once a frame by CMapChunk::RenderPrep for far
+    // chunks), so the real pass would see it gone and make the texture again at full size, and the next frame's
+    // reflection at half size again: every chunk's texture made twice a frame. The reflection keeps the flag.
+    if (CWorldScene::s_reflectionPass) {
+        int16_t wantsMip = this->m_renderFlags & 0x10;
+        this->AllocLayerTextures();
+        this->m_renderFlags |= wantsMip;
+    } else {
+        this->AllocLayerTextures();
+    }
+
     g_chunkTexturesMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
 
     if (!a2 || !CMap::enableTerrainShaderVertex) {
