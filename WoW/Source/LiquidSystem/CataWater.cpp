@@ -77,6 +77,8 @@ static CTexture* s_realReflectionDepth;
 static float s_reflectionDistance = 200.0f;
 // Models smaller than this part of their distance are left out of the reflection (reflectionModelSize).
 static float s_reflectionModelSize = 0.01f;
+// How many screens' height above the view the culling reaches for the reflection (reflectionCullHeight).
+static float s_reflectionCullHeight = 2.0f;
 static bool s_reflectionDepthBound;
 static CTexture* s_blurredBackTex;
 static CTexture* s_blurTempTex;
@@ -1297,7 +1299,15 @@ void Liquid::Cata::EndModelReflection() {
 }
 
 bool Liquid::Cata::ReflectionNeedsWideCulling() {
-    return s_detail >= 3 && s_reflectionMode >= 2 && s_planeValid && !s_cameraUnderwater;
+    return s_detail >= 3 && s_reflectionMode >= 2 && s_planeValid && !s_cameraUnderwater && s_reflectionCullHeight > 0.0f;
+}
+
+float Liquid::Cata::ReflectionCullHeight() {
+    return s_reflectionCullHeight;
+}
+
+void Liquid::Cata::SetReflectionCullHeight(float screens) {
+    s_reflectionCullHeight = screens < 0.0f ? 0.0f : (screens > 4.0f ? 4.0f : screens);
 }
 
 void Liquid::Cata::EndReflection() {

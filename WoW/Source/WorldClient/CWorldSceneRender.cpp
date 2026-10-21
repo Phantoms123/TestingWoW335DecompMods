@@ -154,7 +154,7 @@ void CWorldScene::Render(const C3Vector& cameraPos, float time) {
         // CHANGED: with real water reflections, the culling reaches two screens' height above the top of the view,
         // where what the water mirrors lies, so it does not drop out of the reflection as the camera tilts down.
         if (Liquid::Cata::ReflectionNeedsWideCulling()) {
-            CWorldScene::frustumPortalView.m_rect.maxY = 3.0f;
+            CWorldScene::frustumPortalView.m_rect.maxY = 1.0f + Liquid::Cata::ReflectionCullHeight();
         }
 
         CWorldScene::CullSortTable(&CWorldScene::frustumPortalView.m_rect);

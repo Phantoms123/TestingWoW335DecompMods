@@ -63,6 +63,8 @@ namespace Liquid {
         void EndReflection();
         // Whether the world's culling should take in more above the view for the reflection.
         bool ReflectionNeedsWideCulling();
+        float ReflectionCullHeight();
+        void SetReflectionCullHeight(float screens);
         // Within a reflection (mode 3): mirrors the models (trees, characters, creatures) for the caller to draw.
         bool BeginModelReflection();
         void EndModelReflection();

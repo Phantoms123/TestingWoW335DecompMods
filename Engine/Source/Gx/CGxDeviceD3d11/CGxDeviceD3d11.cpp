@@ -10,6 +10,8 @@
 #include <d3d11_1.h>
 #include <dxgi1_2.h>
 #include <algorithm>
+#include <chrono>
+#include <cstdio>
 #include <cmath>
 #include <cstring>
 #include "Engine/Source/Gx/Blit.h"
@@ -92,6 +94,11 @@ const D3D11_PRIMITIVE_TOPOLOGY s_topology[GxPrims_Last] = { D3D11_PRIMITIVE_TOPO
 // Vertex attribute types (CGxVertexAttrib::m_type): D3DCOLOR, UBYTE4, UBYTE4N, FLOAT2, FLOAT3, SHORT2, FLOAT1.
 const uint32_t s_attribSize[7] = { 4, 4, 4, 8, 12, 4, 4 };
 const DXGI_FORMAT s_attribFormat[7] = { DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UINT, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R32G32_FLOAT, DXGI_FORMAT_R32G32B32_FLOAT, DXGI_FORMAT_R16G16_SINT, DXGI_FORMAT_R32_FLOAT };
+// Nanoseconds on a monotonic clock, for the frame statistics.
+static uint64_t NowNs() {
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+
 const char* const s_attribSemantic[GxVAs_Last] = { "POSITION", "BLENDWEIGHT", "BLENDINDICES", "NORMAL", "COLOR", "COLOR", "TEXCOORD", "TEXCOORD", "TEXCOORD", "TEXCOORD", "TEXCOORD", "TEXCOORD", "TEXCOORD", "TEXCOORD" };
 const uint32_t s_attribSemanticIndex[GxVAs_Last] = { 0, 0, 0, 0, 0, 1, 0, 1, 2, 3, 4, 5, 6, 7 };
 
@@ -250,6 +257,14 @@ void ParseDxbc(const uint8_t* code, size_t size, CGxDeviceD3d11::Shader& shader)
 
                 input.m_index = element[1];
                 input.m_componentType = element[3];
+                input.m_attrib = -1;
+
+                for (uint32_t i = 0; i < GxVAs_Last; i++) {
+                    if (s_attribSemanticIndex[i] == input.m_index && !SStrCmpI(s_attribSemantic[i], input.m_name, STORM_MAX_STR)) {
+                        input.m_attrib = static_cast<int32_t>(i);
+                        break;
+                    }
+                }
 
                 // System values (vertex and instance IDs) are not fed from vertex buffers.
                 if (element[2] == 0) {
@@ -2293,7 +2308,30 @@ void CGxDeviceD3d11::ScenePresent() {
             interval = 1;
         }
 
+        uint64_t presentStart = NowNs();
         HRESULT hr = this->m_swapChain->Present(interval, 0);
+        uint64_t presentEnd = NowNs();
+        this->m_statPresentNs += presentEnd - presentStart;
+        this->m_statFrames++;
+
+        if (!this->m_statStartNs) {
+            this->m_statStartNs = presentEnd;
+        } else if (presentEnd - this->m_statStartNs >= 5000000000ull) {
+            // Every 5 seconds: where the frame time goes. A large present time means waiting for the GPU (or
+            // vsync); a large draw time means the CPU side of the draws.
+            {
+                double frames = this->m_statFrames ? this->m_statFrames : 1;
+                double seconds = (presentEnd - this->m_statStartNs) / 1e9;
+                fprintf(stderr, "D3D11 stats: %.1f fps, %.0f draws a frame, %.1f ms a frame in draws, %.1f ms in present, %.1f ms a frame in all\n", this->m_statFrames / seconds, this->m_statDraws / frames, this->m_statDrawNs / 1e6 / frames, this->m_statPresentNs / 1e6 / frames, seconds * 1000.0 / frames);
+            }
+
+            this->m_statStartNs = presentEnd;
+            this->m_statFrames = 0;
+            this->m_statDraws = 0;
+            this->m_statDrawNs = 0;
+            this->m_statPresentNs = 0;
+        }
+
         static uint32_t s_presentFailures;
 
         if (FAILED(hr) && s_presentFailures++ < 8) {
@@ -3443,14 +3481,8 @@ void CGxDeviceD3d11::IStateSyncVertexPtrs() {
         element.SemanticIndex = input.m_index;
         element.InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA;
         element.InstanceDataStepRate = 0;
-        int32_t attrib = -1;
-
-        for (uint32_t i = 0; i < GxVAs_Last; i++) {
-            if ((this->m_primVertexMask & (1 << i)) && s_attribSemanticIndex[i] == input.m_index && !SStrCmpI(s_attribSemantic[i], input.m_name, STORM_MAX_STR)) {
-                attrib = i;
-                break;
-            }
-        }
+        // The attribute was matched to the input once (ParseDxbc); here only whether the vertices have it.
+        int32_t attrib = input.m_attrib >= 0 && (this->m_primVertexMask & (1 << input.m_attrib)) ? input.m_attrib : -1;
 
         if (attrib >= 0) {
             const CGxVertexAttrib& gx = this->m_primVertexFormatAttrib[attrib];
@@ -3553,6 +3585,15 @@ void CGxDeviceD3d11::Draw(CGxBatch* batch, int32_t count) {
     if (!this->m_context || this->m_intF5C) {
         return;
     }
+
+    struct Timer {
+        CGxDeviceD3d11* device;
+        uint64_t start;
+        ~Timer() {
+            device->m_statDrawNs += NowNs() - start;
+            device->m_statDraws++;
+        }
+    } timer = { this, NowNs() };
 
     this->IStateSync();
 

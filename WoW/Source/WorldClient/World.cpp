@@ -1976,10 +1976,12 @@ void CWorldScene::GetCullCorners(C3Vector* corners) {
     static const uint32_t top[4] = { 1, 2, 5, 6 };
     static const uint32_t bottom[4] = { 0, 3, 4, 7 };
 
+    float h = Liquid::Cata::ReflectionCullHeight();
+
     for (uint32_t i = 0; i < 4; i++) {
         const C3Vector& t = CWorldScene::s_frustumCorners[top[i]];
         const C3Vector& b = CWorldScene::s_frustumCorners[bottom[i]];
-        corners[top[i]] = C3Vector(t.x * 3.0f - b.x * 2.0f, t.y * 3.0f - b.y * 2.0f, t.z * 3.0f - b.z * 2.0f);
+        corners[top[i]] = C3Vector(t.x + (t.x - b.x) * h, t.y + (t.y - b.y) * h, t.z + (t.z - b.z) * h);
     }
 }
 

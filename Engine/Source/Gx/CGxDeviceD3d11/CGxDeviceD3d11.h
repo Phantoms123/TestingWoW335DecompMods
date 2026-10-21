@@ -59,6 +59,7 @@ class CGxDeviceD3d11 : public CGxDevice {
             char m_name[24];
             uint32_t m_index;
             uint32_t m_componentType;         // 1 uint, 2 sint, 3 float
+            int32_t m_attrib;                 // the Gx vertex attribute it reads (-1: none), found once
         };
         std::vector<Input> m_inputs;          // vertex shaders: the input signature
         std::vector<uint8_t> m_code;          // vertex shaders: kept for input layouts
@@ -175,6 +176,12 @@ class CGxDeviceD3d11 : public CGxDevice {
         uint32_t m_used = 0;
     };
     RtDepth m_rtDepths[8];
+    // Frame statistics: draws and the time spent in them and in presenting, printed every 5 s.
+    uint64_t m_statDraws = 0;
+    uint64_t m_statDrawNs = 0;
+    uint64_t m_statPresentNs = 0;
+    uint32_t m_statFrames = 0;
+    uint64_t m_statStartNs = 0;
     uint32_t m_rtDepthClock = 0;
     ID3D11DepthStencilView* m_rtDsv = nullptr;
     // DeviceSetSampledDepth: stands in for the back buffer's depth buffer.
