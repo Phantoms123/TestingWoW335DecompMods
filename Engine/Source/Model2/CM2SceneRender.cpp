@@ -983,6 +983,13 @@ void CM2SceneRender::Draw(M2PASS pass, M2Element* elements, uint32_t* indices, u
             continue;
         }
 
+        // CHANGED: a water reflection draws the models' geometry only (batches and doodad batches): not their
+        // projected textures, ribbons, particles or draw callbacks (player names, weapon trails, bow strings),
+        // which are set up for the frame only after the world has drawn.
+        if (CM2Scene::s_keepClipPlane && element->m_type != 0 && element->m_type != 2) {
+            continue;
+        }
+
         this->m_curElement = element;
         this->m_curType = element->m_type;
         this->m_curModel = element->m_model;

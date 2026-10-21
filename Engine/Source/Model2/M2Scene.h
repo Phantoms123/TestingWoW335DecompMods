@@ -88,7 +88,7 @@ class CM2Scene {
 
     static uint32_t s_optFlags;
     // CHANGED: not in the original client. Set while the scene draws into a water reflection, whose clip plane the
-    // models must keep (instead of setting their own for models standing in liquid).
+    // models must keep (instead of setting their own for models standing in liquid); only geometry is drawn then.
     static bool s_keepClipPlane;
 
     static void AnimateThread(void* param);
