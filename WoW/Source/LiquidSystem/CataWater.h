@@ -13,8 +13,11 @@
 // With rippleDetail 1 or 2 the surface is also bent by 4.3.4's ripple simulation: height maps around the camera,
 // stepped with a wave equation and disturbed by units moving in water and by rain.
 //
-// Not ported yet: real reflections of terrain and buildings (waterDetail 3 draws like 2), and the ripples
-// 4.3.4 makes from the collision meshes of moving objects (boats and the like).
+// waterDetail 3 also reflects the terrain (reflectionMode 2) and buildings (reflectionMode 3) in the water
+// nearest the camera, drawn mirrored into a texture before the world.
+//
+// Not ported yet: the ripples 4.3.4 makes from the collision meshes of moving objects (boats and the like), and
+// reflections of models (trees, characters).
 
 #include <cstdint>
 
@@ -30,7 +33,7 @@ namespace Liquid {
 
     namespace Cata {
         // CVar values. waterDetail: 0 = the 3.3.5 water, 1 = 3.3.5 water too, 2 = 4.3.4 water, 3 = 4.3.4 water
-        // with real reflections (not ported, draws as 2). The others are kept for when those parts are ported.
+        // with real reflections (reflectionMode 2: terrain, 3: terrain and buildings; 0 and 1: sky only).
         void SetWaterDetail(uint32_t detail);
         void SetRippleDetail(uint32_t detail);
         void SetReflectionMode(uint32_t mode);
@@ -45,6 +48,12 @@ namespace Liquid {
         // Once a frame before the liquids draw: moves the ripple maps with the camera, adds rain and units, steps
         // the waves.
         void UpdateRipples(const C3Vector& camera);
+
+        // Real reflections (waterDetail 3 with reflectionMode 2 or 3): when the water seen last frame wants one,
+        // switches to the reflection texture, draws the mirrored sky and sets the mirrored view, clip plane and
+        // winding for the terrain (and map objects, mode 3) the caller then draws; End puts it all back.
+        bool BeginReflection(const C3Vector& worldViewOrigin, uint32_t& mode);
+        void EndReflection();
 
         // Once a frame before the world draws (creates or frees what the current setting needs).
         void BeginFrame();

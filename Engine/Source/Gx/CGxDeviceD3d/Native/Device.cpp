@@ -64,6 +64,9 @@ const D3DCMPFUNC CGxDeviceD3d::s_cmpFunc[4] = { D3DCMP_LESSEQUAL, D3DCMP_EQUAL, 
 // STATIC: 0x00A2FA24
 const D3DCULL CGxDeviceD3d::s_cullMode[3] = { D3DCULL_NONE, D3DCULL_CW, D3DCULL_CCW };
 
+// CHANGED: not in the original client (see DeviceSetCullFlip).
+static bool s_cullFlip;
+
 // STATIC: 0x00AD8EF0
 EGxTexFormat CGxDeviceD3d::s_GxTexFormatToUse[GxTexFormats_Last] = { GxTex_Unknown, GxTex_Abgr8888, GxTex_Argb8888, GxTex_Argb4444, GxTex_Argb1555, GxTex_Rgb565, GxTex_Dxt1, GxTex_Dxt3, GxTex_Dxt5, GxTex_Uv88, GxTex_Gr1616F, GxTex_R32F, GxTex_D24X8, GxTex_Intz };
 
@@ -1656,6 +1659,11 @@ void CGxDeviceD3d::IRsSendToHw(EGxRenderState which) {
                 if (value.m_data.i[0] > 2) {
                     cull = 2;
                 }
+            }
+
+            // CHANGED: a mirrored view (water reflections) turns the winding around.
+            if (s_cullFlip && cull) {
+                cull = 3 - cull;
             }
 
             this->DsSet(Ds_CullMode, s_cullMode[cull]);
@@ -3259,6 +3267,33 @@ int32_t CGxDeviceD3d::DeviceTexSetVolume(CGxTex* texture, uint32_t width, uint32
     texture->m_needsCreation = 0;
     texture->m_needsUpdate = 0;
     return 1;
+}
+
+// CHANGED: not in the original client. While set, front and back faces swap, for drawing the world through a
+// mirroring view matrix; the current culling state is sent again.
+void CGxDeviceD3d::DeviceSetCullFlip(int32_t flip) {
+    if (s_cullFlip == (flip != 0)) {
+        return;
+    }
+
+    s_cullFlip = flip != 0;
+
+    if (!this->m_context) {
+        return;
+    }
+
+    uint32_t cull = 0;
+
+    if (this->m_appMasterEnables & 0x20) {
+        int32_t value = this->m_appRenderStates[GxRs_Culling].m_value.m_data.i[0];
+        cull = value > 2 ? 2 : static_cast<uint32_t>(value < 0 ? 0 : value);
+    }
+
+    if (s_cullFlip && cull) {
+        cull = 3 - cull;
+    }
+
+    this->DsSet(Ds_CullMode, s_cullMode[cull]);
 }
 
 int32_t CGxDeviceD3d::DeviceCanCopySampledDepth() {

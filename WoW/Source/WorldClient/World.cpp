@@ -2644,8 +2644,11 @@ void CWorldScene::RenderChunksSolid() {
             }
         }
 
-        renderChunk->m_renderChunkLink.Unlink();
-        CMap::s_mapRenderChunkUpdateList.LinkToTail(renderChunk);
+        if (!CWorldScene::s_reflectionPass) {
+            renderChunk->m_renderChunkLink.Unlink();
+            CMap::s_mapRenderChunkUpdateList.LinkToTail(renderChunk);
+        }
+
         renderChunk = next;
     }
 }
@@ -2666,8 +2669,11 @@ void CWorldScene::RenderChunksZoneDebug() {
             renderChunk->RenderZoneDebug();
         }
 
-        renderChunk->m_renderChunkLink.Unlink();
-        CMap::s_mapRenderChunkUpdateList.LinkToTail(renderChunk);
+        if (!CWorldScene::s_reflectionPass) {
+            renderChunk->m_renderChunkLink.Unlink();
+            CMap::s_mapRenderChunkUpdateList.LinkToTail(renderChunk);
+        }
+
         renderChunk = next;
     }
 }
@@ -3008,7 +3014,10 @@ void CWorldScene::RenderMapObjDefGroups() {
 
     while (group) {
         CMapObjDefGroup* next = CWorldScene::sortTable.m_mapObjDefGroup.Next(group);
-        group->m_sortTableLink.Unlink();
+
+        if (!CWorldScene::s_reflectionPass) {
+            group->m_sortTableLink.Unlink();
+        }
 
         CMapObjDef* mapObjDef = static_cast<CMapObjDef*>(group->m_parentLinkList.Head()->m_ref);
         CMapObj* mapObj = mapObjDef->m_owner;
@@ -3040,7 +3049,7 @@ void CWorldScene::RenderMapObjDefGroups() {
             mapObj->RenderGroup(group->m_groupNum, mapObjDef->m_invMat, &group->m_frustumList);
         }
 
-        CWFrustum* frustum = group->m_frustumList.Head();
+        CWFrustum* frustum = CWorldScene::s_reflectionPass ? nullptr : group->m_frustumList.Head();
 
         while (frustum) {
             CWFrustum* nextFrustum = group->m_frustumList.Next(frustum);
@@ -3683,12 +3692,14 @@ void CWorldScene::RenderChunksSinglePass() {
                     }
                 }
 
-                renderChunk->m_renderChunkLink.Unlink();
+                if (!CWorldScene::s_reflectionPass) {
+                    renderChunk->m_renderChunkLink.Unlink();
 
-                if (CWorld::enables & Enable_ShowNormals) {
-                    singlePassList.LinkToTail(renderChunk);
-                } else {
-                    CMap::s_mapRenderChunkUpdateList.LinkToTail(renderChunk);
+                    if (CWorld::enables & Enable_ShowNormals) {
+                        singlePassList.LinkToTail(renderChunk);
+                    } else {
+                        CMap::s_mapRenderChunkUpdateList.LinkToTail(renderChunk);
+                    }
                 }
 
                 renderChunk = next;

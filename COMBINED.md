@@ -91,8 +91,14 @@ Every changed spot in the original sources is marked `// CHANGED:`.
   and turning layers (LiquidType Tex1-3) over a base colour (int 2), blended by a 128x128x16 noise volume
   (`XTextures\FX\noise.blob`; the D3D9 device gained DeviceTexSetVolume for it). Needs the ProcMagma shaders,
   the layer textures and noise.blob in the patch MPQ.
-- Not ported yet: real reflections of terrain and buildings (waterDetail 3), ripples from the collision meshes of
-  moving objects (4.3.4's PerturbDisplMapMesh).
+- Real reflections (`waterDetail 3`, `reflectionMode` 2 terrain, 3 terrain and buildings, default 3): before the
+  world draws, the terrain and map objects culled for the frame are drawn again into a reflection texture through
+  the view mirrored in the plane of the water nearest the camera (found while drawing the previous frame), with a
+  clip plane at the water and the winding turned (CGxDevice::DeviceSetCullFlip); the render lists are kept for the
+  real pass (CWorldScene::s_reflectionPass). The sky is drawn mirrored behind them. Water at that height samples
+  it with 4.3.4's real reflection shader permutation; other water keeps the sky reflection.
+- Not ported yet: reflections of models (trees, characters), ripples from the collision meshes of moving objects
+  (4.3.4's PerturbDisplMapMesh).
 
 ### Advanced video options (Engine/Source/ShaderEffect/PostEffects.cpp)
 - The settings behind Waystone's Advanced Effects panel, with its console variable names and defaults, as

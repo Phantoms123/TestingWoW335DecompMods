@@ -153,6 +153,10 @@ class CWorldScene {
     static float s_fogFovPadding;
     static CMapEntity* camTargetEntity;
     static C3Vector s_activeWorldView;
+    // CHANGED: not in the original client. Set while the culled terrain and map objects are drawn a second time,
+    // mirrored, for the 4.3.4 water's reflections: the render lists are left as they are for the real pass.
+    static bool s_reflectionPass;
+    static void RenderReflection();
     static C3Vector camTarget;
     static C4Plane camPlaneXY;
     static C4Plane camPlane;

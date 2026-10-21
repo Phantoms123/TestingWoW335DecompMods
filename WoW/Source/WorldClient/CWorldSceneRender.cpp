@@ -2,6 +2,7 @@
 #include "CWorldSceneRender.h"
 #include "WoW/Source/WorldClient/Map.h"
 #include "WoW/Source/WorldClient/World.h"
+#include "WoW/Source/LiquidSystem/CataWater.h"
 #include "Engine/Source/Gx/Gx.h"
 #include "Engine/Source/Gxu/GxuScene.h"
 #include "Engine/Source/Gx/CGxDevice/CGxDevice.h"
@@ -194,6 +195,9 @@ void CWorldScene::Render(const C3Vector& cameraPos, float time) {
     CShadowQuery::Update();
     CShaderEffect::UpdateProjMatrix();
     CWorldScene::ApplyFogState();
+    // CHANGED: the 4.3.4 water's real reflections, drawn from the lists culled for this frame before the real pass
+    // takes them.
+    CWorldScene::RenderReflection();
     CWorldScene::RenderChunks();
     CWorldScene::RenderMapObjDefGroups();
     CWorldScene::RenderHorizon();
@@ -269,4 +273,24 @@ void CWorldScene::BuildViewMatrices(const C3Vector& position) {
     CShadowCache::s_cutoffPlane.z = normal.z;
     CShadowCache::s_cutoffPlane.w = -(normal.x * projected.x + normal.y * projected.y + normal.z * projected.z);
     CShadowQuery::s_cutoffHeight = position.z + 2.0f;
+}
+
+// CHANGED: not in the original client. The terrain (and, with reflectionMode 3, the map objects) seen in the water,
+// drawn through Liquid::Cata's mirrored view into its reflection texture.
+void CWorldScene::RenderReflection() {
+    uint32_t mode = 0;
+
+    if (!Liquid::Cata::BeginReflection(CWorldScene::s_activeWorldView, mode)) {
+        return;
+    }
+
+    CWorldScene::s_reflectionPass = true;
+    CWorldScene::RenderChunks();
+
+    if (mode >= 3) {
+        CWorldScene::RenderMapObjDefGroups();
+    }
+
+    CWorldScene::s_reflectionPass = false;
+    Liquid::Cata::EndReflection();
 }

@@ -66,6 +66,9 @@ int32_t CWorldScene::s_cullPassStamp;
 // STATIC: 0x00CD8F5C
 C3Vector CWorldScene::s_activeWorldView;
 
+// CHANGED: not in the original client (see World.h).
+bool CWorldScene::s_reflectionPass;
+
 // STATIC: 0x00CD8F68
 C3Vector CWorldScene::camTarget;
 

@@ -23,6 +23,7 @@
 #include "Engine/Source/Storm/H/storm.h"
 #include "Engine/Source/Tempest/C33Matrix.h"
 #include "Engine/Source/Tempest/C44Matrix.h"
+#include "Engine/Source/Tempest/C4Plane.h"
 #include "Engine/Source/Tempest/C4Vector.h"
 #include "Engine/Source/Tempest/CRect.h"
 #include "WoW/Source/LiquidSystem/Liquid.h"
@@ -66,6 +67,7 @@ static CGxShader* s_blurPixelShader;
 
 static CTexture* s_backBufferTex;
 static CTexture* s_fakeReflectionTex;
+static CTexture* s_realReflectionTex;
 static CTexture* s_blurredBackTex;
 static CTexture* s_blurTempTex;
 static uint32_t s_screenWidth;
@@ -77,6 +79,15 @@ static float s_zNear = 0.2f;
 static float s_zFar = 1000.0f;
 static float s_viewportFarClip = 1.0f;
 static bool s_cameraUnderwater;
+
+// The water plane the real reflection mirrors in: the height of the water drawn nearest the camera last frame.
+static bool s_planeValid;
+static float s_planeHeight;
+static bool s_nextPlaneValid;
+static float s_nextPlaneHeight;
+static float s_nextPlaneDistance;
+static bool s_realReady;
+static bool s_inReflection;
 
 // Per liquid pass: whether the frame copy, blur and sky reflection were made, and whether they could be.
 static bool s_inPass;
@@ -156,6 +167,7 @@ static void ReleaseTexture(CTexture*& texture) {
 static void DestroyTargets() {
     ReleaseTexture(s_backBufferTex);
     ReleaseTexture(s_fakeReflectionTex);
+    ReleaseTexture(s_realReflectionTex);
     ReleaseTexture(s_blurredBackTex);
     ReleaseTexture(s_blurTempTex);
     s_screenWidth = 0;
@@ -266,6 +278,10 @@ static bool EnsureTargets() {
         s_reflectionHeight = reflectionHeight;
     }
 
+    if (!s_realReflectionTex && s_detail >= 3) {
+        s_realReflectionTex = CreateTarget(GxTex_NonPow2, s_reflectionWidth, s_reflectionHeight, "LiquidProc Real Reflection");
+    }
+
     if (!s_blurredBackTex) {
         s_blurredBackTex = CreateTarget(GxTex_2d, BLUR_SIZE, BLUR_SIZE, "blurredBack");
     }
@@ -318,6 +334,12 @@ uint32_t Liquid::Cata::GetWaterDetail() {
 }
 
 void Liquid::Cata::BeginFrame() {
+    s_planeValid = s_nextPlaneValid;
+    s_planeHeight = s_nextPlaneHeight;
+    s_nextPlaneValid = false;
+    s_nextPlaneDistance = 0.0f;
+    s_realReady = false;
+
     uint32_t wanted = s_requestedDetail >= 2 && !s_failed ? s_requestedDetail : 0;
 
     if (wanted && !Supported()) {
@@ -425,8 +447,29 @@ static void BlurBackBuffer(CGxTex* backBuffer, CGxTex* blurred, CGxTex* temp) {
 
 // 4.3.4's "fake" reflection: the sky alone, seen from the camera mirrored in the water plane (a camera-relative
 // look along the mirrored view direction, world up), into a window-sized texture.
-static void RenderSkyReflection(CGxTex* target) {
+// The sky alone (stars, sun, moons, sky dome, clouds) through skyView, without depth.
+static void DrawSky(const C44Matrix& skyView) {
     CGxDevice* device = g_theGxDevicePtr;
+    C44Matrix view;
+    GxXformView(view);
+
+    device->XformSetView(skyView);
+    device->RsPush();
+    GxRsSet(GxRs_DepthTest, 0);
+    GxRsSet(GxRs_DepthWrite, 0);
+
+    DayNight::g_stars.Render();
+    DayNight::g_planets.m_sun.Render();
+    DayNight::g_planets.m_moon.Render();
+    DayNight::g_planets.m_moon2.Render();
+    DayNight::g_sky.Render();
+    DayNight::g_clouds.Render();
+
+    device->RsPop();
+    device->XformSetView(view);
+}
+
+static void RenderSkyReflection(CGxTex* target) {
     DayNight::DNInfo* info = DayNight::GetInfo();
 
     GxRenderTargetSet(GxBuffers_Color, target, 0);
@@ -459,20 +502,7 @@ static void RenderSkyReflection(CGxTex* target) {
         GxuXformCreateLookAtSgCompat(eye, mirrored, up, mirroredView);
     }
 
-    device->XformSetView(mirroredView);
-    device->RsPush();
-    GxRsSet(GxRs_DepthTest, 0);
-    GxRsSet(GxRs_DepthWrite, 0);
-
-    DayNight::g_stars.Render();
-    DayNight::g_planets.m_sun.Render();
-    DayNight::g_planets.m_moon.Render();
-    DayNight::g_planets.m_moon2.Render();
-    DayNight::g_sky.Render();
-    DayNight::g_clouds.Render();
-
-    device->RsPop();
-    device->XformSetView(view);
+    DrawSky(mirroredView);
 }
 
 // The first 4.3.4 water draw of a pass makes what it samples from the frame drawn so far.
@@ -1047,6 +1077,99 @@ static void BindRippleMaps() {
     }
 }
 
+// The view mirrored in the plane z = height (camera-relative): z becomes 2 * height - z.
+static C44Matrix MirrorZ(float height) {
+    C44Matrix mirror;
+    mirror.c2 = -1.0f;
+    mirror.d2 = 2.0f * height;
+    return mirror;
+}
+
+static C44Matrix s_reflectionSavedView;
+static CGxTex* s_reflectionSavedColor;
+static float s_reflectionSavedViewport[6];
+
+bool Liquid::Cata::BeginReflection(const C3Vector& worldViewOrigin, uint32_t& mode) {
+    mode = s_reflectionMode;
+
+    if (s_detail < 3 || s_reflectionMode < 2 || !s_planeValid || s_cameraUnderwater || s_inReflection) {
+        return false;
+    }
+
+    // Camera-relative height of the water; nothing to see in it from below or right at it.
+    float height = s_planeHeight - worldViewOrigin.z;
+
+    if (height > -0.05f || !EnsureTargets()) {
+        return false;
+    }
+
+    CGxTex* target = GxTexOf(s_realReflectionTex);
+
+    if (!target) {
+        LogOnce(21, "real reflections skipped, the reflection texture could not be created");
+        return false;
+    }
+
+    CGxDevice* device = g_theGxDevicePtr;
+    SaveConstants();
+    s_reflectionSavedColor = nullptr;
+    device->DeviceGetRenderTarget(GxBuffers_Color, s_reflectionSavedColor);
+    float* vp = s_reflectionSavedViewport;
+    GxXformViewport(vp[0], vp[1], vp[2], vp[3], vp[4], vp[5]);
+    GxXformView(s_reflectionSavedView);
+
+    device->RsPush();
+    GxRenderTargetSet(GxBuffers_Color, target, 0);
+    GxXformSetViewport(0.0f, 1.0f, 0.0f, 1.0f, vp[4], vp[5]);
+
+    DayNight::DNInfo* info = DayNight::GetInfo();
+    GxSceneClear(GxBufferBit_Color | GxBufferBit_Depth, info->m_fog.m_color);
+
+    // The sky, mirrored through the camera (it is drawn around it).
+    if (info->m_showSky) {
+        DrawSky(MirrorZ(0.0f) * s_reflectionSavedView);
+    }
+
+    // The world, mirrored in the water: the clip plane keeps what lies above the water, and the mirror turns the
+    // winding around.
+    C44Matrix mirrored = MirrorZ(height) * s_reflectionSavedView;
+    device->XformSetView(mirrored);
+
+    C44Matrix inverse = (mirrored * device->m_projNative).Inverse();
+    C4Plane clip;
+    clip.n.x = inverse.a2 - height * inverse.a3;
+    clip.n.y = inverse.b2 - height * inverse.b3;
+    clip.n.z = inverse.c2 - height * inverse.c3;
+    clip.d = inverse.d2 - height * inverse.d3;
+    device->ClipPlaneSet(0, clip);
+    GxRsSet(GxRs_ClipPlaneMask, 1);
+    device->DeviceSetCullFlip(1);
+
+    s_inReflection = true;
+    return true;
+}
+
+void Liquid::Cata::EndReflection() {
+    if (!s_inReflection) {
+        return;
+    }
+
+    CGxDevice* device = g_theGxDevicePtr;
+    device->DeviceSetCullFlip(0);
+    GxRsSet(GxRs_ClipPlaneMask, 0);
+    device->XformSetView(s_reflectionSavedView);
+    device->RsPop();
+
+    float* vp = s_reflectionSavedViewport;
+    GxRenderTargetSet(GxBuffers_Color, s_reflectionSavedColor, 0);
+    GxXformSetViewport(vp[0], vp[1], vp[2], vp[3], vp[4], vp[5]);
+    RestoreConstants();
+
+    s_inReflection = false;
+    s_realReady = true;
+    LogOnce(22, "drawing real reflections");
+}
+
 void Liquid::Cata::BeginLiquidPass(bool cameraUnderwater) {
     s_cameraUnderwater = cameraUnderwater;
     s_inPass = s_detail >= 2;
@@ -1219,8 +1342,23 @@ bool Liquid::Cata::RenderWater(IEnvironment* environment, IGeomFactory* geomFact
         return false;
     }
 
-    // Sky reflection for open water; underwater 4.3.4 draws the surface from below without one.
-    uint32_t reflectionKind = 0;
+    // The water nearest the camera sets next frame's reflection plane.
+    if (!s_cameraUnderwater && bounds->c.z < cameraPos.z) {
+        C3Vector toWater = bounds->c - cameraPos;
+        float distance = toWater.x * toWater.x + toWater.y * toWater.y + toWater.z * toWater.z - bounds->r * bounds->r;
+
+        if (!s_nextPlaneValid || distance < s_nextPlaneDistance) {
+            s_nextPlaneValid = true;
+            s_nextPlaneDistance = distance;
+            s_nextPlaneHeight = bounds->c.z;
+        }
+    }
+
+    // A real reflection when one was drawn this frame for water at this height, else the sky reflection;
+    // underwater 4.3.4 draws the surface from below without one.
+    CGxTex* realReflection = GxTexOf(s_realReflectionTex);
+    bool real = s_realReady && realReflection && fabsf(bounds->c.z - s_planeHeight) < 2.0f;
+    uint32_t reflectionKind = real ? 1 : 0;
     CGxShader* pixelShader = s_cameraUnderwater ? s_belowPixelShaders[BelowPermutation(reflectionKind)] : s_abovePixelShaders[AbovePermutation(reflectionKind)];
     CGxShader* vertexShader = s_vertexShaders[s_rippleDetail * 4];
 
@@ -1280,7 +1418,7 @@ bool Liquid::Cata::RenderWater(IEnvironment* environment, IGeomFactory* geomFact
     SetPs(28, phase, wave, 1.0f, 1.0f);
 
     device->RsSet(GxRs_Texture0, backBuffer);
-    device->RsSet(GxRs_Texture1, reflection);
+    device->RsSet(GxRs_Texture1, real ? realReflection : reflection);
     device->RsSet(GxRs_Texture2, depthTint);
     device->RsSet(GxRs_Texture3, blurred);
     device->RsSet(GxRs_Texture5, bump);

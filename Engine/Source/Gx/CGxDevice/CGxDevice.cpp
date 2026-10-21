@@ -127,6 +127,9 @@ int32_t CGxDevice::DeviceCopySampledDepth(CGxTex* texture) {
     return 0;
 }
 
+void CGxDevice::DeviceSetCullFlip(int32_t flip) {
+}
+
 int32_t CGxDevice::DeviceTexSetVolume(CGxTex* texture, uint32_t width, uint32_t height, uint32_t depth, const void* argb) {
     return 0;
 }

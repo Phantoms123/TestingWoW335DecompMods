@@ -639,7 +639,7 @@ static bool WaterDetailCallback(CVar* var, const char* oldValue, const char* val
     int32_t detail = SStrToInt(value);
 
     if (detail < 0 || detail > 3) {
-        ConsoleWrite("waterDetail: 0 and 1 the 3.3.5 water, 2 the 4.3.4 water, 3 the 4.3.4 water with real reflections (not ported yet, draws as 2)", DEFAULT_COLOR);
+        ConsoleWrite("waterDetail: 0 and 1 the 3.3.5 water, 2 the 4.3.4 water, 3 the 4.3.4 water with real reflections (see reflectionMode)", DEFAULT_COLOR);
         return false;
     }
 
@@ -796,8 +796,8 @@ void CWorldParam::Initialize() {
     Liquid::Cata::SetWaterDetail(waterDetail ? static_cast<uint32_t>(waterDetail->m_intValue) : 2);
     CVar* rippleDetail = CVar::Register("rippleDetail", "Water ripple detail with the 4.3.4 water (0 the 3.3.5 ripples, 1 4.3.4 ripples, 2 finer 4.3.4 ripples)", 1, "1", RippleDetailCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     Liquid::Cata::SetRippleDetail(rippleDetail ? static_cast<uint32_t>(rippleDetail->m_intValue) : 1);
-    CVar* reflectionMode = CVar::Register("reflectionMode", "Water reflection mode (0-3)", 1, "0", ReflectionModeCallback, CATEGORY_GRAPHICS, false, nullptr, false);
-    Liquid::Cata::SetReflectionMode(reflectionMode ? static_cast<uint32_t>(reflectionMode->m_intValue) : 0);
+    CVar* reflectionMode = CVar::Register("reflectionMode", "Water reflections with waterDetail 3 (0, 1 sky; 2 sky and terrain; 3 sky, terrain and buildings)", 1, "3", ReflectionModeCallback, CATEGORY_GRAPHICS, false, nullptr, false);
+    Liquid::Cata::SetReflectionMode(reflectionMode ? static_cast<uint32_t>(reflectionMode->m_intValue) : 3);
     CVar* reflectionDownscale = CVar::Register("reflectionDownscale", "Water reflection texture downscale (0-4)", 1, "0", ReflectionDownscaleCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     Liquid::Cata::SetReflectionDownscale(reflectionDownscale ? static_cast<uint32_t>(reflectionDownscale->m_intValue) : 0);
     RegisterPostEffects();

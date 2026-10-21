@@ -196,6 +196,8 @@ class CGxDevice {
     // width x height x depth volume texture holding argb (width * height * depth texels, slice after slice), for
     // 4.3.4 shaders that sample one. False where the device has no volume textures.
     virtual int32_t DeviceTexSetVolume(CGxTex* texture, uint32_t width, uint32_t height, uint32_t depth, const void* argb);
+    // CHANGED: not in the original client. Swaps front and back faces while the world draws mirrored.
+    virtual void DeviceSetCullFlip(int32_t flip);
     virtual void DeviceCopyTex(CGxTex* source, uint32_t sourcePlane, CGxTex* dest, uint32_t destPlane);
     virtual void DeviceOverride(EGxOverride override, uint32_t value);
     virtual void AddDeviceRestoredCallback(GxDeviceCallback callback);
