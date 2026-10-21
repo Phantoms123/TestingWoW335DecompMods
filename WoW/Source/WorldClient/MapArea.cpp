@@ -19,6 +19,7 @@
 #include <cmath>
 #include "Engine/Source/Tempest/CMath.h"
 #include "WoW/Source/WorldClient/CChunkLiquid.h"
+#include "WoW/Source/WorldClient/AdtCompat.h"
 
 void CMapArea::Destroy() {
 }
@@ -394,6 +395,103 @@ void CMapArea::Load(const char* fileName) {
     this->m_asyncObject->m_userArg = this;
     this->m_asyncObject->m_userPostloadCallback = reinterpret_cast<void*>(&CMapArea::AsyncCallback);
     AsyncFileReadObject(this->m_asyncObject, 0);
+}
+
+// CHANGED: reads one whole file into a new SMemAlloc buffer. Returns false if it cannot be opened or read.
+static bool ReadWholeFile(const char* fileName, uint8_t** data, uint32_t* size) {
+    SFileImpl* file;
+
+    *data = nullptr;
+    *size = 0;
+
+    if (!SFileOpenFile(fileName, &file)) {
+        return false;
+    }
+
+    uint32_t fileSize = SFileGetFileSize(file, nullptr);
+    uint8_t* buffer = static_cast<uint8_t*>(SMemAlloc(fileSize ? fileSize : 1, __FILE__, __LINE__, 0));
+    int32_t read = SFileReadFile(file, buffer, fileSize, nullptr, nullptr, 0);
+    SFileCloseFile(file);
+
+    if (!read) {
+        SMemFree(buffer, __FILE__, __LINE__, 0);
+        return false;
+    }
+
+    *data = buffer;
+    *size = fileSize;
+    return true;
+}
+
+// CHANGED: not in the original client. Merges a 4.x split tile into one buffer laid out the way
+// ProcessIffChunks reads it. The read is synchronous, so the tile is ready when this returns.
+int32_t CMapArea::LoadSplit(const char* fileName) {
+    char texName[256];
+    char objName[256];
+    SStrCopy(texName, fileName, sizeof(texName));
+    SStrCopy(objName, fileName, sizeof(objName));
+
+    char* texExt = strrchr(texName, '.');
+    char* objExt = strrchr(objName, '.');
+
+    if (!texExt || !objExt) {
+        return 0;
+    }
+
+    strcpy(texExt, "_tex0.adt");
+    strcpy(objExt, "_obj0.adt");
+
+    uint8_t* rootData;
+    uint8_t* texData;
+    uint8_t* objData;
+    uint32_t rootSize;
+    uint32_t texSize;
+    uint32_t objSize;
+
+    if (!ReadWholeFile(fileName, &rootData, &rootSize)) {
+        return 0;
+    }
+
+    ReadWholeFile(texName, &texData, &texSize);
+    ReadWholeFile(objName, &objData, &objSize);
+
+    AdtCompatSource root = { rootData, rootSize };
+    AdtCompatSource tex = { texData, texSize };
+    AdtCompatSource obj = { objData, objSize };
+
+    int32_t result = 0;
+    uint32_t mergedSize = AdtCompatMergedSize(root, tex, obj);
+
+    if (mergedSize) {
+        void* buffer = CMapArea::AllocAsyncLoadBuffer(mergedSize);
+
+        if (AdtCompatMerge(root, tex, obj, static_cast<uint8_t*>(buffer), mergedSize) == mergedSize) {
+            this->m_fileBuffer = buffer;
+            this->m_fileSize = mergedSize;
+            this->m_file = nullptr;
+            this->m_asyncObject = nullptr;
+            this->ProcessIffChunks();
+            result = 1;
+        } else {
+            CMapArea::FreeAsyncLoadBuffer(buffer, mergedSize);
+        }
+    }
+
+    if (!result) {
+        DebugLog("CMapArea::LoadSplit() could not merge %s\n", fileName);
+    }
+
+    SMemFree(rootData, __FILE__, __LINE__, 0);
+
+    if (texData) {
+        SMemFree(texData, __FILE__, __LINE__, 0);
+    }
+
+    if (objData) {
+        SMemFree(objData, __FILE__, __LINE__, 0);
+    }
+
+    return result;
 }
 
 namespace {

@@ -73,6 +73,9 @@ class CMapArea : public CMapBaseObj {
     CMapArea();
     ~CMapArea() override;
     void Load(const char* fileName);
+    // CHANGED: loads a tile split into root/_tex0/_obj0 files (4.x layout). Returns 0 if the root file
+    // could not be merged, in which case nothing was loaded.
+    int32_t LoadSplit(const char* fileName);
     void LoadTextures(char* fileNames, uint32_t fileNamesSize);
     void LoadTerrainTexture(CMapAreaTexture* areaTexture, int32_t textureId);
     void ProcessIffChunks();

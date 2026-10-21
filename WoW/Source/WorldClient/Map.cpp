@@ -4157,6 +4157,22 @@ CTexture* CMap::LoadTexture(const char* fileName) {
 void CMap::LoadArea(CMapArea* area) {
     char fileName[256];
     SStrPrintf(fileName, sizeof(fileName), "%s\\%s_%d_%d.adt", CMap::mapPath, CMap::mapName, area->m_index.x, area->m_index.y);
+
+    // CHANGED: a tile with a _tex0 file is stored the 4.x way (root/_tex0/_obj0) and is merged on load.
+    char texName[256];
+    SStrCopy(texName, fileName, sizeof(texName));
+    strcpy(strrchr(texName, '.'), "_tex0.adt");
+
+    SFileImpl* texFile;
+
+    if (SFileOpenFile(texName, &texFile)) {
+        SFileCloseFile(texFile);
+
+        if (area->LoadSplit(fileName)) {
+            return;
+        }
+    }
+
     area->Load(fileName);
 }
 
