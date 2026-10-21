@@ -29,7 +29,7 @@ static const D3DQUERYTYPE s_d3dQueryTypes[1] = { D3DQUERYTYPE_OCCLUSION };
 const D3DCUBEMAP_FACES CGxDeviceD3d9Ex::s_faceTypes[6] = { D3DCUBEMAP_FACE_POSITIVE_X, D3DCUBEMAP_FACE_NEGATIVE_X, D3DCUBEMAP_FACE_POSITIVE_Y, D3DCUBEMAP_FACE_NEGATIVE_Y, D3DCUBEMAP_FACE_POSITIVE_Z, D3DCUBEMAP_FACE_NEGATIVE_Z };
 
 // STATIC: 0x00A2FA64
-const D3DFORMAT CGxDeviceD3d9Ex::s_GxTexFmtToD3dFmt[GxTexFormats_Last] = { D3DFMT_UNKNOWN, D3DFMT_A8B8G8R8, D3DFMT_A8R8G8B8, D3DFMT_A4R4G4B4, D3DFMT_A1R5G5B5, D3DFMT_R5G6B5, D3DFMT_DXT1, D3DFMT_DXT3, D3DFMT_DXT5, D3DFMT_V8U8, D3DFMT_G16R16F, D3DFMT_R32F, D3DFMT_D24X8 };
+const D3DFORMAT CGxDeviceD3d9Ex::s_GxTexFmtToD3dFmt[GxTexFormats_Last] = { D3DFMT_UNKNOWN, D3DFMT_A8B8G8R8, D3DFMT_A8R8G8B8, D3DFMT_A4R4G4B4, D3DFMT_A1R5G5B5, D3DFMT_R5G6B5, D3DFMT_DXT1, D3DFMT_DXT3, D3DFMT_DXT5, D3DFMT_V8U8, D3DFMT_G16R16F, D3DFMT_R32F, D3DFMT_D24X8, static_cast<D3DFORMAT>(MAKEFOURCC('I', 'N', 'T', 'Z')) };
 
 // STATIC: 0x00A2FAD8
 const D3DPRIMITIVETYPE CGxDeviceD3d9Ex::s_primitiveConversion[GxPrims_Last] = { D3DPT_POINTLIST, D3DPT_LINELIST, D3DPT_LINESTRIP, D3DPT_TRIANGLELIST, D3DPT_TRIANGLESTRIP, D3DPT_TRIANGLEFAN };
@@ -62,7 +62,7 @@ const D3DCMPFUNC CGxDeviceD3d9Ex::s_cmpFunc[4] = { D3DCMP_LESSEQUAL, D3DCMP_EQUA
 const D3DCULL CGxDeviceD3d9Ex::s_cullMode[3] = { D3DCULL_NONE, D3DCULL_CW, D3DCULL_CCW };
 
 // STATIC: 0x00AD8F8C
-EGxTexFormat CGxDeviceD3d9Ex::s_GxTexFormatToUse[GxTexFormats_Last] = { GxTex_Unknown, GxTex_Abgr8888, GxTex_Argb8888, GxTex_Argb4444, GxTex_Argb1555, GxTex_Rgb565, GxTex_Dxt1, GxTex_Dxt3, GxTex_Dxt5, GxTex_Uv88, GxTex_Gr1616F, GxTex_R32F, GxTex_D24X8 };
+EGxTexFormat CGxDeviceD3d9Ex::s_GxTexFormatToUse[GxTexFormats_Last] = { GxTex_Unknown, GxTex_Abgr8888, GxTex_Argb8888, GxTex_Argb4444, GxTex_Argb1555, GxTex_Rgb565, GxTex_Dxt1, GxTex_Dxt3, GxTex_Dxt5, GxTex_Uv88, GxTex_Gr1616F, GxTex_R32F, GxTex_D24X8, GxTex_Intz };
 
 // STATIC: 0x00AD8FC0
 D3DDECLTYPE CGxDeviceD3d9Ex::s_gxAttribToD3dAttribType[7] = { D3DDECLTYPE_D3DCOLOR, D3DDECLTYPE_UBYTE4, D3DDECLTYPE_UBYTE4N, D3DDECLTYPE_FLOAT2, D3DDECLTYPE_FLOAT3, D3DDECLTYPE_SHORT2, D3DDECLTYPE_FLOAT1 };
@@ -2487,6 +2487,10 @@ void CGxDeviceD3d9Ex::ISetCaps(const CGxFormat& format) {
     this->m_caps.m_rttFormat[GxTex_Gr1616F] = this->m_d3d->CheckDeviceFormat(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, this->m_devAdapterFormat, D3DUSAGE_RENDERTARGET, D3DRTYPE_TEXTURE, D3DFMT_G16R16F) == D3D_OK;
     this->m_caps.m_rttFormat[GxTex_R32F] = this->m_d3d->CheckDeviceFormat(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, this->m_devAdapterFormat, D3DUSAGE_RENDERTARGET, D3DRTYPE_TEXTURE, D3DFMT_R32F) == D3D_OK;
     this->m_caps.m_rttFormat[GxTex_D24X8] = this->m_d3d->CheckDeviceFormat(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, this->m_devAdapterFormat, D3DUSAGE_DEPTHSTENCIL, D3DRTYPE_TEXTURE, D3DFMT_D24X8) == D3D_OK;
+    // CHANGED: INTZ support (a depth-stencil texture shaders can read). Drivers report it only for depth-stencil
+    // use, so the plain texture check above always fails for it.
+    this->m_caps.m_rttFormat[GxTex_Intz] = this->m_d3d->CheckDeviceFormat(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, this->m_devAdapterFormat, D3DUSAGE_DEPTHSTENCIL, D3DRTYPE_TEXTURE, s_GxTexFmtToD3dFmt[GxTex_Intz]) == D3D_OK;
+    this->m_caps.m_texFmt[GxTex_Intz] = this->m_caps.m_rttFormat[GxTex_Intz];
 
     this->m_caps.m_colorWrite = (this->m_d3dCaps.PrimitiveMiscCaps & D3DPMISCCAPS_COLORWRITEENABLE) != 0;
     this->m_caps.m_hwCursor = this->m_d3dCaps.CursorCaps & D3DCURSORCAPS_COLOR;
@@ -3968,7 +3972,8 @@ int32_t CGxDeviceD3d9Ex::ITexAllocD3dTexture(CGxTex* texId) {
             usage = D3DUSAGE_RENDERTARGET | D3DUSAGE_AUTOGENMIPMAP;
         }
 
-        if (texId->m_format == GxTex_D24X8) {
+        // CHANGED: also INTZ.
+        if (texId->m_format == GxTex_D24X8 || texId->m_format == GxTex_Intz) {
             usage = D3DUSAGE_DEPTHSTENCIL;
         }
     }

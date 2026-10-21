@@ -53,8 +53,10 @@ VkFormat TextureFormat(EGxTexFormat format) {
         VK_FORMAT_UNDEFINED, VK_FORMAT_A1R5G5B5_UNORM_PACK16,
         VK_FORMAT_R5G6B5_UNORM_PACK16, VK_FORMAT_BC1_RGBA_UNORM_BLOCK,
         VK_FORMAT_BC2_UNORM_BLOCK, VK_FORMAT_BC3_UNORM_BLOCK,
-        VK_FORMAT_R8G8_SNORM, VK_FORMAT_R16G16_SFLOAT, VK_FORMAT_R32_SFLOAT, VK_FORMAT_D32_SFLOAT
+        VK_FORMAT_R8G8_SNORM, VK_FORMAT_R16G16_SFLOAT, VK_FORMAT_R32_SFLOAT, VK_FORMAT_D32_SFLOAT,
+        VK_FORMAT_UNDEFINED  // CHANGED: GxTex_Intz is D3D9 only
     };
+    static_assert(sizeof(formats) / sizeof(formats[0]) == GxTexFormats_Last, "one entry per texture format");
     return format > GxTex_Unknown && format < GxTexFormats_Last ? formats[format] : VK_FORMAT_UNDEFINED;
 }
 

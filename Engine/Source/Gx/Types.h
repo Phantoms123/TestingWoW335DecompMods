@@ -55,7 +55,10 @@ enum EGxTexFormat {
     GxTex_Gr1616F = 10,
     GxTex_R32F = 11,
     GxTex_D24X8 = 12,
-    GxTexFormats_Last = 13,
+    // CHANGED: not in the original client. A depth-stencil texture shaders can read as depth (D3D9 FOURCC
+    // INTZ), for 4.x effects that sample scene depth.
+    GxTex_Intz = 13,
+    GxTexFormats_Last = 14,
 };
 
 enum EGxVertexBufferFormat {
@@ -206,11 +209,11 @@ class CGxCaps {
     /* 0018 */ int32_t unk_0018;
     /* 001C */ uint32_t m_maxIndex;
     /* 0020 */ int32_t m_generateMipMaps;
-    /* 0024 */ int32_t m_texFmt [13];
+    /* 0024 */ int32_t m_texFmt [GxTexFormats_Last];
     /* 0058 */ int32_t m_texTarget [4];
     /* 0068 */ uint32_t m_texNonPow2;
     /* 006C */ uint32_t m_texMaxSize [4];
-    /* 007C */ int32_t m_rttFormat [13];
+    /* 007C */ int32_t m_rttFormat [GxTexFormats_Last];
     /* 00B0 */ uint32_t unk_00B0;
     /* 00B4 */ int32_t m_shaderTargets [6];
     /* 00CC */ uint32_t m_shaderConstants [6];

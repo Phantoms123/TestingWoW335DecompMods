@@ -246,7 +246,7 @@ class CGxDeviceD3d9Ex : public CGxDevice {
     /* 3B60 */ LPDIRECT3DVERTEXBUFFER9 m_d3dVertexStreamBuf [8];
     /* 3B80 */ uint32_t m_d3dVertexStreamOfs [8];
     /* 3BA0 */ uint32_t m_d3dVertexStreamStride [8];
-    /* 3BC0 */ CGxDeviceD3d9Ex::ScratchTexture m_scratchTextures [13];
+    /* 3BC0 */ CGxDeviceD3d9Ex::ScratchTexture m_scratchTextures [GxTexFormats_Last];
     /* 3C28 */ TSExplicitList<CGxTex, offsetof(CGxTex, m_link2)> m_texCacheList;
     /* 3C34 */ TSExplicitList<CGxTex, offsetof(CGxTex, m_link)> m_texDestroyList;
     /* 3C40 */ uint32_t m_texCacheUsed;
