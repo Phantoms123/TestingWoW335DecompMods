@@ -117,6 +117,12 @@ static float s_planeHeight;
 static bool s_nextPlaneValid;
 static float s_nextPlaneHeight;
 static float s_nextPlaneDistance;
+// The nearest water at about the level already reflected: other water takes over only when clearly nearer.
+static bool s_nextSameValid;
+static float s_nextSameDistance;
+static float s_nextSameHeight;
+// Whether the last see-through pass drew its water with the per-pixel blend (reflectionDebug).
+static bool s_lastPassBlended;
 static bool s_realReady;
 // Smoothing: the plane is kept for a while after its water was last seen, eases between nearby heights, and the
 // reflection fades in and out instead of switching at once.
@@ -435,12 +441,21 @@ void Liquid::Cata::BeginFrame() {
         uint32_t nowMs = OsGetAsyncTimeMs();
 
         if (nowMs - s_lastDebugMs > 500 || fabsf(s_planeHeight - s_lastDebugPlane) > 1.0f) {
-            std::fprintf(stderr, "Reflection: level %.2f (next %.2f%s), real %s, fade %.2f, blend per pixel %s\n", s_planeHeight, s_nextPlaneHeight, s_nextPlaneValid ? "" : " none", s_realReady ? "drawn" : "not drawn", s_reflectionBlend, s_reflectionBlendReady ? "on" : "off");
+            std::fprintf(stderr, "Reflection: level %.2f (next %.2f%s), real %s, fade %.2f, blend per pixel %s\n", s_planeHeight, s_nextPlaneHeight, s_nextPlaneValid ? "" : " none", s_realReady ? "drawn" : "not drawn", s_reflectionBlend, s_lastPassBlended ? "on" : "off");
             s_lastDebugMs = nowMs;
             s_lastDebugPlane = s_planeHeight;
         }
     }
 
+    // Hysteresis: two waters at different levels about as near (a stream running into a pond) otherwise took turns
+    // at every step, and the whole reflection slid between the two levels. Other water takes over when its middle
+    // is under half as far away as the nearest water at the level reflected now.
+    if (s_nextPlaneValid && s_nextSameValid && s_nextPlaneDistance > 0.25f * s_nextSameDistance) {
+        s_nextPlaneHeight = s_nextSameHeight;
+    }
+
+    s_nextSameValid = false;
+    s_nextSameDistance = 0.0f;
     s_planeSeen = s_nextPlaneValid;
 
     if (s_nextPlaneValid) {
@@ -1449,6 +1464,7 @@ void Liquid::Cata::EndLiquidPass() {
     s_inPass = false;
     s_passPrepared = false;
     s_passReady = false;
+    s_lastPassBlended = s_reflectionBlendReady;
     s_reflectionBlendReady = false;
 }
 
@@ -1838,6 +1854,12 @@ bool Liquid::Cata::RenderWater(IEnvironment* environment, IGeomFactory* geomFact
             s_nextPlaneValid = true;
             s_nextPlaneDistance = distance;
             s_nextPlaneHeight = bounds->c.z;
+        }
+
+        if (s_planeValid && fabsf(bounds->c.z - s_planeHeight) < 1.0f && (!s_nextSameValid || distance < s_nextSameDistance)) {
+            s_nextSameValid = true;
+            s_nextSameDistance = distance;
+            s_nextSameHeight = bounds->c.z;
         }
     }
 
