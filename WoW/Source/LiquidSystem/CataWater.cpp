@@ -60,7 +60,7 @@ static bool s_rippleFailed;
 static uint32_t s_reflectionMode;
 static uint32_t s_reflectionDownscale;
 static float s_reflectionStrength = 0.75f;
-static float s_shorelineSoftness = 0.5f;
+static float s_shorelineSoftness = 1.0f;
 static bool s_failed;
 
 static CGxShader* s_vertexShaders[VS_PERMUTATIONS];
@@ -1904,7 +1904,9 @@ bool Liquid::Cata::RenderWater(IEnvironment* environment, IGeomFactory* geomFact
         // water looked missing until the camera came down.
         float aboveWater = s_planeValid ? fabsf(cameraPos.z - s_planeHeight) : 0.0f;
         aboveWater = aboveWater > 10.0f ? 10.0f : aboveWater;
-        float scale = s_shorelineSoftness > 0.0f ? 1.0f / (1.0f + s_shorelineSoftness * (0.4f + aboveWater / 20.0f)) : 1.0f;
+        // Nothing close to the water (4.3.4's own fade, which keeps very shallow stretches visible), growing with the
+        // camera's height above it.
+        float scale = s_shorelineSoftness > 0.0f ? 1.0f / (1.0f + s_shorelineSoftness * (aboveWater / 10.0f)) : 1.0f;
 
         for (uint32_t reg = 5; reg <= 8; reg++) {
             s_ps[reg * 4 + 2] *= scale;
