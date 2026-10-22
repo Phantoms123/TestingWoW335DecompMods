@@ -866,7 +866,7 @@ static bool ShadowModeCallback(CVar* var, const char* oldValue, const char* valu
 static bool ShadowTextureSizeCallback(CVar* var, const char* oldValue, const char* value, void* arg) {
     int32_t size = SStrToInt(value);
 
-    if (size != 0 && size != 1024 && size != 2048) {
+    if (size != 0 && size != 1024 && size != 2048 && size != 4096) {
         ConsoleWrite("Unsupported shadow texture size.", DEFAULT_COLOR);
         return false;
     }
@@ -896,9 +896,9 @@ static bool ShadowFollowSunCallback(CVar* var, const char* oldValue, const char*
 }
 
 static void RegisterCataShadows() {
-    CVar* size = CVar::Register("shadowTextureSize", "Shadow texture size (1024 or 2048; 0 by shadow quality, as 3.3.5)", 1, "0", ShadowTextureSizeCallback, CATEGORY_GRAPHICS, false, nullptr, false);
+    CVar* size = CVar::Register("shadowTextureSize", "Shadow texture size (1024, 2048 or 4096; 0 by shadow quality)", 1, "0", ShadowTextureSizeCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     int32_t sizeValue = size ? size->m_intValue : 0;
-    CShadowCache::SetTextureSizeOverride(sizeValue == 1024 || sizeValue == 2048 ? static_cast<uint32_t>(sizeValue) : 0);
+    CShadowCache::SetTextureSizeOverride(sizeValue == 1024 || sizeValue == 2048 || sizeValue == 4096 ? static_cast<uint32_t>(sizeValue) : 0);
 
     CVar* softness = CVar::Register("shadowSoftness", "Shadow edge softness (1 = original, 0.25-6)", 1, "1.0", ShadowSoftnessCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     CShadowCache::SetSoftness(softness ? softness->m_floatValue : 1.0f);
@@ -950,8 +950,8 @@ void CWorldParam::Initialize() {
     Liquid::Cata::SetReflectionMode(reflectionMode ? static_cast<uint32_t>(reflectionMode->m_intValue) : 3);
     CVar* reflectionStrength = CVar::Register("reflectionStrength", "How strongly the water's real reflections show (0-1)", 1, "0.75", ReflectionStrengthCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     Liquid::Cata::SetReflectionStrength(reflectionStrength ? reflectionStrength->m_floatValue : 0.75f);
-    CVar* shorelineSoftness = CVar::Register("shorelineSoftness", "How much softer the 4.3.4 water's shorelines get with distance (0 as 4.3.4, 1 default, up to 4)", 1, "1", ShorelineSoftnessCallback, CATEGORY_GRAPHICS, false, nullptr, false);
-    Liquid::Cata::SetShorelineSoftness(shorelineSoftness ? shorelineSoftness->m_floatValue : 1.0f);
+    CVar* shorelineSoftness = CVar::Register("shorelineSoftness", "How much softer the 4.3.4 water's shorelines get with distance (0 as 4.3.4, 0.5 default, up to 4)", 1, "0.5", ShorelineSoftnessCallback, CATEGORY_GRAPHICS, false, nullptr, false);
+    Liquid::Cata::SetShorelineSoftness(shorelineSoftness ? shorelineSoftness->m_floatValue : 0.5f);
     CVar* reflectionModels = CVar::Register("reflectionModels", "Reflect trees, characters and creatures in the water with reflectionMode 3 (0 off, 1 on)", 1, "1", ReflectionModelsCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     Liquid::Cata::SetReflectionModels(!reflectionModels || reflectionModels->m_intValue != 0);
     CVar* reflectionDistance = CVar::Register("reflectionDistance", "How far the water's real reflections show, in yards (they fade out from a third of it on; 0 no fade)", 1, "200", ReflectionDistanceCallback, CATEGORY_GRAPHICS, false, nullptr, false);

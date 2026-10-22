@@ -69,7 +69,7 @@ void CShadowCache::SetSoftness(float softness) {
 }
 
 void CShadowCache::SetTextureSizeOverride(uint32_t size) {
-    if (size != 0 && size != 1024 && size != 2048) {
+    if (size != 0 && size != 1024 && size != 2048 && size != 4096) {
         size = 0;
     }
 
@@ -892,8 +892,14 @@ void CShadowCache::PreUpdate(const C3Vector& sunDir) {
 void CShadowCache::Init() {
     CShadowCache::s_shadowSize = 1024;
 
-    if (CShadowCache::s_shadowMode >= SHADOW_HIGH || CShadowCache::s_shadowMode == SHADOW_MEDIUM) {
+    // CHANGED: sharper at the top: 3.3.5 gave medium (2) and high (4) and up 2048-texel maps but the cascaded medium
+    // high (3) only 1024, so 3 looked blockier than 2; every level from 2 up now has 2048, and very high (5) 4096.
+    if (CShadowCache::s_shadowMode >= SHADOW_MEDIUM) {
         CShadowCache::s_shadowSize = 2048;
+    }
+
+    if (CShadowCache::s_shadowMode >= SHADOW_VERY_HIGH) {
+        CShadowCache::s_shadowSize = 4096;
     }
 
     if (CShadowCache::s_sizeOverride) {

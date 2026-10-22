@@ -60,7 +60,7 @@ static bool s_rippleFailed;
 static uint32_t s_reflectionMode;
 static uint32_t s_reflectionDownscale;
 static float s_reflectionStrength = 0.75f;
-static float s_shorelineSoftness = 1.0f;
+static float s_shorelineSoftness = 0.5f;
 static bool s_failed;
 
 static CGxShader* s_vertexShaders[VS_PERMUTATIONS];
@@ -410,8 +410,11 @@ void Liquid::Cata::SetReflectionDownscale(uint32_t downscale) {
     s_reflectionDownscale = downscale > 4 ? 4 : downscale;
 }
 
+// Always: the liquid geometry is built once and kept, so coordinates that followed waterDetail stayed those of the
+// setting a chunk was first drawn with (the 4.3.4 magma, switched on later, turned the map's coordinates and
+// showed dark blotches). The 3.3.5 magma takes world coordinates as well as the other 3.3.5 liquids do.
 bool Liquid::Cata::MagmaUsesWorldCoords() {
-    return s_requestedDetail >= 2;
+    return true;
 }
 
 uint32_t Liquid::Cata::GetWaterDetail() {
