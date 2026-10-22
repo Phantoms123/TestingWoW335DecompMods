@@ -264,6 +264,9 @@ class CGxDevice {
     static CGxShader* s_uiPixelShader;
     static CGxShader* s_uiVertexShader[2];
     static ShadowConstants s_shadowConstants[2];
+    // CHANGED: how much the client's shaders darken what is in shadow or turned from the light (their
+    // "light * 0.3 + 0.7"; 0.3 as 3.3.5). The Direct3D 11 device applies it as pixel shaders load (shadowStrength).
+    static float s_shadowStrength;
     static uint32_t s_alphaRef[12];
     static const uint32_t s_texFormatBitDepth[GxTexFormats_Last];
     static const uint32_t s_texFormatBlockSize[GxTexFormats_Last];

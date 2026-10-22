@@ -2701,9 +2701,27 @@ void CGxDeviceD3d11::IShaderCreatePixel(CGxShader* shader) {
         return;
     }
 
+    // The client's lighting ends "mad r, light, l(0.3), l(0.7)": what the light and the shadow lookup take away
+    // is at most 30%. shadowStrength replaces the pair.
+    std::vector<uint8_t> code(shader->m_code.m_data, shader->m_code.m_data + size);
+
+    if (CGxDevice::s_shadowStrength != 0.3f) {
+        const uint32_t pattern[4] = { 0x4001, 0x3E99999A, 0x4001, 0x3F333333 };
+        float strength = CGxDevice::s_shadowStrength;
+        float rest = 1.0f - strength;
+
+        for (size_t i = 0; i + sizeof(pattern) <= code.size(); i += 4) {
+            if (!memcmp(&code[i], pattern, sizeof(pattern))) {
+                memcpy(&code[i + 4], &strength, 4);
+                memcpy(&code[i + 12], &rest, 4);
+                i += sizeof(pattern) - 4;
+            }
+        }
+    }
+
     ID3D11PixelShader* ps = nullptr;
 
-    if (FAILED(this->m_device->CreatePixelShader(shader->m_code.m_data, size, nullptr, &ps))) {
+    if (FAILED(this->m_device->CreatePixelShader(code.data(), size, nullptr, &ps))) {
         return;
     }
 

@@ -84,6 +84,7 @@ CGxShader* CGxDevice::s_uiVertexShader[2];
 
 // STATIC: 0x00C5DFE0
 ShadowConstants CGxDevice::s_shadowConstants[2];
+float CGxDevice::s_shadowStrength = 0.45f;
 
 // STATIC: 0x00C5FFFC
 CGxShader* CGxDevice::s_uiPixelShader;

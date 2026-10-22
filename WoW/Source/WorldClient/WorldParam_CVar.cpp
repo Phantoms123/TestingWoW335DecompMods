@@ -895,7 +895,21 @@ static bool ShadowFollowSunCallback(CVar* var, const char* oldValue, const char*
     return true;
 }
 
+static bool ShadowStrengthCallback(CVar* var, const char* oldValue, const char* value, void* arg) {
+    float strength = SStrToFloat(value);
+    CGxDevice::s_shadowStrength = strength < 0.1f ? 0.1f : (strength > 0.8f ? 0.8f : strength);
+    ConsoleWrite("Shadow strength changes after a restart (Direct3D 11).", DEFAULT_COLOR);
+    return true;
+}
+
 static void RegisterCataShadows() {
+    CVar* strength = CVar::Register("shadowStrength", "How dark shadows and unlit sides get (0.3 as 3.3.5, 0.45 default, 0.1-0.8; Direct3D 11, after a restart)", 1, "0.45", ShadowStrengthCallback, CATEGORY_GRAPHICS, false, nullptr, false);
+
+    if (strength) {
+        float value = strength->m_floatValue;
+        CGxDevice::s_shadowStrength = value < 0.1f ? 0.1f : (value > 0.8f ? 0.8f : value);
+    }
+
     CVar* size = CVar::Register("shadowTextureSize", "Shadow texture size (1024, 2048 or 4096; 0 by shadow quality)", 1, "0", ShadowTextureSizeCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     int32_t sizeValue = size ? size->m_intValue : 0;
     CShadowCache::SetTextureSizeOverride(sizeValue == 1024 || sizeValue == 2048 || sizeValue == 4096 ? static_cast<uint32_t>(sizeValue) : 0);

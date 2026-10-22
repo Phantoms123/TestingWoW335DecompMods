@@ -91,8 +91,8 @@ static float s_maskSavedPs[8 * 4];
 static CGxTex* s_maskSavedColor;
 static float s_maskSavedViewport[6];
 // Up to this far (yards) from the reflected level water shows the real reflection, from the far one on the sky's.
-static const float REFLECTION_BLEND_NEAR = 3.0f;
-static const float REFLECTION_BLEND_FAR = 14.0f;
+static const float REFLECTION_BLEND_NEAR = 6.0f;
+static const float REFLECTION_BLEND_FAR = 24.0f;
 static float s_reflectionDistance = 200.0f;
 // Models smaller than this part of their distance are left out of the reflection (reflectionModelSize).
 static float s_reflectionModelSize = 0.004f;
@@ -1485,7 +1485,12 @@ bool Liquid::Cata::BeginReflectionMask(const C3Vector& cameraPos) {
 
     GxRenderTargetSet(GxBuffers_Color, mask, 0);
     GxXformSetViewport(0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f);
-    CImVector clear = { 0, 0, 0, 0xFF };
+    // No sky, no shift (green and blue 0.5).
+    CImVector clear;
+    clear.r = 0;
+    clear.g = 0x80;
+    clear.b = 0x80;
+    clear.a = 0xFF;
     GxSceneClear(GxBufferBit_Color, clear);
 
     device->RsSet(GxRs_VertexShader, vertexShader);
@@ -1535,14 +1540,23 @@ void Liquid::Cata::DrawReflectionMask(IGeomFactory* geomFactory, const C3Vector&
         projection.c3 *= -1.0f;
     }
 
-    C44Matrix rows = world * view * projection;
-    float c[20];
+    C44Matrix viewProjection = view * projection;
+    C44Matrix rows = world * viewProjection;
+    float c[28];
     memcpy(c, &rows, sizeof(float) * 16);
     c[16] = world.a2;
     c[17] = world.b2;
     c[18] = world.c2;
     c[19] = world.d2;
-    g_theGxDevicePtr->ShaderConstantsSet(GxSh_Vertex, 0, c, 5);
+    c[20] = viewProjection.c0;
+    c[21] = viewProjection.c1;
+    c[22] = viewProjection.c2;
+    c[23] = viewProjection.c3;
+    c[24] = s_planeHeight - (Liquid::UseCameraRelativeCoords() ? cameraPos.z : 0.0f);
+    c[25] = 0.0f;
+    c[26] = 0.0f;
+    c[27] = 0.0f;
+    g_theGxDevicePtr->ShaderConstantsSet(GxSh_Vertex, 0, c, 7);
 
     CGxBuf* vertexBuf = nullptr;
     CGxBuf* indexBuf = nullptr;
