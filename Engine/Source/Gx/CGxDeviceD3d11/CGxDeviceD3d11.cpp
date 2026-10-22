@@ -2428,6 +2428,11 @@ void CGxDeviceD3d11::SceneClear(uint32_t mask, CImVector color) {
 }
 
 void CGxDeviceD3d11::ScenePresent() {
+    if (this->m_context && CGxDevice::s_shadowStrengthChanged) {
+        CGxDevice::s_shadowStrengthChanged = false;
+        this->IApplyShadowStrength();
+    }
+
     if (this->m_context) {
         int32_t scrShotClick = this->m_scrShotClick;
         CGxDevice::ScenePresent();
@@ -2687,6 +2692,57 @@ void CGxDeviceD3d11::IShaderCreateVertex(CGxShader* shader) {
     shader->m_valid = 1;
 }
 
+// The client's lighting ends "mad r, light, l(0.3), l(0.7)": what the light and the shadow lookup take away is at
+// most 30% (models, buildings, terrain). CGxDevice::s_shadowStrength (shadowStrength) replaces the pair.
+static uint32_t ApplyShadowStrength(std::vector<uint8_t>& code) {
+    const uint32_t pattern[4] = { 0x4001, 0x3E99999A, 0x4001, 0x3F333333 };
+    float strength = CGxDevice::s_shadowStrength;
+    float rest = 1.0f - strength;
+    uint32_t count = 0;
+
+    for (size_t i = 0; i + sizeof(pattern) <= code.size(); i += 4) {
+        if (!memcmp(&code[i], pattern, sizeof(pattern))) {
+            memcpy(&code[i + 4], &strength, 4);
+            memcpy(&code[i + 12], &rest, 4);
+            i += sizeof(pattern) - 4;
+            count++;
+        }
+    }
+
+    return count;
+}
+
+// After shadowStrength changes: every pixel shader made again from its code.
+void CGxDeviceD3d11::IApplyShadowStrength() {
+    uint32_t patched = 0;
+
+    for (CGxShader* shader = this->m_shaderList[GxSh_Pixel].m_fulllist.Head(); shader; shader = this->m_shaderList[GxSh_Pixel].m_fulllist.Next(shader)) {
+        Shader* info = static_cast<Shader*>(shader->m_apiSpecific);
+        uint32_t size = shader->m_code.Count();
+
+        if (!info || !info->m_object || size < 32 || memcmp(shader->m_code.m_data, "DXBC", 4)) {
+            continue;
+        }
+
+        std::vector<uint8_t> code(shader->m_code.m_data, shader->m_code.m_data + size);
+
+        if (!ApplyShadowStrength(code)) {
+            continue;
+        }
+
+        ID3D11PixelShader* ps = nullptr;
+
+        if (SUCCEEDED(this->m_device->CreatePixelShader(code.data(), size, nullptr, &ps))) {
+            static_cast<ID3D11PixelShader*>(info->m_object)->Release();
+            info->m_object = ps;
+            patched++;
+        }
+    }
+
+    this->m_hwPs = nullptr;
+    std::fprintf(stderr, "CGxDeviceD3d11: shadowStrength %.2f applied to %u loaded pixel shaders\n", CGxDevice::s_shadowStrength, patched);
+}
+
 void CGxDeviceD3d11::IShaderCreatePixel(CGxShader* shader) {
     shader->m_valid = 0;
 
@@ -2701,23 +2757,8 @@ void CGxDeviceD3d11::IShaderCreatePixel(CGxShader* shader) {
         return;
     }
 
-    // The client's lighting ends "mad r, light, l(0.3), l(0.7)": what the light and the shadow lookup take away
-    // is at most 30%. shadowStrength replaces the pair.
     std::vector<uint8_t> code(shader->m_code.m_data, shader->m_code.m_data + size);
-
-    if (CGxDevice::s_shadowStrength != 0.3f) {
-        const uint32_t pattern[4] = { 0x4001, 0x3E99999A, 0x4001, 0x3F333333 };
-        float strength = CGxDevice::s_shadowStrength;
-        float rest = 1.0f - strength;
-
-        for (size_t i = 0; i + sizeof(pattern) <= code.size(); i += 4) {
-            if (!memcmp(&code[i], pattern, sizeof(pattern))) {
-                memcpy(&code[i + 4], &strength, 4);
-                memcpy(&code[i + 12], &rest, 4);
-                i += sizeof(pattern) - 4;
-            }
-        }
-    }
+    ApplyShadowStrength(code);
 
     ID3D11PixelShader* ps = nullptr;
 

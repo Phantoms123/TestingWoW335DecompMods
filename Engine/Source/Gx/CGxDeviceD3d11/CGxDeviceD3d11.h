@@ -306,6 +306,7 @@ class CGxDeviceD3d11 : public CGxDevice {
     ID3D11SamplerState* ISampler(CGxTex* texId, bool comparison);
     void IShaderCreateVertex(CGxShader* shader);
     void IShaderCreatePixel(CGxShader* shader);
+    void IApplyShadowStrength();
     void IShaderRelease(CGxShader* shader);
     void IReleaseShaders();
     void IReleasePool(CGxPool* pool);

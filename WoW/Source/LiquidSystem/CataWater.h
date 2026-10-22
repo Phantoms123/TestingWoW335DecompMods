@@ -42,6 +42,7 @@ namespace Liquid {
         void SetReflectionStrength(float strength);
         // How much softer shorelines get with distance (0 = as 4.3.4, 1 = default, up to 4).
         void SetShorelineSoftness(float softness);
+        void SetReflectionDebug(bool enable);
         // How far the real reflection shows (yards; it fades out over the second half, 0 = no fade).
         void SetReflectionDistance(float distance);
         void SetReflectionModelSize(float size);

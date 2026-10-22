@@ -398,6 +398,12 @@ void Liquid::Cata::SetReflectionDistance(float distance) {
     s_reflectionDistance = distance < 0.0f ? 0.0f : distance;
 }
 
+static bool s_reflectionDebug;
+
+void Liquid::Cata::SetReflectionDebug(bool enable) {
+    s_reflectionDebug = enable;
+}
+
 void Liquid::Cata::SetShorelineSoftness(float softness) {
     s_shorelineSoftness = softness < 0.0f ? 0.0f : (softness > 4.0f ? 4.0f : softness);
 }
@@ -422,6 +428,19 @@ uint32_t Liquid::Cata::GetWaterDetail() {
 }
 
 void Liquid::Cata::BeginFrame() {
+    // reflectionDebug 1: the reflected level and what decides it, twice a second and whenever it jumps.
+    if (s_reflectionDebug) {
+        static uint32_t s_lastDebugMs;
+        static float s_lastDebugPlane;
+        uint32_t nowMs = OsGetAsyncTimeMs();
+
+        if (nowMs - s_lastDebugMs > 500 || fabsf(s_planeHeight - s_lastDebugPlane) > 1.0f) {
+            std::fprintf(stderr, "Reflection: level %.2f (next %.2f%s), real %s, fade %.2f, blend per pixel %s\n", s_planeHeight, s_nextPlaneHeight, s_nextPlaneValid ? "" : " none", s_realReady ? "drawn" : "not drawn", s_reflectionBlend, s_reflectionBlendReady ? "on" : "off");
+            s_lastDebugMs = nowMs;
+            s_lastDebugPlane = s_planeHeight;
+        }
+    }
+
     s_planeSeen = s_nextPlaneValid;
 
     if (s_nextPlaneValid) {
@@ -1813,7 +1832,7 @@ bool Liquid::Cata::RenderWater(IEnvironment* environment, IGeomFactory* geomFact
     if (!s_cameraUnderwater && bounds->c.z < cameraPos.z) {
         // Nearest across the ground (the water around the camera, rather than whichever is nearest along the view).
         C3Vector toWater = bounds->c - cameraPos;
-        float distance = toWater.x * toWater.x + toWater.y * toWater.y - bounds->r * bounds->r;
+        float distance = toWater.x * toWater.x + toWater.y * toWater.y;
 
         if (!s_nextPlaneValid || distance < s_nextPlaneDistance) {
             s_nextPlaneValid = true;
