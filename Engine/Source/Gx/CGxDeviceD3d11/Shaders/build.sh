@@ -10,3 +10,4 @@ cd "$(dirname "$0")"
 "$VFHLSL" /T ps_4_0 /E PsMain /Vn g_blit_ps /Fh vkd3d/blit_ps.h Blit.hlsl
 "$VFHLSL" /T ps_4_1 /E PsMain /Vn g_depthcopy_ps /Fh vkd3d/depthcopy_ps.h DepthCopy.hlsl
 "$VFHLSL" /T gs_4_0 /E GsMain /Vn g_clipplanes_gs /Fh vkd3d/clipplanes_gs.h ClipPlanes.hlsl
+"$VFHLSL" /T ps_4_0 /E PsMain /Vn g_cleardepth_ps /Fh vkd3d/cleardepth_ps.h ClearDepth.hlsl

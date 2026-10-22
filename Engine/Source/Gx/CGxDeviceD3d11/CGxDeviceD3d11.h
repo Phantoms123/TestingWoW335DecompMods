@@ -167,6 +167,8 @@ class CGxDeviceD3d11 : public CGxDevice {
     ID3D11ShaderResourceView* m_resolveSrv = nullptr;
     ID3D11SamplerState* m_stretchSampler = nullptr;
     ID3D11PixelShader* m_depthCopyPs = nullptr;
+    ID3D11PixelShader* m_clearDepthPs = nullptr;
+    ID3D11DepthStencilState* m_clearDepthState = nullptr;
     // Clip planes for shader draws (Shaders/ClipPlanes.hlsl): bound while planes are on and a client shader draws
     // triangles.
     struct ID3D11GeometryShader* m_clipGs = nullptr;

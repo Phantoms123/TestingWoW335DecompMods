@@ -31,6 +31,7 @@ namespace {
 #include "Engine/Source/Gx/CGxDeviceD3d11/Shaders/vkd3d/blit_vs.h"
 #include "Engine/Source/Gx/CGxDeviceD3d11/Shaders/vkd3d/clipplanes_gs.h"
 #include "Engine/Source/Gx/CGxDeviceD3d11/Shaders/vkd3d/depthcopy_ps.h"
+#include "Engine/Source/Gx/CGxDeviceD3d11/Shaders/vkd3d/cleardepth_ps.h"
 #include "Engine/Source/Gx/CGxDeviceD3d11/Shaders/vkd3d/ffp_ps.h"
 #include "Engine/Source/Gx/CGxDeviceD3d11/Shaders/vkd3d/ffp_vs.h"
 
@@ -871,6 +872,15 @@ int32_t CGxDeviceD3d11::ICreateD3dDevice(const CGxFormat& format) {
     this->m_device->CreateVertexShader(g_blit_vs, sizeof(g_blit_vs), nullptr, &this->m_blitVs);
     this->m_device->CreatePixelShader(g_blit_ps, sizeof(g_blit_ps), nullptr, &this->m_blitPs);
     this->m_device->CreatePixelShader(g_depthcopy_ps, sizeof(g_depthcopy_ps), nullptr, &this->m_depthCopyPs);
+    this->m_device->CreatePixelShader(g_cleardepth_ps, sizeof(g_cleardepth_ps), nullptr, &this->m_clearDepthPs);
+
+    {
+        D3D11_DEPTH_STENCIL_DESC depthDesc = {};
+        depthDesc.DepthEnable = TRUE;
+        depthDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+        depthDesc.DepthFunc = D3D11_COMPARISON_ALWAYS;
+        this->m_device->CreateDepthStencilState(&depthDesc, &this->m_clearDepthState);
+    }
     this->m_device->CreateGeometryShader(g_clipplanes_gs, sizeof(g_clipplanes_gs), nullptr, &this->m_clipGs);
     this->m_ffpVsInfo = Shader();
     this->m_ffpVsInfo.m_object = this->m_ffpVs;
@@ -1068,6 +1078,8 @@ void CGxDeviceD3d11::IDestroyD3d() {
     SafeRelease(this->m_blitPs);
     SafeRelease(this->m_stretchSampler);
     SafeRelease(this->m_depthCopyPs);
+    SafeRelease(this->m_clearDepthPs);
+    SafeRelease(this->m_clearDepthState);
     SafeRelease(this->m_clipGs);
     this->m_ffpVsInfo = Shader();
     for (RtDepth& rtDepth : this->m_rtDepths) {
@@ -2367,7 +2379,51 @@ void CGxDeviceD3d11::SceneClear(uint32_t mask, CImVector color) {
     }
 
     if ((mask & GxBufferBit_Depth) && this->m_curDsv) {
-        this->m_ctx->ClearDepthStencilView(this->m_curDsv, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+        // Direct3D 9 clears the depth within the viewport only too: the cascaded shadow maps are drawn a tile at a
+        // time, each tile clearing its own viewport (ShadowQuery), and a whole clear left only the last tile.
+        D3D11_VIEWPORT viewport;
+        UINT viewports = 1;
+        this->m_ctx->RSGetViewports(&viewports, &viewport);
+        bool full = true;
+
+        if (viewports) {
+            ID3D11Resource* resource = nullptr;
+            this->m_curDsv->GetResource(&resource);
+            ID3D11Texture2D* texture = nullptr;
+
+            if (resource && SUCCEEDED(resource->QueryInterface(__uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&texture)))) {
+                D3D11_TEXTURE2D_DESC desc;
+                texture->GetDesc(&desc);
+                full = viewport.TopLeftX <= 0.0f && viewport.TopLeftY <= 0.0f && viewport.TopLeftX + viewport.Width >= desc.Width && viewport.TopLeftY + viewport.Height >= desc.Height;
+                texture->Release();
+            }
+
+            SafeRelease(resource);
+        }
+
+        if (full || !this->m_clearDepthPs || !this->m_clearDepthState || !this->m_blitVs) {
+            this->m_ctx->ClearDepthStencilView(this->m_curDsv, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+        } else {
+            ID3D11ShaderResourceView* none[24] = {};
+            this->m_ctx->PSSetShaderResources(0, 24, none);
+            this->m_ctx->OMSetRenderTargets(0, nullptr, this->m_curDsv);
+            D3D11_VIEWPORT depthViewport = viewport;
+            depthViewport.MinDepth = 0.0f;
+            depthViewport.MaxDepth = 1.0f;
+            this->m_ctx->RSSetViewports(1, &depthViewport);
+            this->m_ctx->RSSetState(nullptr);
+            this->m_ctx->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
+            this->m_ctx->OMSetDepthStencilState(this->m_clearDepthState, 0);
+            this->m_ctx->IASetInputLayout(nullptr);
+            this->m_ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+            this->m_ctx->VSSetShader(this->m_blitVs, nullptr, 0);
+            this->m_ctx->VSSetConstantBuffers(0, 1, &this->m_blitConstants);
+            this->m_ctx->GSSetShader(nullptr, nullptr, 0);
+            this->m_ctx->PSSetShader(this->m_clearDepthPs, nullptr, 0);
+            this->m_ctx->Draw(3, 0);
+            this->m_ctx->OMSetRenderTargets(this->m_curRtv ? 1 : 0, this->m_curRtv ? &this->m_curRtv : nullptr, this->m_curDsv);
+            this->IStateInvalidate();
+        }
     }
 }
 

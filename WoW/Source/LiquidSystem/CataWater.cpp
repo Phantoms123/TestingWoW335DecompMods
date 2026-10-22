@@ -1897,10 +1897,10 @@ bool Liquid::Cata::RenderWater(IEnvironment* environment, IGeomFactory* geomFact
     // ones, a visible step along their edge): it follows the camera's height above the water instead, which is how
     // far off the shores seen are.
     {
-        // At most 20 yards' worth: from high above, a stronger fade took all of a shallow river's depth, and the
+        // At most 10 yards' worth: from high above, a stronger fade took all of a shallow river's depth, and the
         // water looked missing until the camera came down.
         float aboveWater = s_planeValid ? fabsf(cameraPos.z - s_planeHeight) : 0.0f;
-        aboveWater = aboveWater > 20.0f ? 20.0f : aboveWater;
+        aboveWater = aboveWater > 10.0f ? 10.0f : aboveWater;
         float scale = s_shorelineSoftness > 0.0f ? 1.0f / (1.0f + s_shorelineSoftness * (0.4f + aboveWater / 20.0f)) : 1.0f;
 
         for (uint32_t reg = 5; reg <= 8; reg++) {
