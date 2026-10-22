@@ -91,8 +91,8 @@ static float s_maskSavedPs[8 * 4];
 static CGxTex* s_maskSavedColor;
 static float s_maskSavedViewport[6];
 // Up to this far (yards) from the reflected level water shows the real reflection, from the far one on the sky's.
-static const float REFLECTION_BLEND_NEAR = 2.0f;
-static const float REFLECTION_BLEND_FAR = 10.0f;
+static const float REFLECTION_BLEND_NEAR = 3.0f;
+static const float REFLECTION_BLEND_FAR = 14.0f;
 static float s_reflectionDistance = 200.0f;
 // Models smaller than this part of their distance are left out of the reflection (reflectionModelSize).
 static float s_reflectionModelSize = 0.004f;
@@ -424,12 +424,19 @@ void Liquid::Cata::BeginFrame() {
     if (s_nextPlaneValid) {
         // A small change of height (the next chunk of a river, the water level settling) eases over; a jump to
         // other water starts there.
-        // The ease is slow (about two seconds to settle), so walking along a sloping river does not shift the whole
-        // reflection with every step from one chunk's height to the next.
+        // The ease is slow (about two seconds to settle, whatever the frame rate), so walking along a sloping river
+        // or turning the camera does not shift the whole reflection with every step from one chunk's height to the
+        // next.
+        static uint32_t s_lastEaseMs;
+        uint32_t nowMs = OsGetAsyncTimeMs();
+        float seconds = s_lastEaseMs ? static_cast<float>(nowMs - s_lastEaseMs) * 0.001f : 0.0f;
+        s_lastEaseMs = nowMs;
+
         if (!s_planeValid || fabsf(s_nextPlaneHeight - s_planeHeight) > 15.0f) {
             s_planeHeight = s_nextPlaneHeight;
         } else {
-            s_planeHeight += (s_nextPlaneHeight - s_planeHeight) * 0.03f;
+            float ease = 1.0f - expf(-(seconds > 0.25f ? 0.25f : seconds) / 0.6f);
+            s_planeHeight += (s_nextPlaneHeight - s_planeHeight) * ease;
         }
 
         s_planeValid = true;
@@ -1787,8 +1794,9 @@ bool Liquid::Cata::RenderWater(IEnvironment* environment, IGeomFactory* geomFact
 
     // The water nearest the camera sets next frame's reflection plane.
     if (!s_cameraUnderwater && bounds->c.z < cameraPos.z) {
+        // Nearest across the ground (the water around the camera, rather than whichever is nearest along the view).
         C3Vector toWater = bounds->c - cameraPos;
-        float distance = toWater.x * toWater.x + toWater.y * toWater.y + toWater.z * toWater.z - bounds->r * bounds->r;
+        float distance = toWater.x * toWater.x + toWater.y * toWater.y - bounds->r * bounds->r;
 
         if (!s_nextPlaneValid || distance < s_nextPlaneDistance) {
             s_nextPlaneValid = true;
@@ -1889,7 +1897,10 @@ bool Liquid::Cata::RenderWater(IEnvironment* environment, IGeomFactory* geomFact
     // ones, a visible step along their edge): it follows the camera's height above the water instead, which is how
     // far off the shores seen are.
     {
+        // At most 20 yards' worth: from high above, a stronger fade took all of a shallow river's depth, and the
+        // water looked missing until the camera came down.
         float aboveWater = s_planeValid ? fabsf(cameraPos.z - s_planeHeight) : 0.0f;
+        aboveWater = aboveWater > 20.0f ? 20.0f : aboveWater;
         float scale = s_shorelineSoftness > 0.0f ? 1.0f / (1.0f + s_shorelineSoftness * (0.4f + aboveWater / 20.0f)) : 1.0f;
 
         for (uint32_t reg = 5; reg <= 8; reg++) {

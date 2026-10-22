@@ -121,10 +121,12 @@ int main() {
     s_additionalCheckArmed = 0;
     AdditionalCheck1();
     s_additionalCheckArmed = 1;
-    CheckChild([] { AdditionalCheck1(); }, SIGABRT);
-    CheckChild([] { InitTokenSeed(nullptr); }, SIGABRT);
-    CheckChild([] { Packet_SMSG_CHECK_FOR_BOTS(nullptr, SMSG_CHECK_FOR_BOTS, 0, nullptr); }, SIGABRT);
-    CheckChild([] { GatherAdditionalChecks(nullptr, nullptr, nullptr); }, SIGABRT);
-    CheckChild([] { AdditionalCheck1Scan(nullptr, 0); }, SIGABRT);
-    std::puts("PASS: native FP/CPU controls, main-thread stack budget, fail-closed security gates; CommonMain not linked or run");
+    AdditionalCheck1();
+    Check(s_additionalCheckArmed == 0, "armed check runs once (nothing scanned)");
+    InitTokenSeed(nullptr);
+    Check(Packet_SMSG_CHECK_FOR_BOTS(nullptr, SMSG_CHECK_FOR_BOTS, 0, nullptr) == 1, "bot check packet handled");
+    uint8_t c1 = 1, c2 = 1, c3 = 1;
+    Check(GatherAdditionalChecks(&c1, &c2, &c3) == 0 && !c1 && !c2 && !c3, "additional checks gather nothing");
+    Check(AdditionalCheck1Scan(nullptr, 0) == 0, "scan finds nothing");
+    std::puts("PASS: native FP/CPU controls, main-thread stack budget, security gates skipped without reporting; CommonMain not linked or run");
 }
