@@ -14,7 +14,7 @@ sampler2D Depth2 : register(s5);     // its depth
 float4 View : register(c0);          // the depth's near, far and conversion (ViewSettings::Params)
 float4 Up : register(c1);            // world up in view space; w: the mask's height range (yards)
 float4 Proj : register(c2);          // the projection's x and y scale and offset (a0, b1, c0, c1)
-float4 Far : register(c3);           // x: depth beyond which is sky
+float4 Far : register(c3);           // x: depth beyond which is sky; y, z: distance fade start, 1 / length
 float4 Second : register(c4);        // x: first level - second level, y: 1 if the second was drawn; z, w: real
                                      // within z yards of a level, all sky 1 / w yards further
 
@@ -40,5 +40,9 @@ float4 main(PS_POSITION float2 uv : TEXCOORD0) : COLOR {
     // the two levels into it (orange smears that followed the camera); each level now has its own reflection.
     float3 real = lerp(tex2D(A, uv).rgb, tex2D(A2, uv).rgb, second);
     float sky = saturate((above - Second.z) * Second.w);
+    // What the reflection shows far off fades into the sky reflection (reflectionDistance).
+    float d = lerp(tex2D(Depth, uv).x, tex2D(Depth2, uv).x, second);
+    float fade = saturate((ViewDepth(d, View) - Far.y) * Far.z);
+    sky = max(sky, fade * fade * (3.0 - 2.0 * fade));
     return float4(lerp(real, tex2D(B, uv).rgb, sky), 1.0);
 }

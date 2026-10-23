@@ -116,6 +116,16 @@ CRenderBatch::~CRenderBatch() {
 
 // VERIFY: d1a22f87 auto
 // OFFSET: 0x004843A0
+// CHANGED: the frame coordinates reach past 1 on a widescreen (the minimap's calendar sat at x 1.05 at 2560 x 1440
+// and its date was culled while its texture drew); text is only skipped when it is beyond the whole screen.
+static inline float UiScreenMaxX() {
+    return 4.0f;
+}
+
+static inline float UiScreenMaxY() {
+    return 4.0f;
+}
+
 // CHANGED: uiTextDebug (env WOW_UITEXT=<frame name>) prints why that frame's strings are or are not drawn.
 static const char* UiTextDebugFrame() {
     static const char* s_name = getenv("WOW_UITEXT");
@@ -151,7 +161,7 @@ void CRenderBatch::QueueFontString(CSimpleFontString* string) {
         fprintf(stderr, "UI text %s '%s': rect %.4f %.4f %.4f %.4f, layer %u, block %p, gx %p, font %p height %.4f, colors %u first %08x, alpha %u\n", debugFrame, string->m_text ? string->m_text : "", rect.minX, rect.minY, rect.maxX, rect.maxY, string->m_drawLayer, (void*)string->m_string, (void*)g, (void*)string->m_fontHandle, string->m_fontHeight, string->m_colorCount, string->m_colorCount ? *reinterpret_cast<uint32_t*>(&string->m_colors[0]) : 0u, string->m_alphaCount ? string->m_alphas[0] : 255u);
     }
 
-    if (rect.maxY < 0.0f || rect.minY > 1.0f || rect.maxX < 0.0f || rect.minX > 1.0f) {
+    if (rect.maxY < 0.0f || rect.minY > UiScreenMaxY() || rect.maxX < 0.0f || rect.minX > UiScreenMaxX()) {
         return;
     }
 

@@ -41,6 +41,16 @@
 #include "Engine/Source/Tempest/CImVector.h"
 #include "Engine/Source/Tempest/CRect.h"
 
+// CHANGED: the frame coordinates reach past 1 on a widescreen (the minimap's calendar sat at x 1.05 at 2560 x 1440
+// and its date was culled while its texture drew); text is only skipped when it is beyond the whole screen.
+static inline float UiScreenMaxX() {
+    return 4.0f;
+}
+
+static inline float UiScreenMaxY() {
+    return 4.0f;
+}
+
 // STATIC: 0x009EA254
 static const uint8_t s_letterHasFinalConsonant[26] = { 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 
@@ -104,7 +114,7 @@ static int32_t s_fontStringCount;
 // VERIFY: 0e98fd61 auto
 // OFFSET: 0x004826D0
 static int32_t IsRectOffscreen(const CRect& rect) {
-    return rect.maxY < 0.0f || rect.minY > 1.0f || rect.maxX < 0.0f || rect.minX > 1.0f;
+    return rect.maxY < 0.0f || rect.minY > UiScreenMaxY() || rect.maxX < 0.0f || rect.minX > UiScreenMaxX();
 }
 
 // VERIFY: d066960a manual

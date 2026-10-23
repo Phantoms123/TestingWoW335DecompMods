@@ -537,7 +537,7 @@ void Liquid::Cata::BeginFrame() {
         }
 
         s_plane2Valid = true;
-        s_plane2Hold = PLANE_HOLD_FRAMES;
+        s_plane2Hold = PLANE_HOLD_FRAMES * 4;
     } else if (s_plane2Hold) {
         s_plane2Hold--;
     } else {
@@ -1491,7 +1491,9 @@ void Liquid::Cata::EndReflection() {
 
         // What lies far off fades into the fog from a third of reflectionDistance on, so distant hills,
         // buildings and trees do not stand out in the water or appear in it abruptly.
-        if (s_reflectionDistance > 0.0f) {
+        // CHANGED: not into the fog colour when the per-pixel blend runs (it fades into the sky reflection itself):
+        // at sunset the fog is orange, and the water fogs what it shows again, so the reflections turned orange.
+        if (s_reflectionDistance > 0.0f && s_reflectionPlanes == 0) {
             C4Vector view = ViewSettings::Params(s_zNear, s_zFar, s_viewportFarClip);
             PostEffects::FadeByDepth(reflection, depth, view, s_viewportFarClip * 0.99999f, s_reflectionDistance * 0.35f, s_reflectionDistance, info->m_fog.m_color);
         }
@@ -1724,7 +1726,7 @@ void Liquid::Cata::EndReflectionMask() {
             params.x, params.y, params.z, params.w,
             view.c0, view.c1, view.c2, REFLECTION_MASK_RANGE,
             projection.a0, projection.b1, projection.c0, projection.c1,
-            2.0f, 0.0f, 0.0f, 0.0f,
+            2.0f, s_reflectionDistance > 0.0f ? s_reflectionDistance * 0.35f : 1.0e6f, s_reflectionDistance > 0.0f ? 1.0f / (s_reflectionDistance * 0.65f) : 0.0f, 0.0f,
             second ? s_planeHeight - s_plane2Height : 0.0f, second ? 1.0f : 0.0f, REFLECTION_BLEND_NEAR, 1.0f / (REFLECTION_BLEND_FAR - REFLECTION_BLEND_NEAR),
         };
         s_reflectionBlendReady = PostEffects::ReflectionBlend(blend, real, sky, mask, depth, second ? real2 : real, second ? depth2 : depth, c);
