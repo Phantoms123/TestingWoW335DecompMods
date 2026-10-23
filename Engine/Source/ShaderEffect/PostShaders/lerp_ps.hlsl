@@ -33,11 +33,12 @@ float4 main(PS_POSITION float2 uv : TEXCOORD0) : COLOR {
     float4 mask = tex2D(Amount, uv);
     float above1 = (mask.g * 2.0 - 1.0) * Up.w;
     float above2 = above1 + Second.x;
-    bool useSecond = Second.y > 0.5 && abs(above2) < abs(above1);
-    float above = useSecond ? above2 : above1;
+    // Between the two levels the two reflections blend over a couple of yards around the midpoint, so no seam.
+    float second = Second.y > 0.5 ? saturate((abs(above1) - abs(above2)) * 0.5 + 0.5) : 0.0;
+    float above = lerp(abs(above1), abs(above2), second);
     // CHANGED: read in place. Shifting the reflection to suit water at another level pulled the banks between
     // the two levels into it (orange smears that followed the camera); each level now has its own reflection.
-    float3 real = useSecond ? tex2D(A2, uv).rgb : tex2D(A, uv).rgb;
-    float sky = saturate((abs(above) - Second.z) * Second.w);
+    float3 real = lerp(tex2D(A, uv).rgb, tex2D(A2, uv).rgb, second);
+    float sky = saturate((above - Second.z) * Second.w);
     return float4(lerp(real, tex2D(B, uv).rgb, sky), 1.0);
 }

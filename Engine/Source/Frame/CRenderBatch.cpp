@@ -2,6 +2,10 @@
 #include <cstdint>
 #include <cstdlib>
 #include "Engine/Source/Frame/CRenderBatch.h"
+#include "Engine/Source/Frame/CSimpleFrame.h"
+#include "Engine/Source/Storm/H/storm.h"
+#include "Engine/Source/Os/TimeManager.h"
+#include <cstdio>
 #include "Engine/Source/Base/Coordinate.h"
 #include "Engine/Source/Frame/CSimpleRender.h"
 #include "Engine/Source/Frame/CSimpleTexture.h"
@@ -112,11 +116,39 @@ CRenderBatch::~CRenderBatch() {
 
 // VERIFY: d1a22f87 auto
 // OFFSET: 0x004843A0
+// CHANGED: uiTextDebug (env WOW_UITEXT=<frame name>) prints why that frame's strings are or are not drawn.
+static const char* UiTextDebugFrame() {
+    static const char* s_name = getenv("WOW_UITEXT");
+    return s_name && *s_name ? s_name : nullptr;
+}
+
 void CRenderBatch::QueueFontString(CSimpleFontString* string) {
     CRect rect;
+    const char* debugFrame = UiTextDebugFrame();
+    bool debug = false;
+
+    if (debugFrame && string->m_parent) {
+        const char* name = string->m_parent->GetName();
+        static uint32_t s_lastMs;
+        uint32_t now = OsGetAsyncTimeMs();
+        debug = name && !SStrCmpI(name, debugFrame, STORM_MAX_STR) && now - s_lastMs > 1000;
+
+        if (debug) {
+            s_lastMs = now;
+        }
+    }
 
     if (!string->GetRect(&rect)) {
+        if (debug) {
+            fprintf(stderr, "UI text %s '%s': no rect\n", debugFrame, string->m_text ? string->m_text : "");
+        }
+
         return;
+    }
+
+    if (debug) {
+        CGxString* g = string->m_string ? TextBlockGetStringPtr(string->m_string) : nullptr;
+        fprintf(stderr, "UI text %s '%s': rect %.4f %.4f %.4f %.4f, layer %u, block %p, gx %p, font %p height %.4f, colors %u first %08x, alpha %u\n", debugFrame, string->m_text ? string->m_text : "", rect.minX, rect.minY, rect.maxX, rect.maxY, string->m_drawLayer, (void*)string->m_string, (void*)g, (void*)string->m_fontHandle, string->m_fontHeight, string->m_colorCount, string->m_colorCount ? *reinterpret_cast<uint32_t*>(&string->m_colors[0]) : 0u, string->m_alphaCount ? string->m_alphas[0] : 255u);
     }
 
     if (rect.maxY < 0.0f || rect.minY > 1.0f || rect.maxX < 0.0f || rect.minX > 1.0f) {

@@ -104,8 +104,8 @@ static float s_maskSavedPs[8 * 4];
 static CGxTex* s_maskSavedColor;
 static float s_maskSavedViewport[6];
 // Up to this far (yards) from the reflected level water shows the real reflection, from the far one on the sky's.
-static const float REFLECTION_BLEND_NEAR = 2.0f;
-static const float REFLECTION_BLEND_FAR = 10.0f;
+static const float REFLECTION_BLEND_NEAR = 6.0f;
+static const float REFLECTION_BLEND_FAR = 24.0f;
 // The heights the mask holds, either way of the reflected level (yards; 8 bits over twice this).
 static const float REFLECTION_MASK_RANGE = 24.0f;
 static float s_reflectionDistance = 200.0f;
