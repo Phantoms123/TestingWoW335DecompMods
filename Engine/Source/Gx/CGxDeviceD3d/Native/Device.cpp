@@ -1216,8 +1216,8 @@ void CGxDeviceD3d::ISetTexCoordIndex(uint32_t tmu, int32_t texGen, uint32_t coor
             break;
 
         case GxTexGen_ObjectLinear:
-        case GxTexGen_EyeLinear:
-        case GxTexGen_Unk3:
+        case GxTexGen_World:
+        case GxTexGen_View:
             this->DsSet(state, tmu | D3DTSS_TCI_CAMERASPACEPOSITION);
             break;
 
@@ -1477,7 +1477,7 @@ void CGxDeviceD3d::ISetTexGen(uint32_t tmu, int32_t texGen) {
 
     C44Matrix matrix;
 
-    if (texGen == GxTexGen_ObjectLinear || texGen == GxTexGen_EyeLinear) {
+    if (texGen == GxTexGen_ObjectLinear || texGen == GxTexGen_World) {
         CGxMatrixStack& view = this->m_xforms[GxXform_View];
         matrix = view.m_mtx[view.m_level];
         matrix = matrix.AffineInverse();
@@ -1793,7 +1793,7 @@ void CGxDeviceD3d::IRsSendToHw(EGxRenderState which) {
             this->m_d3dDevice->SetRenderState(D3DRS_POINTSPRITEENABLE, value.m_data.i[0] != 0);
             break;
 
-        case Unk84: {
+        case GxRs_BlendFactor: {
             uint32_t factor = static_cast<uint32_t>(value.m_data.f[0] * 255.0f);
             this->m_d3dDevice->SetRenderState(D3DRS_BLENDFACTOR, (((((factor << 8) | factor) << 8) | factor) << 8) | factor);
             break;
@@ -2591,7 +2591,7 @@ void CGxDeviceD3d::ITexForceRecreation(int32_t all) {
 
         uint32_t texelStrideInBytes;
         const void* texels;
-        texId->m_userFunc(GxTex_3, texId->m_width, texId->m_height, 0, 0, texId->m_userArg, texelStrideInBytes, texels);
+        texId->m_userFunc(GxTex_Recreate, texId->m_width, texId->m_height, 0, 0, texId->m_userArg, texelStrideInBytes, texels);
     }
 
     if (this->m_hwnd && this->m_d3dDevice) {

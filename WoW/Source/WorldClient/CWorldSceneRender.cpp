@@ -306,10 +306,17 @@ static double MsSince(std::chrono::steady_clock::time_point& start) {
 }
 
 void CWorldScene::RenderReflection() {
+    // CHANGED: up to two mirrors, the second for the nearest water at another level.
+    for (uint32_t index = 0; index < 2; index++) {
+        CWorldScene::RenderReflectionAt(index);
+    }
+}
+
+void CWorldScene::RenderReflectionAt(uint32_t index) {
     uint32_t mode = 0;
     std::chrono::steady_clock::time_point t = std::chrono::steady_clock::now();
 
-    if (!Liquid::Cata::BeginReflection(CWorldScene::s_activeWorldView, mode)) {
+    if (!Liquid::Cata::BeginReflection(CWorldScene::s_activeWorldView, mode, index)) {
         return;
     }
 
@@ -345,6 +352,11 @@ void CWorldScene::RenderReflection() {
     CWorldScene::s_reflectionPass = false;
     Liquid::Cata::EndReflection();
     s_reflectionMs[4] += MsSince(t);
+
+    if (index) {
+        return;
+    }
+
     s_reflectionFrames++;
 
     if (s_reflectionPrinted.time_since_epoch().count() == 0) {

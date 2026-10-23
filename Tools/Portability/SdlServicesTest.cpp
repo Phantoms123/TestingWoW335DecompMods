@@ -114,7 +114,7 @@ void JoystickRemapping() {
         SDL_JoystickSetVirtualButton(control, 4, 1) == 0, "hold old stick and unmapped button");
     OsPollJoysticks(1);
     auto events = Drain();
-    Check(Has(events, OS_INPUT_14, 0, 32767) && Has(events, OS_INPUT_16, 4, 0), "deliver old stick and held button");
+    Check(Has(events, OS_INPUT_JOYSTICK_STICK, 0, 32767) && Has(events, OS_INPUT_JOYSTICK_BUTTON_DOWN, 4, 0), "deliver old stick and held button");
     OsJoystickMapStick(0, 9, 2, 3);
     OsJoystickMapHat(0, 0, 4, 5, 6, 99);
     OsJoystickMapSlider(0, -1);
@@ -122,40 +122,40 @@ void JoystickRemapping() {
 
     OsJoystickMapHat(0, 0, 4, 5, 6, 7);
     events = Drain();
-    Check(Has(events, OS_INPUT_17, 4, 0), "hat remap releases previously delivered held button");
+    Check(Has(events, OS_INPUT_JOYSTICK_BUTTON_UP, 4, 0), "hat remap releases previously delivered held button");
     OsPollJoysticks(1);
     events = Drain();
-    Check(Has(events, OS_INPUT_18, 0, 1) && !Has(events, OS_INPUT_16, 4, 0), "held button now drives hat only");
+    Check(Has(events, OS_INPUT_18, 0, 1) && !Has(events, OS_INPUT_JOYSTICK_BUTTON_DOWN, 4, 0), "held button now drives hat only");
     OsJoystickMapStick(0, 0, 2, 3);
     events = Drain();
-    Check(Has(events, OS_INPUT_14, 0, 0), "stick remap releases nonzero old axes before centered new axes");
+    Check(Has(events, OS_INPUT_JOYSTICK_STICK, 0, 0), "stick remap releases nonzero old axes before centered new axes");
     OsPollJoysticks(1);
     events = Drain();
-    Check(!Has(events, OS_INPUT_14, 0, 32767) && Has(events, OS_INPUT_15, 0, 32767) &&
+    Check(!Has(events, OS_INPUT_JOYSTICK_STICK, 0, 32767) && Has(events, OS_INPUT_JOYSTICK_AXIS, 0, 32767) &&
         Has(events, OS_INPUT_18, 0, 1), "old axis becomes independent while new stick remains centered");
     OsPollJoysticks(0);
     events = Drain();
-    Check(Has(events, OS_INPUT_15, 0, 0) && Has(events, OS_INPUT_18, 0, 0), "focus releases remapped axis and hat");
+    Check(Has(events, OS_INPUT_JOYSTICK_AXIS, 0, 0) && Has(events, OS_INPUT_18, 0, 0), "focus releases remapped axis and hat");
     OsPollJoysticks(1);
     Drain();
     OsJoystickMapSlider(0, 0);
     events = Drain();
-    Check(Has(events, OS_INPUT_15, 0, 0), "slider remap releases previous axis interpretation");
+    Check(Has(events, OS_INPUT_JOYSTICK_AXIS, 0, 0), "slider remap releases previous axis interpretation");
     OsPollJoysticks(1);
     events = Drain();
-    Check(Has(events, OS_INPUT_15, 0, 32767) && Has(events, OS_INPUT_18, 0, 1), "slider and hat state restored after remap");
+    Check(Has(events, OS_INPUT_JOYSTICK_AXIS, 0, 32767) && Has(events, OS_INPUT_18, 0, 1), "slider and hat state restored after remap");
     Check(SDL_JoystickSetVirtualButton(control, 4, 0) == 0, "release remapped physical button");
     OsPollJoysticks(1);
     events = Drain();
-    Check(Has(events, OS_INPUT_18, 0, 0) && !Has(events, OS_INPUT_17, 4, 0), "physical release ends hat without duplicate button release");
+    Check(Has(events, OS_INPUT_18, 0, 0) && !Has(events, OS_INPUT_JOYSTICK_BUTTON_UP, 4, 0), "physical release ends hat without duplicate button release");
     Check(SDL_JoystickSetVirtualAxis(control, 2, 32767) == 0 &&
         SDL_JoystickSetVirtualButton(control, 4, 1) == 0, "hold new stick and remapped hat for close");
     OsPollJoysticks(1);
     events = Drain();
-    Check(Has(events, OS_INPUT_14, 0, 32767) && Has(events, OS_INPUT_18, 0, 1), "new mapping delivers active stick and hat");
+    Check(Has(events, OS_INPUT_JOYSTICK_STICK, 0, 32767) && Has(events, OS_INPUT_18, 0, 1), "new mapping delivers active stick and hat");
     OsJoystickClose(0);
     events = Drain();
-    Check(Has(events, OS_INPUT_14, 0, 0) && Has(events, OS_INPUT_15, 0, 0) &&
+    Check(Has(events, OS_INPUT_JOYSTICK_STICK, 0, 0) && Has(events, OS_INPUT_JOYSTICK_AXIS, 0, 0) &&
         Has(events, OS_INPUT_18, 0, 0), "close releases new stick slider and hat");
     SDL_JoystickClose(control);
     Check(SDL_JoystickDetachVirtual(index) == 0 && OsJoystickCount() == 0, "remapping fixture cleanup");
@@ -189,12 +189,12 @@ void Joysticks() {
         SDL_JoystickSetVirtualButton(control, 4, 1) == 0 && SDL_JoystickSetVirtualButton(control, 5, 1) == 0, "set virtual state");
     OsPollJoysticks(1);
     auto events = Drain();
-    Check(Has(events, OS_INPUT_14, 0, 32767), "mapped stick output");
-    Check(Has(events, OS_INPUT_16, 2, 0), "joystick button down");
-    Check(Has(events, OS_INPUT_18, 0, 2) && !Has(events, OS_INPUT_16, 4, 0), "button hat diagonal consumes buttons");
+    Check(Has(events, OS_INPUT_JOYSTICK_STICK, 0, 32767), "mapped stick output");
+    Check(Has(events, OS_INPUT_JOYSTICK_BUTTON_DOWN, 2, 0), "joystick button down");
+    Check(Has(events, OS_INPUT_18, 0, 2) && !Has(events, OS_INPUT_JOYSTICK_BUTTON_DOWN, 4, 0), "button hat diagonal consumes buttons");
     OsPollJoysticks(0);
     events = Drain();
-    Check(Has(events, OS_INPUT_14, 0, 0) && Has(events, OS_INPUT_17, 2, 0) && Has(events, OS_INPUT_18, 0, 0), "focus loss releases all state");
+    Check(Has(events, OS_INPUT_JOYSTICK_STICK, 0, 0) && Has(events, OS_INPUT_JOYSTICK_BUTTON_UP, 2, 0) && Has(events, OS_INPUT_18, 0, 0), "focus loss releases all state");
     OsPollJoysticks(0);
     Check(Drain().empty(), "inactive no repeated input");
     OsJoystickConfigureMouseMode(1, 0, 0, 1, 1.0f);
@@ -220,10 +220,10 @@ void Joysticks() {
     Check(SDL_JoystickSetVirtualAxis(control, 2, 32767) == 0 && SDL_JoystickSetVirtualHat(control, 0, SDL_HAT_LEFTDOWN) == 0, "set slider and native hat");
     OsPollJoysticks(1);
     events = Drain();
-    Check(Has(events, OS_INPUT_15, 2, 32767) && Has(events, OS_INPUT_18, 0, 6), "slider and native hat output");
+    Check(Has(events, OS_INPUT_JOYSTICK_AXIS, 2, 32767) && Has(events, OS_INPUT_18, 0, 6), "slider and native hat output");
     OsJoystickClose(0);
     events = Drain();
-    Check(Has(events, OS_INPUT_15, 2, 0) && Has(events, OS_INPUT_18, 0, 0), "close releases slider and hat");
+    Check(Has(events, OS_INPUT_JOYSTICK_AXIS, 2, 0) && Has(events, OS_INPUT_18, 0, 0), "close releases slider and hat");
     SDL_JoystickClose(control);
     Check(SDL_JoystickDetachVirtual(0) == 0 && OsJoystickCount() == 0, "virtual cleanup");
     OsPollJoysticks(1);

@@ -110,10 +110,10 @@ void Poll(Device& d, bool active) {
         auto stick = d.sticks[i];
         if (stick.x < 0 || stick.y < 0 || (d.mouse && i == d.mouseStick)) continue;
         if (axes[stick.x] != d.axes[stick.x] || axes[stick.y] != d.axes[stick.y])
-            OsQueuePut(OS_INPUT_14, i, axes[stick.x], axes[stick.y], 0);
+            OsQueuePut(OS_INPUT_JOYSTICK_STICK, i, axes[stick.x], axes[stick.y], 0);
     }
     for (int i = 0; i < 8; ++i) {
-        if (!MappedAxis(d, i) && axes[i] != d.axes[i]) OsQueuePut(OS_INPUT_15, i, axes[i], 0, 0);
+        if (!MappedAxis(d, i) && axes[i] != d.axes[i]) OsQueuePut(OS_INPUT_JOYSTICK_AXIS, i, axes[i], 0, 0);
     }
     for (int i = 0; i < 32; ++i) {
         if (hatButtons[i] || buttons[i] == d.buttons[i]) continue;
@@ -123,11 +123,11 @@ void Poll(Device& d, bool active) {
             OsQueuePut(buttons[i] ? OS_INPUT_MOUSE_DOWN : OS_INPUT_MOUSE_UP,
                 i == d.left ? MOUSE_BUTTON_LEFT : MOUSE_BUTTON_RIGHT, x, y, 0);
         } else {
-            OsQueuePut(buttons[i] ? OS_INPUT_16 : OS_INPUT_17, i, 0, 0, 0);
+            OsQueuePut(buttons[i] ? OS_INPUT_JOYSTICK_BUTTON_DOWN : OS_INPUT_JOYSTICK_BUTTON_UP, i, 0, 0, 0);
         }
     }
     for (int i = 0; i < 4; ++i) {
-        if (directions[i] != d.directions[i]) OsQueuePut(OS_INPUT_18, i, directions[i], 0, 0);
+        if (directions[i] != d.directions[i]) OsQueuePut(OS_INPUT_JOYSTICK_HAT, i, directions[i], 0, 0);
     }
     auto stick = d.sticks[d.mouseStick];
     const uint32_t now = SDL_GetTicks();

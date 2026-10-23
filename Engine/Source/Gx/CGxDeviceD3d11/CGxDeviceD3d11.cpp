@@ -1739,7 +1739,7 @@ void CGxDeviceD3d11::ITexForceRecreation(int32_t all) {
 
         uint32_t texelStrideInBytes;
         const void* texels;
-        texId->m_userFunc(GxTex_3, texId->m_width, texId->m_height, 0, 0, texId->m_userArg, texelStrideInBytes, texels);
+        texId->m_userFunc(GxTex_Recreate, texId->m_width, texId->m_height, 0, 0, texId->m_userArg, texelStrideInBytes, texels);
     }
 
     for (uint32_t i = 0; i < 16; i++) {
@@ -2878,7 +2878,7 @@ void CGxDeviceD3d11::ISetTexGen(uint32_t tmu, int32_t texGen) {
     CGxMatrixStack& stack = this->m_texGen[tmu];
     C44Matrix matrix;
 
-    if (texGen == GxTexGen_ObjectLinear || texGen == GxTexGen_EyeLinear) {
+    if (texGen == GxTexGen_ObjectLinear || texGen == GxTexGen_World) {
         CGxMatrixStack& view = this->m_xforms[GxXform_View];
         matrix = view.m_mtx[view.m_level];
         matrix = matrix.AffineInverse();
@@ -3166,7 +3166,7 @@ void CGxDeviceD3d11::IRsSendToHw(EGxRenderState which) {
             break;
         }
 
-        case Unk84:
+        case GxRs_BlendFactor:
             this->m_blendFactor = value.m_data.f[0];
             this->m_stateDirty = true;
             break;
@@ -3474,8 +3474,8 @@ void CGxDeviceD3d11::IFfpSync() {
 
         switch (this->m_texGenMode[i]) {
             case GxTexGen_ObjectLinear:
-            case GxTexGen_EyeLinear:
-            case GxTexGen_Unk3:
+            case GxTexGen_World:
+            case GxTexGen_View:
                 gen = 1;
                 break;
 

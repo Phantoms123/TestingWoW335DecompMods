@@ -74,6 +74,19 @@ static CTexture* s_fakeReflectionTex;
 static CTexture* s_realReflectionTex;
 static CTexture* s_realReflectionTemp;
 static CTexture* s_realReflectionDepth;
+// CHANGED: a second real reflection, for the nearest water at another level (a stream above the pond it runs into):
+// one mirror is only right for water at its own level.
+static CTexture* s_real2ReflectionTex;
+static CTexture* s_real2ReflectionDepth;
+static bool s_real2Ready;
+static bool s_plane2Valid;
+static float s_plane2Height;
+static uint32_t s_plane2Hold;
+static bool s_next2Valid;
+static float s_next2Distance;
+static float s_next2Height;
+static uint32_t s_reflectionIndex;
+static uint32_t s_reflectionPlanes = 2;
 // The real reflection eased into the sky one (a quarter, half and three quarters sky), for water a little away
 // from the reflected level; made once a pass, when water first needs one.
 static const uint32_t REFLECTION_MIXES = 3;
@@ -91,8 +104,8 @@ static float s_maskSavedPs[8 * 4];
 static CGxTex* s_maskSavedColor;
 static float s_maskSavedViewport[6];
 // Up to this far (yards) from the reflected level water shows the real reflection, from the far one on the sky's.
-static const float REFLECTION_BLEND_NEAR = 6.0f;
-static const float REFLECTION_BLEND_FAR = 24.0f;
+static const float REFLECTION_BLEND_NEAR = 2.0f;
+static const float REFLECTION_BLEND_FAR = 10.0f;
 // The heights the mask holds, either way of the reflected level (yards; 8 bits over twice this).
 static const float REFLECTION_MASK_RANGE = 24.0f;
 static float s_reflectionDistance = 200.0f;
@@ -217,6 +230,8 @@ static void DestroyTargets() {
     ReleaseTexture(s_realReflectionTex);
     ReleaseTexture(s_realReflectionTemp);
     ReleaseTexture(s_realReflectionDepth);
+    ReleaseTexture(s_real2ReflectionTex);
+    ReleaseTexture(s_real2ReflectionDepth);
 
     for (uint32_t i = 0; i < REFLECTION_MIXES; i++) {
         ReleaseTexture(s_reflectionMixTex[i]);
@@ -351,6 +366,21 @@ static bool EnsureTargets() {
         }
     }
 
+    if (s_reflectionPlanes >= 2 && s_detail >= 3) {
+        if (!s_real2ReflectionTex) {
+            s_real2ReflectionTex = CreateTarget(GxTex_NonPow2, s_reflectionWidth, s_reflectionHeight, "LiquidProc Real Reflection 2");
+        }
+
+        if (!s_real2ReflectionDepth && g_theGxDevicePtr->Caps().m_rttFormat[GxTex_Intz]) {
+            CGxTexFlags flags(GxTex_Nearest, 0, 0, 0, 0, 1);
+            s_real2ReflectionDepth = TextureCreate(GxTex_NonPow2, s_reflectionWidth, s_reflectionHeight, 0, GxTex_Intz, GxTex_Intz, flags, nullptr, GxTexNullUserFunc, "LiquidProc Reflection Depth 2", 0);
+
+            if (s_real2ReflectionDepth && !TextureGetGxTex(s_real2ReflectionDepth, 1, nullptr)) {
+                ReleaseTexture(s_real2ReflectionDepth);
+            }
+        }
+    }
+
     if (!s_realReflectionTemp && s_detail >= 3) {
         s_realReflectionTemp = CreateTarget(GxTex_NonPow2, s_reflectionWidth, s_reflectionHeight, "blurredReflection");
     }
@@ -408,6 +438,10 @@ void Liquid::Cata::SetReflectionDistance(float distance) {
 
 static bool s_reflectionDebug;
 
+void Liquid::Cata::SetReflectionPlanes(uint32_t planes) {
+    s_reflectionPlanes = planes < 1 ? 1 : (planes > 2 ? 2 : planes);
+}
+
 void Liquid::Cata::SetReflectionDebug(bool enable) {
     s_reflectionDebug = enable;
 }
@@ -443,7 +477,7 @@ void Liquid::Cata::BeginFrame() {
         uint32_t nowMs = OsGetAsyncTimeMs();
 
         if (nowMs - s_lastDebugMs > 500 || fabsf(s_planeHeight - s_lastDebugPlane) > 1.0f) {
-            std::fprintf(stderr, "Reflection: level %.2f (next %.2f%s), real %s, fade %.2f, blend per pixel %s\n", s_planeHeight, s_nextPlaneHeight, s_nextPlaneValid ? "" : " none", s_realReady ? "drawn" : "not drawn", s_reflectionBlend, s_lastPassBlended ? "on" : "off");
+            std::fprintf(stderr, "Reflection: level %.2f (next %.2f%s), second level %.2f%s, real %s, fade %.2f, blend per pixel %s\n", s_planeHeight, s_nextPlaneHeight, s_nextPlaneValid ? "" : " none", s_plane2Height, s_plane2Valid ? (s_real2Ready ? " drawn" : "") : " none", s_realReady ? "drawn" : "not drawn", s_reflectionBlend, s_lastPassBlended ? "on" : "off");
             s_lastDebugMs = nowMs;
             s_lastDebugPlane = s_planeHeight;
         }
@@ -486,9 +520,32 @@ void Liquid::Cata::BeginFrame() {
         s_planeValid = false;
     }
 
+    // The second level: the nearest water more than a yard from the first, eased the same way.
+    if (s_next2Valid && s_planeValid && fabsf(s_next2Height - s_planeHeight) > 1.0f) {
+        if (!s_plane2Valid || fabsf(s_next2Height - s_plane2Height) > 3.0f) {
+            s_plane2Height = s_next2Height;
+        } else {
+            s_plane2Height += (s_next2Height - s_plane2Height) * 0.1f;
+        }
+
+        s_plane2Valid = true;
+        s_plane2Hold = PLANE_HOLD_FRAMES;
+    } else if (s_plane2Hold) {
+        s_plane2Hold--;
+    } else {
+        s_plane2Valid = false;
+    }
+
+    if (s_plane2Valid && (!s_planeValid || fabsf(s_plane2Height - s_planeHeight) < 0.5f)) {
+        s_plane2Valid = false;
+    }
+
+    s_next2Valid = false;
+    s_next2Distance = 0.0f;
     s_nextPlaneValid = false;
     s_nextPlaneDistance = 0.0f;
     s_realReady = false;
+    s_real2Ready = false;
 
     uint32_t wanted = s_requestedDetail >= 2 && !s_failed ? s_requestedDetail : 0;
 
@@ -1244,20 +1301,35 @@ static float s_reflectionPlaneZ;
 static C44Matrix s_reflectionSavedProjection;
 static bool s_reflectionModels = true;
 
-bool Liquid::Cata::BeginReflection(const C3Vector& worldViewOrigin, uint32_t& mode) {
+bool Liquid::Cata::BeginReflection(const C3Vector& worldViewOrigin, uint32_t& mode, uint32_t index) {
     mode = s_reflectionMode;
 
     if (s_inReflection) {
         return false;
     }
 
+    // The second level only alongside the first.
+    if (index) {
+        float height2 = s_plane2Height - worldViewOrigin.z;
+
+        if (index >= s_reflectionPlanes || !s_realReady || !s_plane2Valid || height2 > -0.05f || !GxTexOf(s_real2ReflectionTex)) {
+            return false;
+        }
+    }
+
+    s_reflectionIndex = index;
+
     // Camera-relative height of the water; nothing to see in it from below or right at it.
-    float height = s_planeHeight - worldViewOrigin.z;
+    float height = (index ? s_plane2Height : s_planeHeight) - worldViewOrigin.z;
     bool possible = s_detail >= 3 && s_reflectionMode >= 2 && s_planeValid && !s_cameraUnderwater && height <= -0.05f;
     bool wanted = possible && s_planeSeen;
 
-    // Fade towards on while the water is in view, towards off otherwise.
-    uint32_t now = OsGetAsyncTimeMs();
+    if (index) {
+        wanted = true;
+    }
+
+    // Fade towards on while the water is in view, towards off otherwise (once a frame, with the first level).
+    uint32_t now = index ? s_lastBlendMs : OsGetAsyncTimeMs();
     float elapsed = s_lastBlendMs ? (now - s_lastBlendMs) * 0.001f : 0.0f;
     s_lastBlendMs = now;
     elapsed = elapsed > 0.25f ? 0.25f : elapsed;
@@ -1268,7 +1340,7 @@ bool Liquid::Cata::BeginReflection(const C3Vector& worldViewOrigin, uint32_t& mo
         return false;
     }
 
-    CGxTex* target = GxTexOf(s_realReflectionTex);
+    CGxTex* target = GxTexOf(index ? s_real2ReflectionTex : s_realReflectionTex);
 
     if (!target) {
         LogOnce(21, "real reflections skipped, the reflection texture could not be created");
@@ -1286,7 +1358,7 @@ bool Liquid::Cata::BeginReflection(const C3Vector& worldViewOrigin, uint32_t& mo
     device->RsPush();
     // The colour target first, so the depth texture is never paired with the (larger) back buffer.
     GxRenderTargetSet(GxBuffers_Color, target, 0);
-    CGxTex* depth = GxTexOf(s_realReflectionDepth);
+    CGxTex* depth = GxTexOf(index ? s_real2ReflectionDepth : s_realReflectionDepth);
 
     if (depth && depth->m_width == target->m_width && depth->m_height == target->m_height) {
         GxRenderTargetSet(GxBuffers_Depth, depth, 0);
@@ -1401,8 +1473,8 @@ void Liquid::Cata::EndReflection() {
     GxRsSet(GxRs_ClipPlaneMask, 0);
     device->XformSetView(s_reflectionSavedView);
 
-    CGxTex* depth = s_reflectionDepthBound ? GxTexOf(s_realReflectionDepth) : nullptr;
-    CGxTex* reflection = GxTexOf(s_realReflectionTex);
+    CGxTex* depth = s_reflectionDepthBound ? GxTexOf(s_reflectionIndex ? s_real2ReflectionDepth : s_realReflectionDepth) : nullptr;
+    CGxTex* reflection = GxTexOf(s_reflectionIndex ? s_real2ReflectionTex : s_realReflectionTex);
     DayNight::DNInfo* info = DayNight::GetInfo();
 
     // The depth texture stops being the depth buffer before it is read.
@@ -1435,7 +1507,14 @@ void Liquid::Cata::EndReflection() {
     RestoreConstants();
 
     s_inReflection = false;
-    s_realReady = true;
+
+    if (s_reflectionIndex) {
+        s_real2Ready = true;
+        LogOnce(24, "drawing a second real reflection for water at another level");
+    } else {
+        s_realReady = true;
+    }
+
     LogOnce(22, "drawing real reflections");
 }
 
@@ -1624,19 +1703,23 @@ void Liquid::Cata::EndReflectionMask() {
     CGxTex* blend = GxTexOf(s_reflectionBlendTex);
 
     CGxTex* depth = GxTexOf(s_realReflectionDepth);
+    CGxTex* real2 = GxTexOf(s_real2ReflectionTex);
+    CGxTex* depth2 = GxTexOf(s_real2ReflectionDepth);
+    bool second = s_real2Ready && s_plane2Valid && real2 && depth2;
 
     if (real && sky && mask && blend && depth && sky->m_width == real->m_width && sky->m_height == real->m_height && depth->m_width == real->m_width && depth->m_height == real->m_height) {
         C44Matrix view;
         GxXformView(view);
         const C44Matrix& projection = g_theGxDevicePtr->m_projNative;
         C4Vector params = ViewSettings::Params(s_zNear, s_zFar, s_viewportFarClip);
-        float c[16] = {
+        float c[20] = {
             params.x, params.y, params.z, params.w,
             view.c0, view.c1, view.c2, REFLECTION_MASK_RANGE,
             projection.a0, projection.b1, projection.c0, projection.c1,
             2.0f, 0.0f, 0.0f, 0.0f,
+            second ? s_planeHeight - s_plane2Height : 0.0f, second ? 1.0f : 0.0f, REFLECTION_BLEND_NEAR, 1.0f / (REFLECTION_BLEND_FAR - REFLECTION_BLEND_NEAR),
         };
-        s_reflectionBlendReady = PostEffects::ReflectionBlend(blend, real, sky, mask, depth, c);
+        s_reflectionBlendReady = PostEffects::ReflectionBlend(blend, real, sky, mask, depth, second ? real2 : real, second ? depth2 : depth, c);
     }
 
     if (s_reflectionBlendReady) {
@@ -1859,6 +1942,12 @@ bool Liquid::Cata::RenderWater(IEnvironment* environment, IGeomFactory* geomFact
             s_nextPlaneValid = true;
             s_nextPlaneDistance = distance;
             s_nextPlaneHeight = bounds->c.z;
+        }
+
+        if (s_planeValid && fabsf(bounds->c.z - s_planeHeight) > 1.0f && fabsf(bounds->c.z - s_planeHeight) < 40.0f && (!s_next2Valid || distance < s_next2Distance)) {
+            s_next2Valid = true;
+            s_next2Distance = distance;
+            s_next2Height = bounds->c.z;
         }
 
         if (s_planeValid && fabsf(bounds->c.z - s_planeHeight) < 1.0f && (!s_nextSameValid || distance < s_nextSameDistance)) {

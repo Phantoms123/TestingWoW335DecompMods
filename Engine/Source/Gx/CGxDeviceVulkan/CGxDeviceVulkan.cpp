@@ -926,7 +926,7 @@ void CGxDeviceVulkan::State::Draw(CGxBatch& batch, bool indexed) {
             if ((fixedVertexStage && enabledStage && (coordinate >= 8 || generation > GxTexGen_SphereMap || transformMode > 2)) ||
                 (fixedPixelStage && fixedStageEnabled[stage] && (colourOp >= 6 || alphaOp >= 6)))
                 throw std::runtime_error("Unsupported fixed-function texture-stage state");
-            if (enabledStage && (generation == GxTexGen_ObjectLinear || generation == GxTexGen_EyeLinear)) {
+            if (enabledStage && (generation == GxTexGen_ObjectLinear || generation == GxTexGen_World)) {
                 texGen = view.AffineInverse();
                 if (generation == GxTexGen_ObjectLinear) texGen = texGen * world.Inverse();
             } else if (enabledStage && generation == GxTexGen_SphereMap) {

@@ -157,6 +157,7 @@ class CWorldScene {
     // mirrored, for the 4.3.4 water's reflections: the render lists are left as they are for the real pass.
     static bool s_reflectionPass;
     static void RenderReflection();
+    static void RenderReflectionAt(uint32_t index);
     static void GetCullCorners(C3Vector* corners);
     static C3Vector camTarget;
     static C4Plane camPlaneXY;

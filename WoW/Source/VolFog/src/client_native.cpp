@@ -81,7 +81,7 @@ struct UnitWalk
 int32_t VisitVisibleUnit(WOWGUID guid, void* param)
 {
     UnitWalk* walk = static_cast<UnitWalk*>(param);
-    CGObject_C* object = ClntObjMgrObjectPtr(guid, TYPEMASK_UNIT, __FILE__, __LINE__);
+    CGObject_C* object = ClntObjMgrObjectPtr(guid, TYPE_UNIT, __FILE__, __LINE__);
     CGUnit_C* unit = static_cast<CGUnit_C*>(object);
     if (!unit || !object->m_worldObject)
         return 1;

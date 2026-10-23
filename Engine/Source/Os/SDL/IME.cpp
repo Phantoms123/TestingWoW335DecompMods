@@ -82,9 +82,9 @@ int32_t OsIMEGetCandidates(uint32_t, uint32_t& pageStart, uint32_t& pageSize,
     return 0;
 }
 
-int32_t OsIMEGetLanguageMode() {
+OS_IME_LANGUAGEMODE OsIMEGetLanguageMode() {
     errno = ENOTSUP;
-    return 0;
+    return OS_IME_MODE_ROMAN;
 }
 
 void OsIMESetLanguageMode(int32_t) {

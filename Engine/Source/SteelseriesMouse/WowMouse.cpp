@@ -12,7 +12,7 @@ SteelseriesMouse::~SteelseriesMouse() {
 #if defined(_WIN32)
 #line 12
 WowMouse::WowMouse() {
-    void* window = OsGuiGetWindow(0);
+    void* window = OsGuiGetWindow(OSGUI_WINDOW_TYPE_GX);
 
     if (window) {
         this->m_hidManager = HidManager::Create();

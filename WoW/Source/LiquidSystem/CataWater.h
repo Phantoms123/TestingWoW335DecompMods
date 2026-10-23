@@ -43,6 +43,8 @@ namespace Liquid {
         // How much softer shorelines get with distance (0 = as 4.3.4, 1 = default, up to 4).
         void SetShorelineSoftness(float softness);
         void SetReflectionDebug(bool enable);
+        // 1: one real reflection, 2: a second for the nearest water at another level.
+        void SetReflectionPlanes(uint32_t planes);
         // How far the real reflection shows (yards; it fades out over the second half, 0 = no fade).
         void SetReflectionDistance(float distance);
         void SetReflectionModelSize(float size);
@@ -62,7 +64,7 @@ namespace Liquid {
         // Real reflections (waterDetail 3 with reflectionMode 2 or 3): when the water seen last frame wants one,
         // switches to the reflection texture, draws the mirrored sky and sets the mirrored view, clip plane and
         // winding for the terrain (and map objects, mode 3) the caller then draws; End puts it all back.
-        bool BeginReflection(const C3Vector& worldViewOrigin, uint32_t& mode);
+        bool BeginReflection(const C3Vector& worldViewOrigin, uint32_t& mode, uint32_t index = 0);
         void EndReflection();
         // Whether the world's culling should take in more above the view for the reflection.
         bool ReflectionNeedsWideCulling();

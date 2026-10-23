@@ -778,6 +778,11 @@ static bool ReflectionStrengthCallback(CVar* var, const char* oldValue, const ch
     return true;
 }
 
+static bool ReflectionPlanesCallback(CVar* var, const char* oldValue, const char* value, void* arg) {
+    Liquid::Cata::SetReflectionPlanes(static_cast<uint32_t>(SStrToInt(value)));
+    return true;
+}
+
 static bool ReflectionDebugCallback(CVar* var, const char* oldValue, const char* value, void* arg) {
     Liquid::Cata::SetReflectionDebug(SStrToInt(value) != 0);
     return true;
@@ -971,6 +976,8 @@ void CWorldParam::Initialize() {
     Liquid::Cata::SetReflectionStrength(reflectionStrength ? reflectionStrength->m_floatValue : 1.0f);
     CVar* shorelineSoftness = CVar::Register("shorelineSoftness", "How much softer the 4.3.4 water's shorelines get with distance (0 as 4.3.4, 1 default, up to 4)", 1, "1", ShorelineSoftnessCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     Liquid::Cata::SetShorelineSoftness(shorelineSoftness ? shorelineSoftness->m_floatValue : 1.0f);
+    CVar* reflectionPlanes = CVar::Register("reflectionPlanes", "Real water reflections drawn a frame: 1, or 2 (a second for the nearest water at another level)", 1, "2", ReflectionPlanesCallback, CATEGORY_GRAPHICS, false, nullptr, false);
+    Liquid::Cata::SetReflectionPlanes(reflectionPlanes ? static_cast<uint32_t>(reflectionPlanes->m_intValue) : 2u);
     CVar::Register("reflectionDebug", "Print the water reflection's level to the terminal (0 off, 1 on)", 1, "0", ReflectionDebugCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     CVar* reflectionModels = CVar::Register("reflectionModels", "Reflect trees, characters and creatures in the water with reflectionMode 3 (0 off, 1 on)", 1, "1", ReflectionModelsCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     Liquid::Cata::SetReflectionModels(!reflectionModels || reflectionModels->m_intValue != 0);

@@ -54,8 +54,8 @@ namespace PostEffects {
     // Blends source over all of target (the same size) by amount (0-1).
     bool Blend(CGxTex* target, CGxTex* source, float amount);
     // The water's real reflection, lined up for water above or below its level by mask and its depth, blended into
-    // the sky one (all the size of target). constants: 4 registers (see lerp_ps.hlsl).
-    bool ReflectionBlend(CGxTex* target, CGxTex* real, CGxTex* sky, CGxTex* mask, CGxTex* depth, const float* constants);
+    // the sky one (all the size of target). constants: 5 registers (see lerp_ps.hlsl).
+    bool ReflectionBlend(CGxTex* target, CGxTex* real, CGxTex* sky, CGxTex* mask, CGxTex* depth, CGxTex* real2, CGxTex* depth2, const float* constants);
     // The shaders that draw the water's reflection mask (watermask_vs/ps.hlsl).
     bool WaterMaskShaders(CGxShader*& vertexShader, CGxShader*& pixelShader);
     // Softens target with a Gaussian blur of about radius texels, through temp (the same size).
