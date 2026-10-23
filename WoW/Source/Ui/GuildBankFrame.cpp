@@ -692,7 +692,7 @@ int32_t Packet_SMSG_GUILD_BANK_LIST(void* param, NETMESSAGE msgId, uint32_t time
         s_pendingItemQueries = 0;
 
         for (uint32_t i = 0; i < CGGuildBankInfo::m_tabSlots[tab].m_count; i++) {
-            g_nameDBCache.CancelCallback(*reinterpret_cast<uint64_t*>(&CGGuildBankInfo::m_tabSlots[tab].m_data[i]), Signal_EVENT_GUILDBANKBAGSLOTS_CHANGED, nullptr);
+            g_itemDBCache.CancelCallback(CGGuildBankInfo::m_tabSlots[tab].m_data[i].m_itemID, Signal_EVENT_GUILDBANKBAGSLOTS_CHANGED, nullptr);
         }
     }
 
