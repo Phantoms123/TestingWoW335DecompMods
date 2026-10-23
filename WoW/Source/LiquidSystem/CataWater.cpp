@@ -549,9 +549,10 @@ void Liquid::Cata::BeginFrame() {
         }
 
         s_plane2Valid = true;
-        s_plane2Hold = PLANE_HOLD_FRAMES * 16;
-    } else if (s_plane2Hold) {
-        s_plane2Hold--;
+        s_plane2Hold = OsGetAsyncTimeMs();
+    } else if (s_plane2Valid && OsGetAsyncTimeMs() - s_plane2Hold < 20000) {
+        // Kept for 20 seconds after the other water was last nearby, so it does not drop in and out (each time
+        // the water there changed reflection at once).
     } else {
         s_plane2Valid = false;
     }
