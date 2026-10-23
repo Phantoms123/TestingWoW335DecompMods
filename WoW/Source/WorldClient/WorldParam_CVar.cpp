@@ -986,10 +986,10 @@ void CWorldParam::Initialize() {
     Liquid::Cata::SetReflectionStrength(reflectionStrength ? reflectionStrength->m_floatValue : 1.0f);
     CVar* shorelineSoftness = CVar::Register("shorelineSoftness", "How much softer the 4.3.4 water's shorelines get with distance (0 as 4.3.4, 1 default, up to 4)", 1, "1", ShorelineSoftnessCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     Liquid::Cata::SetShorelineSoftness(shorelineSoftness ? shorelineSoftness->m_floatValue : 1.0f);
-    CVar* reflectionPlanes = CVar::Register("reflectionPlanes", "Real water reflections drawn a frame with reflectionBlend 1: 1, or 2 (a second for the nearest water at another level)", 1, "1", ReflectionPlanesCallback, CATEGORY_GRAPHICS, false, nullptr, false);
-    Liquid::Cata::SetReflectionPlanes(reflectionPlanes ? static_cast<uint32_t>(reflectionPlanes->m_intValue) : 1u);
-    CVar* reflectionSaturation = CVar::Register("reflectionSaturation", "Colour kept in the water's reflections (0 grey, 1 full; 0.35 default)", 1, "0.35", ReflectionSaturationCallback, CATEGORY_GRAPHICS, false, nullptr, false);
-    Liquid::Cata::SetReflectionSaturation(reflectionSaturation ? reflectionSaturation->m_floatValue : 0.35f);
+    CVar* reflectionPlanes = CVar::Register("reflectionPlanes", "Real water reflections drawn a frame with reflectionBlend 1: 1, or 2 (a second for the nearest water at another level)", 1, "2", ReflectionPlanesCallback, CATEGORY_GRAPHICS, false, nullptr, false);
+    Liquid::Cata::SetReflectionPlanes(reflectionPlanes ? static_cast<uint32_t>(reflectionPlanes->m_intValue) : 2u);
+    CVar* reflectionSaturation = CVar::Register("reflectionSaturation", "Colour kept in the water's reflections (0 grey as default, 1 full)", 1, "0", ReflectionSaturationCallback, CATEGORY_GRAPHICS, false, nullptr, false);
+    Liquid::Cata::SetReflectionSaturation(reflectionSaturation ? reflectionSaturation->m_floatValue : 0.0f);
     CVar* reflectionBlend = CVar::Register("reflectionBlend", "Per-pixel water reflection blend (1 on, 0 the older per-chunk steps)", 1, "1", ReflectionBlendCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     Liquid::Cata::SetReflectionPerPixel(reflectionBlend && reflectionBlend->m_intValue != 0);
     CVar::Register("reflectionDebug", "Print the water reflection's level to the terminal (0 off, 1 on)", 1, "0", ReflectionDebugCallback, CATEGORY_GRAPHICS, false, nullptr, false);

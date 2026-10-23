@@ -86,11 +86,11 @@ static bool s_next2Valid;
 static float s_next2Distance;
 static float s_next2Height;
 static uint32_t s_reflectionIndex;
-static uint32_t s_reflectionPlanes = 1;
+static uint32_t s_reflectionPlanes = 2;
 // CHANGED: reflectionBlend 0 (default) draws the water as before the per-pixel blending (one real reflection,
 // eased into the sky one in quarter steps per chunk); 1 the per-pixel blend and second level.
 static bool s_reflectionPerPixel = true;
-static float s_reflectionSaturation = 0.35f;
+static float s_reflectionSaturation = 0.0f;
 // The real reflection eased into the sky one (a quarter, half and three quarters sky), for water a little away
 // from the reflected level; made once a pass, when water first needs one.
 static const uint32_t REFLECTION_MIXES = 3;
@@ -549,7 +549,7 @@ void Liquid::Cata::BeginFrame() {
         }
 
         s_plane2Valid = true;
-        s_plane2Hold = PLANE_HOLD_FRAMES * 4;
+        s_plane2Hold = PLANE_HOLD_FRAMES * 16;
     } else if (s_plane2Hold) {
         s_plane2Hold--;
     } else {
