@@ -519,12 +519,12 @@ void Liquid::Cata::BeginFrame() {
 
         // The nearest water now at the second level: the two swap at once (both are drawn, so nothing moves),
         // rather than the first easing across to it and sliding the whole reflection.
+        // The nearest water is at the second level: both levels are drawn and each pixel takes its own, so the
+        // levels stay as they are (swapping them changed what each reflection was culled for, and the water there
+        // changed at once).
         if (s_reflectionPerPixel && s_reflectionPlanes >= 2 && s_plane2Valid && fabsf(s_nextPlaneHeight - s_plane2Height) < 1.0f && fabsf(s_nextPlaneHeight - s_planeHeight) > 1.0f) {
-            float first = s_planeHeight;
-            s_planeHeight = s_plane2Height;
-            s_plane2Height = first;
             s_next2Valid = true;
-            s_next2Height = first;
+            s_next2Height = s_plane2Height;
         } else if (!s_planeValid || fabsf(s_nextPlaneHeight - s_planeHeight) > 15.0f) {
             s_planeHeight = s_nextPlaneHeight;
         } else {
