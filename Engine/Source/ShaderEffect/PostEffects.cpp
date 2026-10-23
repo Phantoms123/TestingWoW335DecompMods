@@ -723,9 +723,9 @@ bool PostEffects::Blend(CGxTex* target, CGxTex* source, float amount) {
     return true;
 }
 
-// Draws a and b blended by amount's red (all three the size of target) into target.
-bool PostEffects::Lerp(CGxTex* target, CGxTex* a, CGxTex* b, CGxTex* amount) {
-    if (!target || !a || !b || !amount) {
+// The water's reflection blend (lerp_ps): the real reflection read where the mask says, the sky one by its red.
+bool PostEffects::ReflectionBlend(CGxTex* target, CGxTex* real, CGxTex* sky, CGxTex* mask, CGxTex* depth, const float* constants) {
+    if (!target || !real || !sky || !mask || !depth || !constants) {
         return false;
     }
 
@@ -744,9 +744,11 @@ bool PostEffects::Lerp(CGxTex* target, CGxTex* a, CGxTex* b, CGxTex* amount) {
     CGxDevice* device = g_theGxDevicePtr;
     PassState state;
     state.Begin();
-    device->RsSet(GxRs_Texture0, a);
-    device->RsSet(GxRs_Texture1, b);
-    device->RsSet(GxRs_Texture2, amount);
+    device->RsSet(GxRs_Texture0, real);
+    device->RsSet(GxRs_Texture1, sky);
+    device->RsSet(GxRs_Texture2, mask);
+    device->RsSet(GxRs_Texture3, depth);
+    device->ShaderConstantsSet(GxSh_Pixel, 0, constants, 4);
     Pass(state, target, s_lerpPs, nullptr);
     state.End();
     return true;

@@ -59,7 +59,7 @@ static uint32_t s_requestedRipple = 1;
 static bool s_rippleFailed;
 static uint32_t s_reflectionMode;
 static uint32_t s_reflectionDownscale;
-static float s_reflectionStrength = 0.75f;
+static float s_reflectionStrength = 1.0f;
 static float s_shorelineSoftness = 1.0f;
 static bool s_failed;
 
@@ -93,6 +93,8 @@ static float s_maskSavedViewport[6];
 // Up to this far (yards) from the reflected level water shows the real reflection, from the far one on the sky's.
 static const float REFLECTION_BLEND_NEAR = 6.0f;
 static const float REFLECTION_BLEND_FAR = 24.0f;
+// The heights the mask holds, either way of the reflected level (yards; 8 bits over twice this).
+static const float REFLECTION_MASK_RANGE = 24.0f;
 static float s_reflectionDistance = 200.0f;
 // Models smaller than this part of their distance are left out of the reflection (reflectionModelSize).
 static float s_reflectionModelSize = 0.004f;
@@ -1534,7 +1536,7 @@ bool Liquid::Cata::BeginReflectionMask(const C3Vector& cameraPos) {
 
     float plane = s_planeHeight - (Liquid::UseCameraRelativeCoords() ? cameraPos.z : 0.0f);
     C4Vector view = ViewSettings::Params(s_zNear, s_zFar, s_viewportFarClip);
-    float c[8] = { view.x, view.y, view.z, view.w, plane, REFLECTION_BLEND_NEAR, 1.0f / (REFLECTION_BLEND_FAR - REFLECTION_BLEND_NEAR), 0.0f };
+    float c[8] = { view.x, view.y, view.z, view.w, plane, REFLECTION_BLEND_NEAR, 1.0f / (REFLECTION_BLEND_FAR - REFLECTION_BLEND_NEAR), REFLECTION_MASK_RANGE };
     device->ShaderConstantsSet(GxSh_Pixel, 0, c, 2);
 
     s_reflectionMaskDrawing = true;
@@ -1575,23 +1577,14 @@ void Liquid::Cata::DrawReflectionMask(IGeomFactory* geomFactory, const C3Vector&
         projection.c3 *= -1.0f;
     }
 
-    C44Matrix viewProjection = view * projection;
-    C44Matrix rows = world * viewProjection;
-    float c[28];
+    C44Matrix rows = world * view * projection;
+    float c[20];
     memcpy(c, &rows, sizeof(float) * 16);
     c[16] = world.a2;
     c[17] = world.b2;
     c[18] = world.c2;
     c[19] = world.d2;
-    c[20] = viewProjection.c0;
-    c[21] = viewProjection.c1;
-    c[22] = viewProjection.c2;
-    c[23] = viewProjection.c3;
-    c[24] = s_planeHeight - (Liquid::UseCameraRelativeCoords() ? cameraPos.z : 0.0f);
-    c[25] = 0.0f;
-    c[26] = 0.0f;
-    c[27] = 0.0f;
-    g_theGxDevicePtr->ShaderConstantsSet(GxSh_Vertex, 0, c, 7);
+    g_theGxDevicePtr->ShaderConstantsSet(GxSh_Vertex, 0, c, 5);
 
     CGxBuf* vertexBuf = nullptr;
     CGxBuf* indexBuf = nullptr;
@@ -1630,8 +1623,20 @@ void Liquid::Cata::EndReflectionMask() {
     CGxTex* mask = GxTexOf(s_reflectionMaskTex);
     CGxTex* blend = GxTexOf(s_reflectionBlendTex);
 
-    if (real && sky && mask && blend && sky->m_width == real->m_width && sky->m_height == real->m_height) {
-        s_reflectionBlendReady = PostEffects::Lerp(blend, real, sky, mask);
+    CGxTex* depth = GxTexOf(s_realReflectionDepth);
+
+    if (real && sky && mask && blend && depth && sky->m_width == real->m_width && sky->m_height == real->m_height && depth->m_width == real->m_width && depth->m_height == real->m_height) {
+        C44Matrix view;
+        GxXformView(view);
+        const C44Matrix& projection = g_theGxDevicePtr->m_projNative;
+        C4Vector params = ViewSettings::Params(s_zNear, s_zFar, s_viewportFarClip);
+        float c[16] = {
+            params.x, params.y, params.z, params.w,
+            view.c0, view.c1, view.c2, REFLECTION_MASK_RANGE,
+            projection.a0, projection.b1, projection.c0, projection.c1,
+            2.0f, 0.0f, 0.0f, 0.0f,
+        };
+        s_reflectionBlendReady = PostEffects::ReflectionBlend(blend, real, sky, mask, depth, c);
     }
 
     if (s_reflectionBlendReady) {

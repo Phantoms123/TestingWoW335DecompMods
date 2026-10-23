@@ -53,8 +53,9 @@ namespace PostEffects {
     bool Tint(CGxTex* target, const CImVector& color, float amount);
     // Blends source over all of target (the same size) by amount (0-1).
     bool Blend(CGxTex* target, CGxTex* source, float amount);
-    // Draws a and b (the size of target) blended by amount's red into target.
-    bool Lerp(CGxTex* target, CGxTex* a, CGxTex* b, CGxTex* amount);
+    // The water's real reflection, lined up for water above or below its level by mask and its depth, blended into
+    // the sky one (all the size of target). constants: 4 registers (see lerp_ps.hlsl).
+    bool ReflectionBlend(CGxTex* target, CGxTex* real, CGxTex* sky, CGxTex* mask, CGxTex* depth, const float* constants);
     // The shaders that draw the water's reflection mask (watermask_vs/ps.hlsl).
     bool WaterMaskShaders(CGxShader*& vertexShader, CGxShader*& pixelShader);
     // Softens target with a Gaussian blur of about radius texels, through temp (the same size).
