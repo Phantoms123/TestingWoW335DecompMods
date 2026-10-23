@@ -750,7 +750,7 @@ bool PostEffects::ReflectionBlend(CGxTex* target, CGxTex* real, CGxTex* sky, CGx
     device->RsSet(GxRs_Texture3, depth);
     device->RsSet(GxRs_Texture4, real2);
     device->RsSet(GxRs_Texture5, depth2);
-    device->ShaderConstantsSet(GxSh_Pixel, 0, constants, 5);
+    device->ShaderConstantsSet(GxSh_Pixel, 0, constants, 6);
     Pass(state, target, s_lerpPs, nullptr);
     state.End();
     return true;

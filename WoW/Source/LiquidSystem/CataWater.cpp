@@ -90,6 +90,7 @@ static uint32_t s_reflectionPlanes = 1;
 // CHANGED: reflectionBlend 0 (default) draws the water as before the per-pixel blending (one real reflection,
 // eased into the sky one in quarter steps per chunk); 1 the per-pixel blend and second level.
 static bool s_reflectionPerPixel = true;
+static float s_reflectionSaturation = 0.35f;
 // The real reflection eased into the sky one (a quarter, half and three quarters sky), for water a little away
 // from the reflected level; made once a pass, when water first needs one.
 static const uint32_t REFLECTION_MIXES = 3;
@@ -440,6 +441,10 @@ void Liquid::Cata::SetReflectionDistance(float distance) {
 }
 
 static bool s_reflectionDebug;
+
+void Liquid::Cata::SetReflectionSaturation(float saturation) {
+    s_reflectionSaturation = saturation < 0.0f ? 0.0f : (saturation > 1.0f ? 1.0f : saturation);
+}
 
 void Liquid::Cata::SetReflectionPerPixel(bool enable) {
     s_reflectionPerPixel = enable;
@@ -1511,7 +1516,7 @@ void Liquid::Cata::EndReflection() {
     float shown = s_reflectionStrength * s_reflectionBlend;
 
     // A slight blur, as 4.3.4's blurredReflection: thin edges stop shimmering as the camera moves.
-    PostEffects::Soften(reflection, GxTexOf(s_realReflectionTemp), 1.5f);
+    PostEffects::Soften(reflection, GxTexOf(s_realReflectionTemp), 2.5f);
 
     // CHANGED: towards a grey as bright as the fog, not the fog colour itself: at sunset that is orange, and the
     // water fogs what it shows again, so the reflections turned orange.
@@ -1734,12 +1739,13 @@ void Liquid::Cata::EndReflectionMask() {
         GxXformView(view);
         const C44Matrix& projection = g_theGxDevicePtr->m_projNative;
         C4Vector params = ViewSettings::Params(s_zNear, s_zFar, s_viewportFarClip);
-        float c[20] = {
+        float c[24] = {
             params.x, params.y, params.z, params.w,
             view.c0, view.c1, view.c2, REFLECTION_MASK_RANGE,
             projection.a0, projection.b1, projection.c0, projection.c1,
             2.0f, s_reflectionDistance > 0.0f ? s_reflectionDistance * 0.35f : 1.0e6f, s_reflectionDistance > 0.0f ? 1.0f / (s_reflectionDistance * 0.65f) : 0.0f, 0.0f,
             second ? s_planeHeight - s_plane2Height : 0.0f, second ? 1.0f : 0.0f, REFLECTION_BLEND_NEAR, 1.0f / (REFLECTION_BLEND_FAR - REFLECTION_BLEND_NEAR),
+            s_reflectionSaturation, 0.0f, 0.0f, 0.0f,
         };
         s_reflectionBlendReady = PostEffects::ReflectionBlend(blend, real, sky, mask, depth, second ? real2 : real, second ? depth2 : depth, c);
     }
