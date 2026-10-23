@@ -505,7 +505,15 @@ void Liquid::Cata::BeginFrame() {
         float seconds = s_lastEaseMs ? static_cast<float>(nowMs - s_lastEaseMs) * 0.001f : 0.0f;
         s_lastEaseMs = nowMs;
 
-        if (!s_planeValid || fabsf(s_nextPlaneHeight - s_planeHeight) > 15.0f) {
+        // The nearest water now at the second level: the two swap at once (both are drawn, so nothing moves),
+        // rather than the first easing across to it and sliding the whole reflection.
+        if (s_plane2Valid && fabsf(s_nextPlaneHeight - s_plane2Height) < 1.0f && fabsf(s_nextPlaneHeight - s_planeHeight) > 1.0f) {
+            float first = s_planeHeight;
+            s_planeHeight = s_plane2Height;
+            s_plane2Height = first;
+            s_next2Valid = true;
+            s_next2Height = first;
+        } else if (!s_planeValid || fabsf(s_nextPlaneHeight - s_planeHeight) > 15.0f) {
             s_planeHeight = s_nextPlaneHeight;
         } else {
             float ease = 1.0f - expf(-(seconds > 0.25f ? 0.25f : seconds) / 0.6f);
@@ -1944,7 +1952,7 @@ bool Liquid::Cata::RenderWater(IEnvironment* environment, IGeomFactory* geomFact
             s_nextPlaneHeight = bounds->c.z;
         }
 
-        if (s_planeValid && fabsf(bounds->c.z - s_planeHeight) > 1.0f && fabsf(bounds->c.z - s_planeHeight) < 40.0f && (!s_next2Valid || distance < s_next2Distance)) {
+        if (s_planeValid && fabsf(bounds->c.z - s_planeHeight) > 1.0f && fabsf(bounds->c.z - s_planeHeight) < 12.0f && (!s_next2Valid || distance < s_next2Distance)) {
             s_next2Valid = true;
             s_next2Distance = distance;
             s_next2Height = bounds->c.z;

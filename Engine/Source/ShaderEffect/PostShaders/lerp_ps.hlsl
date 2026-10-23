@@ -35,17 +35,9 @@ float4 main(PS_POSITION float2 uv : TEXCOORD0) : COLOR {
     float above2 = above1 + Second.x;
     bool useSecond = Second.y > 0.5 && abs(above2) < abs(above1);
     float above = useSecond ? above2 : above1;
-    float raise = 2.0 * above;
-    float2 read = uv;
-
-    for (int i = 0; i < 4; i++) {
-        float d = useSecond ? tex2Dlod(Depth2, float4(read, 0.0, 0.0)).x : tex2Dlod(Depth, float4(read, 0.0, 0.0)).x;
-        float3 p = ViewPoint(d, read) + Up.xyz * raise;
-        float2 seen = p.z > 0.05 ? ScreenUv(p) : read;
-        read = clamp(read - (seen - uv), 0.0, 1.0);
-    }
-
-    float3 real = useSecond ? tex2Dlod(A2, float4(read, 0.0, 0.0)).rgb : tex2Dlod(A, float4(read, 0.0, 0.0)).rgb;
+    // CHANGED: read in place. Shifting the reflection to suit water at another level pulled the banks between
+    // the two levels into it (orange smears that followed the camera); each level now has its own reflection.
+    float3 real = useSecond ? tex2D(A2, uv).rgb : tex2D(A, uv).rgb;
     float sky = saturate((abs(above) - Second.z) * Second.w);
     return float4(lerp(real, tex2D(B, uv).rgb, sky), 1.0);
 }
