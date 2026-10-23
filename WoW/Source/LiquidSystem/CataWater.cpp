@@ -59,7 +59,7 @@ static uint32_t s_requestedRipple = 1;
 static bool s_rippleFailed;
 static uint32_t s_reflectionMode;
 static uint32_t s_reflectionDownscale;
-static float s_reflectionStrength = 0.75f;
+static float s_reflectionStrength = 1.0f;
 static float s_shorelineSoftness = 1.0f;
 static bool s_failed;
 
@@ -89,7 +89,7 @@ static uint32_t s_reflectionIndex;
 static uint32_t s_reflectionPlanes = 1;
 // CHANGED: reflectionBlend 0 (default) draws the water as before the per-pixel blending (one real reflection,
 // eased into the sky one in quarter steps per chunk); 1 the per-pixel blend and second level.
-static bool s_reflectionPerPixel = false;
+static bool s_reflectionPerPixel = true;
 // The real reflection eased into the sky one (a quarter, half and three quarters sky), for water a little away
 // from the reflected level; made once a pass, when water first needs one.
 static const uint32_t REFLECTION_MIXES = 3;
@@ -107,8 +107,8 @@ static float s_maskSavedPs[8 * 4];
 static CGxTex* s_maskSavedColor;
 static float s_maskSavedViewport[6];
 // Up to this far (yards) from the reflected level water shows the real reflection, from the far one on the sky's.
-static const float REFLECTION_BLEND_NEAR = 2.0f;
-static const float REFLECTION_BLEND_FAR = 10.0f;
+static const float REFLECTION_BLEND_NEAR = 6.0f;
+static const float REFLECTION_BLEND_FAR = 24.0f;
 // The heights the mask holds, either way of the reflected level (yards; 8 bits over twice this).
 static const float REFLECTION_MASK_RANGE = 24.0f;
 static float s_reflectionDistance = 200.0f;
@@ -1513,8 +1513,13 @@ void Liquid::Cata::EndReflection() {
     // A slight blur, as 4.3.4's blurredReflection: thin edges stop shimmering as the camera moves.
     PostEffects::Soften(reflection, GxTexOf(s_realReflectionTemp), 1.5f);
 
+    // CHANGED: towards a grey as bright as the fog, not the fog colour itself: at sunset that is orange, and the
+    // water fogs what it shows again, so the reflections turned orange.
     if (shown < 1.0f) {
-        PostEffects::Tint(reflection, info->m_fog.m_color, 1.0f - shown);
+        CImVector grey = info->m_fog.m_color;
+        uint8_t luma = static_cast<uint8_t>(0.299f * grey.r + 0.587f * grey.g + 0.114f * grey.b);
+        grey.r = grey.g = grey.b = luma;
+        PostEffects::Tint(reflection, grey, 1.0f - shown);
     }
     device->RsPop();
 
