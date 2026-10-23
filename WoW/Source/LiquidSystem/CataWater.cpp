@@ -107,10 +107,10 @@ static float s_maskSavedPs[8 * 4];
 static CGxTex* s_maskSavedColor;
 static float s_maskSavedViewport[6];
 // Up to this far (yards) from the reflected level water shows the real reflection, from the far one on the sky's.
-static const float REFLECTION_BLEND_NEAR = 6.0f;
-static const float REFLECTION_BLEND_FAR = 24.0f;
+static const float REFLECTION_BLEND_NEAR = 30.0f;
+static const float REFLECTION_BLEND_FAR = 60.0f;
 // The heights the mask holds, either way of the reflected level (yards; 8 bits over twice this).
-static const float REFLECTION_MASK_RANGE = 24.0f;
+static const float REFLECTION_MASK_RANGE = 64.0f;
 static float s_reflectionDistance = 200.0f;
 // Models smaller than this part of their distance are left out of the reflection (reflectionModelSize).
 static float s_reflectionModelSize = 0.004f;
@@ -514,7 +514,7 @@ void Liquid::Cata::BeginFrame() {
 
         // The nearest water now at the second level: the two swap at once (both are drawn, so nothing moves),
         // rather than the first easing across to it and sliding the whole reflection.
-        if (s_reflectionPerPixel && s_plane2Valid && fabsf(s_nextPlaneHeight - s_plane2Height) < 1.0f && fabsf(s_nextPlaneHeight - s_planeHeight) > 1.0f) {
+        if (s_reflectionPerPixel && s_reflectionPlanes >= 2 && s_plane2Valid && fabsf(s_nextPlaneHeight - s_plane2Height) < 1.0f && fabsf(s_nextPlaneHeight - s_planeHeight) > 1.0f) {
             float first = s_planeHeight;
             s_planeHeight = s_plane2Height;
             s_plane2Height = first;
