@@ -992,7 +992,18 @@ void CMapObj::UnifiedRender(CMapObjGroup* group, uint32_t index) {
         CMapObj::SetEmissiveColor(emissive);
 
         GxTexSetWrap(gxTex0, static_cast<EGxTexWrapMode>((material.m_flags & 0x40) == 0), static_cast<EGxTexWrapMode>((material.m_flags & 0x80) == 0));
+        // WMOs from newer clients / converters use shader ids beyond the 7 unified effects; fall back to
+        // the diffuse effect instead of reading past the array.
+        if (shader >= sizeof(CMapObj::s_unifiedShaders) / sizeof(CMapObj::s_unifiedShaders[0])) {
+            shader = 0;
+        }
+
         CShaderEffect* effect = CMapObj::s_unifiedShaders[shader];
+
+        if (!effect) {
+            continue;
+        }
+
         g_theGxDevicePtr->RsSet(GxRs_Texture0, gxTex0);
         g_theGxDevicePtr->RsSet(GxRs_Texture1, gxTex1);
         effect->SetCurrent();

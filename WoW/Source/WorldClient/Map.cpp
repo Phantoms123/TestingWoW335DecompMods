@@ -1,3 +1,4 @@
+#include <vector>
 #include "Map.h"
 #include "Engine/Source/ShaderEffect/ShadowCache.h"
 #if defined(_MSC_VER)
@@ -1996,7 +1997,11 @@ void CMap::PreUpdateAreas(bool addToScene) {
     int32_t minY = CWorld::gbChunkRect.minY >> 4;
     int32_t maxX = CWorld::gbChunkRect.maxX >> 4;
     int32_t entryCount = 0;
-    CMapAreaEntry* entries = static_cast<CMapAreaEntry*>(alloca(1024 * sizeof(CMapAreaEntry)));
+
+    // One entry per map tile (64x64 grid at most). The original used a fixed 1024 entry stack buffer,
+    // which overflows once the view distance covers more than 1024 tiles.
+    std::vector<CMapAreaEntry> entryStorage(64 * 64);
+    CMapAreaEntry* entries = entryStorage.data();
 
     CMap::ClearChunkSortList();
     CMap::ProcessChunkLiquidUpdateList();
@@ -2023,8 +2028,8 @@ void CMap::PreUpdateAreas(bool addToScene) {
         link = next;
     }
 
-    for (int32_t y = minY; y <= maxY; y++) {
-        for (int32_t x = minX; x <= maxX; x++) {
+    for (int32_t y = minY < 0 ? 0 : minY; y <= maxY && y < 64; y++) {
+        for (int32_t x = minX < 0 ? 0 : minX; x <= maxX && x < 64; x++) {
             int32_t index = 64 * y + x;
 
             if ((CMap::m_areaInfo[index].m_flags & 1) && !CMap::m_areaTable[index]) {

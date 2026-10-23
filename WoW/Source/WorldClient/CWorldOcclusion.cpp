@@ -233,7 +233,8 @@ static C3Vector s_occlusionVolumeVerts61[4] = { C3Vector(-475.600006f, 2173.8000
 
 // STATIC: 0x00AF0040
 static OcclusionVolume s_occlusionVolumes[62] = {
-    { 0, 0, { CAaBox(C3Vector(0.0f, 0.0f, 0.0f), C3Vector(0.0f, 0.0f, 0.0f)), s_occlusionVolumeVerts0, 4 } },
+    // Stormwind gate fix: move the gate occluder to an unused map id so it never culls the gate (patch 0x6EE040 = 99999).
+    { 99999, 0, { CAaBox(C3Vector(0.0f, 0.0f, 0.0f), C3Vector(0.0f, 0.0f, 0.0f)), s_occlusionVolumeVerts0, 4 } },
     { 571, 0, { CAaBox(C3Vector(0.0f, 0.0f, 0.0f), C3Vector(0.0f, 0.0f, 0.0f)), s_occlusionVolumeVerts1, 8 } },
     { 571, 2, { CAaBox(C3Vector(0.0f, 0.0f, 0.0f), C3Vector(0.0f, 0.0f, 0.0f)), s_occlusionVolumeVerts2, 6 } },
     { 571, 0, { CAaBox(C3Vector(0.0f, 0.0f, 0.0f), C3Vector(0.0f, 0.0f, 0.0f)), s_occlusionVolumeVerts3, 4 } },
