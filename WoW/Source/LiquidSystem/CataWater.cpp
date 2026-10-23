@@ -59,7 +59,7 @@ static uint32_t s_requestedRipple = 1;
 static bool s_rippleFailed;
 static uint32_t s_reflectionMode;
 static uint32_t s_reflectionDownscale;
-static float s_reflectionStrength = 1.0f;
+static float s_reflectionStrength = 0.75f;
 static float s_shorelineSoftness = 1.0f;
 static bool s_failed;
 
@@ -86,7 +86,10 @@ static bool s_next2Valid;
 static float s_next2Distance;
 static float s_next2Height;
 static uint32_t s_reflectionIndex;
-static uint32_t s_reflectionPlanes = 2;
+static uint32_t s_reflectionPlanes = 1;
+// CHANGED: reflectionBlend 0 (default) draws the water as before the per-pixel blending (one real reflection,
+// eased into the sky one in quarter steps per chunk); 1 the per-pixel blend and second level.
+static bool s_reflectionPerPixel = false;
 // The real reflection eased into the sky one (a quarter, half and three quarters sky), for water a little away
 // from the reflected level; made once a pass, when water first needs one.
 static const uint32_t REFLECTION_MIXES = 3;
@@ -104,8 +107,8 @@ static float s_maskSavedPs[8 * 4];
 static CGxTex* s_maskSavedColor;
 static float s_maskSavedViewport[6];
 // Up to this far (yards) from the reflected level water shows the real reflection, from the far one on the sky's.
-static const float REFLECTION_BLEND_NEAR = 6.0f;
-static const float REFLECTION_BLEND_FAR = 24.0f;
+static const float REFLECTION_BLEND_NEAR = 2.0f;
+static const float REFLECTION_BLEND_FAR = 10.0f;
 // The heights the mask holds, either way of the reflected level (yards; 8 bits over twice this).
 static const float REFLECTION_MASK_RANGE = 24.0f;
 static float s_reflectionDistance = 200.0f;
@@ -438,6 +441,10 @@ void Liquid::Cata::SetReflectionDistance(float distance) {
 
 static bool s_reflectionDebug;
 
+void Liquid::Cata::SetReflectionPerPixel(bool enable) {
+    s_reflectionPerPixel = enable;
+}
+
 void Liquid::Cata::SetReflectionPlanes(uint32_t planes) {
     s_reflectionPlanes = planes < 1 ? 1 : (planes > 2 ? 2 : planes);
 }
@@ -507,7 +514,7 @@ void Liquid::Cata::BeginFrame() {
 
         // The nearest water now at the second level: the two swap at once (both are drawn, so nothing moves),
         // rather than the first easing across to it and sliding the whole reflection.
-        if (s_plane2Valid && fabsf(s_nextPlaneHeight - s_plane2Height) < 1.0f && fabsf(s_nextPlaneHeight - s_planeHeight) > 1.0f) {
+        if (s_reflectionPerPixel && s_plane2Valid && fabsf(s_nextPlaneHeight - s_plane2Height) < 1.0f && fabsf(s_nextPlaneHeight - s_planeHeight) > 1.0f) {
             float first = s_planeHeight;
             s_planeHeight = s_plane2Height;
             s_plane2Height = first;
@@ -1320,7 +1327,7 @@ bool Liquid::Cata::BeginReflection(const C3Vector& worldViewOrigin, uint32_t& mo
     if (index) {
         float height2 = s_plane2Height - worldViewOrigin.z;
 
-        if (index >= s_reflectionPlanes || !s_realReady || !s_plane2Valid || height2 > -0.05f || !GxTexOf(s_real2ReflectionTex)) {
+        if (!s_reflectionPerPixel || index >= s_reflectionPlanes || !s_realReady || !s_plane2Valid || height2 > -0.05f || !GxTexOf(s_real2ReflectionTex)) {
             return false;
         }
     }
@@ -1493,7 +1500,7 @@ void Liquid::Cata::EndReflection() {
         // buildings and trees do not stand out in the water or appear in it abruptly.
         // CHANGED: not into the fog colour when the per-pixel blend runs (it fades into the sky reflection itself):
         // at sunset the fog is orange, and the water fogs what it shows again, so the reflections turned orange.
-        if (s_reflectionDistance > 0.0f && s_reflectionPlanes == 0) {
+        if (s_reflectionDistance > 0.0f && !s_reflectionPerPixel) {
             C4Vector view = ViewSettings::Params(s_zNear, s_zFar, s_viewportFarClip);
             PostEffects::FadeByDepth(reflection, depth, view, s_viewportFarClip * 0.99999f, s_reflectionDistance * 0.35f, s_reflectionDistance, info->m_fog.m_color);
         }
@@ -1563,7 +1570,7 @@ bool Liquid::Cata::BeginReflectionMask(const C3Vector& cameraPos) {
     s_reflectionBlendReady = false;
     s_reflectionMaskDrawing = false;
 
-    if (!s_inPass || s_cameraUnderwater || !s_realReady || !s_planeValid || !GxTexOf(s_realReflectionTex)) {
+    if (!s_reflectionPerPixel || !s_inPass || s_cameraUnderwater || !s_realReady || !s_planeValid || !GxTexOf(s_realReflectionTex)) {
         return false;
     }
 
