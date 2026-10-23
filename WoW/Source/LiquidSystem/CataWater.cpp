@@ -82,6 +82,9 @@ static bool s_real2Ready;
 static bool s_plane2Valid;
 static float s_plane2Height;
 static uint32_t s_plane2Hold;
+// The camera's height when water was last drawn (the levels are chosen for the next frame).
+static float s_lastCameraZ;
+static bool s_lastCameraZValid;
 static bool s_next2Valid;
 static float s_next2Distance;
 static float s_next2Height;
@@ -522,7 +525,19 @@ void Liquid::Cata::BeginFrame() {
         // The nearest water is at the second level: both levels are drawn and each pixel takes its own, so the
         // levels stay as they are (swapping them changed what each reflection was culled for, and the water there
         // changed at once).
-        if (s_reflectionPerPixel && s_reflectionPlanes >= 2 && s_plane2Valid && fabsf(s_nextPlaneHeight - s_plane2Height) < 1.0f && fabsf(s_nextPlaneHeight - s_planeHeight) > 1.0f) {
+        // CHANGED: unless the camera has gone below the first level: nothing is reflected in water seen from
+        // under it, and the second level is only drawn alongside the first, so the water at the second level lost
+        // its reflection at once (the colour change moving the camera down to a stream below a pond). The two
+        // levels then trade places; both heights are kept, so the water at each level keeps its own reflection.
+        bool firstAboveCamera = s_lastCameraZValid && s_planeValid && s_planeHeight - s_lastCameraZ > -0.05f;
+        bool secondBelowCamera = s_lastCameraZValid && s_plane2Height - s_lastCameraZ <= -0.05f;
+
+        if (s_reflectionPerPixel && s_reflectionPlanes >= 2 && s_plane2Valid && fabsf(s_nextPlaneHeight - s_plane2Height) < 1.0f && fabsf(s_nextPlaneHeight - s_planeHeight) > 1.0f && firstAboveCamera && secondBelowCamera) {
+            float first = s_planeHeight;
+            s_planeHeight = s_plane2Height;
+            s_plane2Height = first;
+            s_plane2Hold = OsGetAsyncTimeMs();
+        } else if (s_reflectionPerPixel && s_reflectionPlanes >= 2 && s_plane2Valid && fabsf(s_nextPlaneHeight - s_plane2Height) < 1.0f && fabsf(s_nextPlaneHeight - s_planeHeight) > 1.0f) {
             s_next2Valid = true;
             s_next2Height = s_plane2Height;
         } else if (!s_planeValid || fabsf(s_nextPlaneHeight - s_planeHeight) > 15.0f) {
@@ -1962,6 +1977,9 @@ bool Liquid::Cata::RenderWater(IEnvironment* environment, IGeomFactory* geomFact
     }
 
     // The water nearest the camera sets next frame's reflection plane.
+    s_lastCameraZ = cameraPos.z;
+    s_lastCameraZValid = true;
+
     if (!s_cameraUnderwater && bounds->c.z < cameraPos.z) {
         // Nearest across the ground (the water around the camera, rather than whichever is nearest along the view).
         C3Vector toWater = bounds->c - cameraPos;
