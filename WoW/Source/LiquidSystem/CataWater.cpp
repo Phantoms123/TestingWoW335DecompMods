@@ -726,6 +726,8 @@ static void DrawSky(const C44Matrix& skyView) {
     device->XformSetView(view);
 }
 
+static C44Matrix MirrorZ(float height);
+
 static void RenderSkyReflection(CGxTex* target) {
     DayNight::DNInfo* info = DayNight::GetInfo();
 
@@ -740,24 +742,14 @@ static void RenderSkyReflection(CGxTex* target) {
     C44Matrix view;
     GxXformView(view);
 
-    C3Vector forward(view.a2, view.b2, view.c2);
-    C3Vector mirrored(forward.x, forward.y, -forward.z);
-    C3Vector eye(0.0f, 0.0f, 0.0f);
-    C3Vector up(0.0f, 0.0f, 1.0f);
-    C44Matrix mirroredView;
-
-    if (mirrored.x * mirrored.x + mirrored.y * mirrored.y < 0.0001f) {
-        // Straight up or down: no world up to roll against, so a fixed side axis.
-        mirroredView = view;
-        mirroredView.a2 = -view.a2;
-        mirroredView.b2 = -view.b2;
-        mirroredView.c2 = -view.c2;
-        mirroredView.d0 = 0.0f;
-        mirroredView.d1 = 0.0f;
-        mirroredView.d2 = 0.0f;
-    } else {
-        GxuXformCreateLookAtSgCompat(eye, mirrored, up, mirroredView);
-    }
+    // CHANGED: mirrored in the water as the real reflection is (the view with the world's z turned over), rather
+    // than a camera looking up along the mirrored direction: that drew the sky upside down to what the water
+    // shader and the per-pixel blend read, so the sky's bands showed as lines on the water moving the wrong way
+    // when the camera tilted. Around the camera, as the sky is drawn.
+    view.d0 = 0.0f;
+    view.d1 = 0.0f;
+    view.d2 = 0.0f;
+    C44Matrix mirroredView = MirrorZ(0.0f) * view;
 
     DrawSky(mirroredView);
 }

@@ -148,6 +148,8 @@ CDataAllocator CGWorldFrame::s_worldFrameHeap(sizeof(CGWorldFrame), 1);
 // STATIC: 0x00B743A8
 static char s_keyNameBuffer[8];
 
+int32_t g_timeOfDayOverride = -1;
+
 // VERIFY: d8525c88 auto
 // OFFSET: 0x004F5960
 CGCamera* CGWorldFrame::GetActiveCamera() {
@@ -1611,6 +1613,13 @@ void CGWorldFrame::UpdateDayNight(float deltaSec) {
             SysMsgPrintf(SYSMSG_ERROR, "Invalid time of day override in Map ID %d. TOD = %d.", World::QueryMapId(), map->m_timeOfDayOverride);
             info->m_dayProgression = 0.5f;
         }
+    }
+
+    // CHANGED: timeOfDay (console, minutes past midnight 0-1439; -1 the server's time): the time of day the world is
+    // lit for on this client only, for looking at the lighting, shadows and water at other hours.
+    if (g_timeOfDayOverride >= 0 && g_timeOfDayOverride < 1440) {
+        info->m_timeOfDay = 0;
+        info->m_dayProgression = static_cast<float>(g_timeOfDayOverride) * (1.0f / 1440.0f);
     }
 
     info->m_weatherIntensity = World::s_weather->m_densityBlend * World::s_weather->m_fogIntensity;

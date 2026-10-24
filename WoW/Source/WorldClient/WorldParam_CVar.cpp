@@ -915,6 +915,14 @@ static bool ShadowFollowSunCallback(CVar* var, const char* oldValue, const char*
     return true;
 }
 
+extern int32_t g_timeOfDayOverride;
+
+static bool TimeOfDayCallback(CVar* var, const char* oldValue, const char* value, void* arg) {
+    int32_t minutes = SStrToInt(value);
+    g_timeOfDayOverride = minutes >= 0 && minutes < 1440 ? minutes : -1;
+    return true;
+}
+
 static bool ShadowSunHeightCallback(CVar* var, const char* oldValue, const char* value, void* arg) {
     float height = SStrToFloat(value);
     CShadowQuery::s_minSunHeight = height < 0.0f ? 0.0f : (height > 80.0f ? 80.0f : height);
@@ -946,6 +954,9 @@ static void RegisterCataShadows() {
 
     CVar* followSun = CVar::Register("shadowFollowSun", "Shadows follow the sun and moon position (0 off as 3.3.5, 1 on)", 1, "0", ShadowFollowSunCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     CShadowQuery::s_followSun = followSun && followSun->m_intValue != 0;
+
+    // Not saved: the server's time again after a restart.
+    CVar::Register("timeOfDay", "Time of day to light the world for, in minutes past midnight (0-1439, e.g. 720 noon; -1 the server's time)", 0, "-1", TimeOfDayCallback, CATEGORY_GRAPHICS, false, nullptr, false);
 
     CVar* sunHeight = CVar::Register("shadowSunHeight", "Lowest height of the light casting shadows, in degrees (0 as 3.3.5; higher shortens evening shadows)", 1, "0", ShadowSunHeightCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     CShadowQuery::s_minSunHeight = sunHeight ? (sunHeight->m_floatValue < 0.0f ? 0.0f : (sunHeight->m_floatValue > 80.0f ? 80.0f : sunHeight->m_floatValue)) : 0.0f;
