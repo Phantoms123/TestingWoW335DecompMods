@@ -1782,8 +1782,8 @@ void Liquid::Cata::EndReflectionMask() {
             projection.a0, projection.b1, projection.c0, projection.c1,
             2.0f, s_reflectionDistance > 0.0f ? s_reflectionDistance * 0.35f : 1.0e6f, s_reflectionDistance > 0.0f ? 1.0f / (s_reflectionDistance * 0.65f) : 0.0f, 0.0f,
             second ? s_planeHeight - s_plane2Height : 0.0f, second ? 1.0f : 0.0f,
-            trace ? REFLECTION_TRACE_NEAR : REFLECTION_BLEND_NEAR, trace ? 1.0f / (REFLECTION_TRACE_FAR - REFLECTION_TRACE_NEAR) : 1.0f / (REFLECTION_BLEND_FAR - REFLECTION_BLEND_NEAR),
-            s_reflectionSaturation, 0.0f, 0.0f, 0.0f,
+            REFLECTION_BLEND_NEAR, 1.0f / (REFLECTION_BLEND_FAR - REFLECTION_BLEND_NEAR),
+            s_reflectionSaturation, REFLECTION_TRACE_NEAR, 1.0f / (REFLECTION_TRACE_FAR - REFLECTION_TRACE_NEAR), 0.0f,
             s_planeHeight - s_maskCameraZ, trace ? 1.0f : 0.0f, REFLECTION_TRACE_DISTANCE, 1.5f,
         };
         s_reflectionBlendReady = PostEffects::ReflectionBlend(blend, real, sky, mask, depth, second ? real2 : real, second ? depth2 : depth, scene ? scene : real, sceneDepth ? sceneDepth : depth, c);

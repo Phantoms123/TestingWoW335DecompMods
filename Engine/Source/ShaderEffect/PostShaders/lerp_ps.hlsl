@@ -18,11 +18,12 @@ float4 Proj : register(c2);          // the projection's x and y scale and offse
 float4 Far : register(c3);           // x: depth beyond which is sky; y, z: distance fade start, 1 / length
 float4 Second : register(c4);        // x: first level - second level, y: 1 if the second was drawn; z, w: real
                                      // within z yards of a level, none 1 / w yards further
-float4 Tone : register(c5);          // x: colour kept in the reflection (0 grey, 1 as reflected)
+float4 Tone : register(c5);          // x: colour kept in the reflection (0 grey, 1 as reflected); y, z: traced
+                                     // from y yards off a level, fully 1 / z yards further
 float4 Trace : register(c6);         // x: the first level's height from the camera, y: 1 traces on screen,
                                      // z: furthest traced (yards), w: how thick what is hit is taken to be
 
-static const int STEPS = 40;
+static const int STEPS = 64;
 static const int REFINE = 6;
 
 float2 ScreenUv(float3 p) {
@@ -52,10 +53,13 @@ float4 TraceScene(float2 uv, float above1) {
     // Lifted a little off the water, so it does not hit the banks right at its edge.
     start += up * 0.05;
 
-    float last = 0.0;
-    float dist = 0.5;
-    float hit = -1.0;
+    // Each pixel's steps start a little apart (a fixed pattern on screen), so the steps do not show as bands.
+    float jitter = frac(52.9829189 * frac(dot(uv * float2(1920.0, 1080.0), float2(0.06711056, 0.00583715))));
     float limit = Trace.z;
+    float last = 0.0;
+    float dist = 0.3 + 0.4 * jitter;
+    float hit = -1.0;
+    bool front = true;
 
     [loop]
     for (int i = 0; i < STEPS; i++) {
@@ -73,48 +77,52 @@ float4 TraceScene(float2 uv, float above1) {
 
         float behind = p.z - SceneZ(suv);
 
-        if (behind > 0.0) {
-            // Behind what is drawn there: a hit when not much behind (else it passed behind it, unseen).
-            if (behind < Trace.w + dist * 0.08) {
-                hit = dist;
+        if (behind > 0.0 && front) {
+            // Crossed behind what is drawn there: found where, then taken as a hit unless it went behind something
+            // (a hill's far side, a tree's) rather than into it.
+            float lo = last;
+            float hi = dist;
+
+            [loop]
+            for (int j = 0; j < REFINE; j++) {
+                float mid = 0.5 * (lo + hi);
+                float3 q = start + dir * mid;
+
+                if (q.z - SceneZ(ScreenUv(q)) > 0.0) {
+                    hi = mid;
+                } else {
+                    lo = mid;
+                }
             }
 
-            break;
+            float3 q = start + dir * hi;
+
+            if (q.z - SceneZ(ScreenUv(q)) < Trace.w + hi * 0.03) {
+                hit = hi;
+                break;
+            }
         }
 
+        front = behind <= 0.0;
         last = dist;
-        dist = min(dist * 1.18 + 0.25, limit);
 
-        if (last >= limit) {
+        if (dist >= limit) {
             break;
         }
+
+        dist = min(dist * 1.08 + 0.3, limit);
     }
 
     if (hit < 0.0) {
         return float4(0.0, 0.0, 0.0, 0.0);
     }
 
-    float lo = last;
-    float hi = hit;
-
-    [loop]
-    for (int j = 0; j < REFINE; j++) {
-        float mid = 0.5 * (lo + hi);
-        float3 p = start + dir * mid;
-
-        if (p.z - SceneZ(ScreenUv(p)) > 0.0) {
-            hi = mid;
-        } else {
-            lo = mid;
-        }
-    }
-
-    float3 p = start + dir * hi;
+    float3 p = start + dir * hit;
     float2 suv = ScreenUv(p);
     // Less near the screen's edges, the furthest traced, and for rays turning back towards the camera.
     float2 edge = min(suv, 1.0 - suv);
     float trust = saturate(min(edge.x, edge.y) * 12.0);
-    trust *= saturate((limit - hi) / (limit * 0.3));
+    trust *= saturate((limit - hit) / (limit * 0.3));
     trust *= saturate(dir.z * 4.0 + 1.0);
     return float4(tex2Dlod(Scene, float4(suv, 0.0, 0.0)).rgb, trust);
 }
@@ -127,22 +135,25 @@ float4 main(PS_POSITION float2 uv : TEXCOORD0) : COLOR {
     float second = Second.y > 0.5 ? saturate((abs(above1) - abs(above2)) * 0.5 + 0.5) : 0.0;
     float above = lerp(abs(above1), abs(above2), second);
     float3 real = lerp(tex2D(A, uv).rgb, tex2D(A2, uv).rgb, second);
-    // Away from both levels neither reflection is right for the water there.
+    // Away from both levels neither reflection is right for the water there; as 4.3.4, the real one still shows
+    // up to Second.z yards off, the sky beyond.
     float away = saturate((above - Second.z) * Second.w);
     // What the reflection shows far off fades away too (reflectionDistance).
     float d = lerp(tex2D(Depth, uv).x, tex2D(Depth2, uv).x, second);
     float fade = saturate((ViewDepth(d, View) - Far.y) * Far.z);
     fade = fade * fade * (3.0 - 2.0 * fade);
-    float3 sky = tex2D(B, uv).rgb;
-    float3 other = sky;
+    float3 c = lerp(real, tex2D(B, uv).rgb, max(away, fade));
 
-    // CHANGED: the frame itself where it holds what that water reflects (reflectionScreenSpace).
-    if (Trace.y > 0.5 && max(away, fade) > 0.001) {
+    // CHANGED: what the frame itself holds of what that water reflects, where it can be found
+    // (reflectionScreenSpace): from Tone.y yards off a level on, fully 1 / Tone.z yards further. Where it cannot,
+    // the above (so no patches of sky beside the real reflection).
+    float traceAway = max(saturate((above - Tone.y) * Tone.z), fade);
+
+    if (Trace.y > 0.5 && traceAway > 0.001) {
         float4 traced = TraceScene(uv, above1);
-        other = lerp(sky, traced.rgb, traced.a);
+        c = lerp(c, traced.rgb, traceAway * traced.a);
     }
 
-    float3 c = lerp(real, other, max(away, fade));
     // CHANGED: less colour in what the water reflects (reflectionSaturation): a sunset sky turned all of it orange.
     return float4(lerp(Luma(c).xxx, c, Tone.x), 1.0);
 }
