@@ -49,6 +49,7 @@ static uint32_t s_maxUntexturedBatches;
 float CShadowQuery::s_cutoffHeight;
 
 int32_t CShadowQuery::s_followSun;
+float CShadowQuery::s_minSunHeight;
 
 // CHANGED: 4.3.4's shadowFollowSun (Waystone's shadow light, the same steps and limits). Picks the sun while it
 // is above the horizon, else the moon; keeps the light at least 0.2 below level so shadows stay finite; and only
@@ -183,6 +184,20 @@ void CShadowQuery::Update() {
 
     if (CShadowQuery::s_followSun) {
         GetSkyShadowDirection(direction);
+    }
+
+    // CHANGED: shadowSunHeight, the lowest the light casting shadows may stand (degrees; 0 as 3.3.5). An evening
+    // sun casts shadows many times longer than what casts them, across slopes far from the trees and drakes.
+    if (CShadowQuery::s_minSunHeight > 0.0f) {
+        float minZ = -std::sin(CShadowQuery::s_minSunHeight * 0.0174533f);
+
+        if (direction.z > minZ) {
+            float flat = std::sqrt(direction.x * direction.x + direction.y * direction.y);
+            float scale = flat > 0.0001f ? std::sqrt(1.0f - minZ * minZ) / flat : 0.0f;
+            direction.x *= scale;
+            direction.y *= scale;
+            direction.z = minZ;
+        }
     }
 
     CShadowCache::PreUpdate(direction);

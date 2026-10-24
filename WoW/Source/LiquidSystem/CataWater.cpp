@@ -85,6 +85,10 @@ static uint32_t s_plane2Hold;
 // The camera's height when water was last drawn (the levels are chosen for the next frame).
 static float s_lastCameraZ;
 static bool s_lastCameraZValid;
+// The nearest water at the second level's height this frame (it keeps the level until other water is much nearer).
+static bool s_nextSame2Valid;
+static float s_nextSame2Distance;
+static float s_nextSame2Height;
 static bool s_next2Valid;
 static float s_next2Distance;
 static float s_next2Height;
@@ -554,6 +558,16 @@ void Liquid::Cata::BeginFrame() {
     } else {
         s_planeValid = false;
     }
+
+    // CHANGED: the second level stays with its water while that is still in view, unless other water is under half
+    // as far away (as the first level does): in a valley of pools and waterfalls the nearest one changed with
+    // every few steps, and each change made two pools change their look at once.
+    if (s_next2Valid && s_nextSame2Valid && s_next2Distance > 0.25f * s_nextSame2Distance) {
+        s_next2Height = s_nextSame2Height;
+    }
+
+    s_nextSame2Valid = false;
+    s_nextSame2Distance = 0.0f;
 
     // The second level: the nearest water more than a yard from the first, eased the same way.
     if (s_next2Valid && s_planeValid && fabsf(s_next2Height - s_planeHeight) > 1.0f) {
@@ -1995,6 +2009,12 @@ bool Liquid::Cata::RenderWater(IEnvironment* environment, IGeomFactory* geomFact
             s_next2Valid = true;
             s_next2Distance = distance;
             s_next2Height = bounds->c.z;
+        }
+
+        if (s_plane2Valid && fabsf(bounds->c.z - s_plane2Height) < 1.0f && (!s_nextSame2Valid || distance < s_nextSame2Distance)) {
+            s_nextSame2Valid = true;
+            s_nextSame2Distance = distance;
+            s_nextSame2Height = bounds->c.z;
         }
 
         if (s_planeValid && fabsf(bounds->c.z - s_planeHeight) < 1.0f && (!s_nextSameValid || distance < s_nextSameDistance)) {

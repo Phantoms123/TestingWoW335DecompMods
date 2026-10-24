@@ -915,6 +915,13 @@ static bool ShadowFollowSunCallback(CVar* var, const char* oldValue, const char*
     return true;
 }
 
+static bool ShadowSunHeightCallback(CVar* var, const char* oldValue, const char* value, void* arg) {
+    float height = SStrToFloat(value);
+    CShadowQuery::s_minSunHeight = height < 0.0f ? 0.0f : (height > 80.0f ? 80.0f : height);
+    CShadowCache::s_needsRebuild = 1;
+    return true;
+}
+
 static bool ShadowStrengthCallback(CVar* var, const char* oldValue, const char* value, void* arg) {
     float strength = SStrToFloat(value);
     CGxDevice::s_shadowStrength = strength < 0.1f ? 0.1f : (strength > 0.8f ? 0.8f : strength);
@@ -939,6 +946,9 @@ static void RegisterCataShadows() {
 
     CVar* followSun = CVar::Register("shadowFollowSun", "Shadows follow the sun and moon position (0 off as 3.3.5, 1 on)", 1, "0", ShadowFollowSunCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     CShadowQuery::s_followSun = followSun && followSun->m_intValue != 0;
+
+    CVar* sunHeight = CVar::Register("shadowSunHeight", "Lowest height of the light casting shadows, in degrees (0 as 3.3.5; higher shortens evening shadows)", 1, "0", ShadowSunHeightCallback, CATEGORY_GRAPHICS, false, nullptr, false);
+    CShadowQuery::s_minSunHeight = sunHeight ? (sunHeight->m_floatValue < 0.0f ? 0.0f : (sunHeight->m_floatValue > 80.0f ? 80.0f : sunHeight->m_floatValue)) : 0.0f;
 
     s_shadowModeVar = CVar::Register("shadowMode", "Quality of shadows, as 4.3.4 (0-3; -1 extShadowQuality decides)", 1, "-1", ShadowModeCallback, CATEGORY_GRAPHICS, false, nullptr, false);
 
