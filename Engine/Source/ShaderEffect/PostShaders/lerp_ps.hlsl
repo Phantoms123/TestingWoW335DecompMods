@@ -123,7 +123,10 @@ float4 TraceScene(float2 uv, float above1) {
     float2 edge = min(suv, 1.0 - suv);
     float trust = saturate(min(edge.x, edge.y) * 5.0);
     trust *= saturate((limit - hit) / (limit * 0.3));
-    trust *= saturate(dir.z * 4.0 + 1.0);
+    // CHANGED: none for rays turning back towards the camera, nor for what lies nearer it than the water: those are
+    // things in front (a tree beside the camera), seen from the front, not what the water has above it.
+    trust *= saturate(dir.z * 6.0);
+    trust *= saturate((p.z - start.z) * 0.5);
     return float4(tex2Dlod(Scene, float4(suv, 0.0, 0.0)).rgb, trust);
 }
 

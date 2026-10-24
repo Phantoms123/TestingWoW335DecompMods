@@ -82,6 +82,9 @@ static bool s_real2Ready;
 static bool s_plane2Valid;
 static float s_plane2Height;
 static uint32_t s_plane2Hold;
+// Other water nearest since then (it becomes the first level after a little while).
+static float s_pendingHeight;
+static uint32_t s_pendingSince;
 // The camera's height when water was last drawn (the levels are chosen for the next frame).
 static float s_lastCameraZ;
 static bool s_lastCameraZValid;
@@ -558,8 +561,19 @@ void Liquid::Cata::BeginFrame() {
         } else if (!s_planeValid || fabsf(s_nextPlaneHeight - s_planeHeight) > 1.0f) {
             // CHANGED: other water (more than a yard off) is taken at once, not eased across to: an ease cut short
             // (the nearest water at the second level again) left the level between the two, at no water at all.
-            s_planeHeight = s_nextPlaneHeight;
+            // Only once it has stayed the nearest for a little while, though (unless there is no level, or the
+            // camera is below it): rising or turning brought other chunks in and out of view, and the level
+            // flipped between two waters a few yards apart, changing the look of both each time.
+            if (fabsf(s_pendingHeight - s_nextPlaneHeight) > 1.0f) {
+                s_pendingHeight = s_nextPlaneHeight;
+                s_pendingSince = nowMs;
+            }
+
+            if (!s_planeValid || firstAboveCamera || nowMs - s_pendingSince >= 500) {
+                s_planeHeight = s_nextPlaneHeight;
+            }
         } else {
+            s_pendingHeight = s_planeHeight;
             float ease = 1.0f - expf(-(seconds > 0.25f ? 0.25f : seconds) / 0.6f);
             s_planeHeight += (s_nextPlaneHeight - s_planeHeight) * ease;
         }
