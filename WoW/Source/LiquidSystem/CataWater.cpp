@@ -123,9 +123,10 @@ static const float REFLECTION_BLEND_FAR = 60.0f;
 // The heights the mask holds, either way of the reflected level (yards; 8 bits over twice this).
 static const float REFLECTION_MASK_RANGE = 64.0f;
 // CHANGED: with the reflections traced on screen (reflectionScreenSpace), water this far from a reflected level
-// takes them instead (fully a few yards further), rather than a real reflection mirrored at the wrong height.
-static const float REFLECTION_TRACE_NEAR = 1.5f;
-static const float REFLECTION_TRACE_FAR = 4.0f;
+// takes them instead (fully 4 yards further), rather than a real reflection mirrored at the wrong height; nearer than
+// that the real one stays (a sloping stream's steps took one, then the other, and showed as patches).
+static const float REFLECTION_TRACE_NEAR = 6.0f;
+static const float REFLECTION_TRACE_FAR = 10.0f;
 static const float REFLECTION_TRACE_DISTANCE = 150.0f;
 static bool s_reflectionScreenSpace = true;
 static float s_maskCameraZ;
