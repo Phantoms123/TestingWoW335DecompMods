@@ -555,7 +555,9 @@ void Liquid::Cata::BeginFrame() {
         } else if (s_reflectionPerPixel && s_reflectionPlanes >= 2 && s_plane2Valid && fabsf(s_nextPlaneHeight - s_plane2Height) < 1.0f && fabsf(s_nextPlaneHeight - s_planeHeight) > 1.0f) {
             s_next2Valid = true;
             s_next2Height = s_plane2Height;
-        } else if (!s_planeValid || fabsf(s_nextPlaneHeight - s_planeHeight) > 15.0f) {
+        } else if (!s_planeValid || fabsf(s_nextPlaneHeight - s_planeHeight) > 1.0f) {
+            // CHANGED: other water (more than a yard off) is taken at once, not eased across to: an ease cut short
+            // (the nearest water at the second level again) left the level between the two, at no water at all.
             s_planeHeight = s_nextPlaneHeight;
         } else {
             float ease = 1.0f - expf(-(seconds > 0.25f ? 0.25f : seconds) / 0.6f);
@@ -582,7 +584,7 @@ void Liquid::Cata::BeginFrame() {
 
     // The second level: the nearest water more than a yard from the first, eased the same way.
     if (s_next2Valid && s_planeValid && fabsf(s_next2Height - s_planeHeight) > 1.0f) {
-        if (!s_plane2Valid || fabsf(s_next2Height - s_plane2Height) > 3.0f) {
+        if (!s_plane2Valid || fabsf(s_next2Height - s_plane2Height) > 1.0f) {
             s_plane2Height = s_next2Height;
         } else {
             s_plane2Height += (s_next2Height - s_plane2Height) * 0.1f;

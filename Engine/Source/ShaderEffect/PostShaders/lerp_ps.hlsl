@@ -119,9 +119,9 @@ float4 TraceScene(float2 uv, float above1) {
 
     float3 p = start + dir * hit;
     float2 suv = ScreenUv(p);
-    // Less near the screen's edges, the furthest traced, and for rays turning back towards the camera.
+    // Less near the screen's edges (over a fifth of it, so what leaves the screen fades from the water), the furthest traced, and for rays turning back towards the camera.
     float2 edge = min(suv, 1.0 - suv);
-    float trust = saturate(min(edge.x, edge.y) * 12.0);
+    float trust = saturate(min(edge.x, edge.y) * 5.0);
     trust *= saturate((limit - hit) / (limit * 0.3));
     trust *= saturate(dir.z * 4.0 + 1.0);
     return float4(tex2Dlod(Scene, float4(suv, 0.0, 0.0)).rgb, trust);
