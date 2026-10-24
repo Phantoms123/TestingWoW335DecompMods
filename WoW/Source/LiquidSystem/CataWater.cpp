@@ -119,6 +119,13 @@ static const float REFLECTION_BLEND_NEAR = 30.0f;
 static const float REFLECTION_BLEND_FAR = 60.0f;
 // The heights the mask holds, either way of the reflected level (yards; 8 bits over twice this).
 static const float REFLECTION_MASK_RANGE = 64.0f;
+// CHANGED: with the reflections traced on screen (reflectionScreenSpace), water this far from a reflected level
+// takes them instead (fully a few yards further), rather than a real reflection mirrored at the wrong height.
+static const float REFLECTION_TRACE_NEAR = 1.5f;
+static const float REFLECTION_TRACE_FAR = 4.0f;
+static const float REFLECTION_TRACE_DISTANCE = 150.0f;
+static bool s_reflectionScreenSpace = true;
+static float s_maskCameraZ;
 static float s_reflectionDistance = 200.0f;
 // Models smaller than this part of their distance are left out of the reflection (reflectionModelSize).
 static float s_reflectionModelSize = 0.004f;
@@ -451,6 +458,10 @@ static bool s_reflectionDebug;
 
 void Liquid::Cata::SetReflectionSaturation(float saturation) {
     s_reflectionSaturation = saturation < 0.0f ? 0.0f : (saturation > 1.0f ? 1.0f : saturation);
+}
+
+void Liquid::Cata::SetReflectionScreenSpace(bool enable) {
+    s_reflectionScreenSpace = enable;
 }
 
 void Liquid::Cata::SetReflectionPerPixel(bool enable) {
@@ -1662,6 +1673,7 @@ bool Liquid::Cata::BeginReflectionMask(const C3Vector& cameraPos) {
     device->RsSet(GxRs_PixelShader, pixelShader);
     device->RsSet(GxRs_Texture0, depth);
 
+    s_maskCameraZ = cameraPos.z;
     float plane = s_planeHeight - (Liquid::UseCameraRelativeCoords() ? cameraPos.z : 0.0f);
     C4Vector view = ViewSettings::Params(s_zNear, s_zFar, s_viewportFarClip);
     float c[8] = { view.x, view.y, view.z, view.w, plane, REFLECTION_BLEND_NEAR, 1.0f / (REFLECTION_BLEND_FAR - REFLECTION_BLEND_NEAR), REFLECTION_MASK_RANGE };
@@ -1761,15 +1773,20 @@ void Liquid::Cata::EndReflectionMask() {
         GxXformView(view);
         const C44Matrix& projection = g_theGxDevicePtr->m_projNative;
         C4Vector params = ViewSettings::Params(s_zNear, s_zFar, s_viewportFarClip);
-        float c[24] = {
+        CGxTex* scene = GxTexOf(s_backBufferTex);
+        CGxTex* sceneDepth = DepthCache::GetDepthTex();
+        bool trace = s_reflectionScreenSpace && scene && sceneDepth;
+        float c[28] = {
             params.x, params.y, params.z, params.w,
             view.c0, view.c1, view.c2, REFLECTION_MASK_RANGE,
             projection.a0, projection.b1, projection.c0, projection.c1,
             2.0f, s_reflectionDistance > 0.0f ? s_reflectionDistance * 0.35f : 1.0e6f, s_reflectionDistance > 0.0f ? 1.0f / (s_reflectionDistance * 0.65f) : 0.0f, 0.0f,
-            second ? s_planeHeight - s_plane2Height : 0.0f, second ? 1.0f : 0.0f, REFLECTION_BLEND_NEAR, 1.0f / (REFLECTION_BLEND_FAR - REFLECTION_BLEND_NEAR),
+            second ? s_planeHeight - s_plane2Height : 0.0f, second ? 1.0f : 0.0f,
+            trace ? REFLECTION_TRACE_NEAR : REFLECTION_BLEND_NEAR, trace ? 1.0f / (REFLECTION_TRACE_FAR - REFLECTION_TRACE_NEAR) : 1.0f / (REFLECTION_BLEND_FAR - REFLECTION_BLEND_NEAR),
             s_reflectionSaturation, 0.0f, 0.0f, 0.0f,
+            s_planeHeight - s_maskCameraZ, trace ? 1.0f : 0.0f, REFLECTION_TRACE_DISTANCE, 1.5f,
         };
-        s_reflectionBlendReady = PostEffects::ReflectionBlend(blend, real, sky, mask, depth, second ? real2 : real, second ? depth2 : depth, c);
+        s_reflectionBlendReady = PostEffects::ReflectionBlend(blend, real, sky, mask, depth, second ? real2 : real, second ? depth2 : depth, scene ? scene : real, sceneDepth ? sceneDepth : depth, c);
     }
 
     if (s_reflectionBlendReady) {

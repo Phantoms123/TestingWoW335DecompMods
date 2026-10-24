@@ -778,6 +778,11 @@ static bool ReflectionStrengthCallback(CVar* var, const char* oldValue, const ch
     return true;
 }
 
+static bool ReflectionScreenSpaceCallback(CVar* var, const char* oldValue, const char* value, void* arg) {
+    Liquid::Cata::SetReflectionScreenSpace(SStrToInt(value) != 0);
+    return true;
+}
+
 static bool ReflectionSaturationCallback(CVar* var, const char* oldValue, const char* value, void* arg) {
     Liquid::Cata::SetReflectionSaturation(SStrToFloat(value));
     return true;
@@ -1011,6 +1016,8 @@ void CWorldParam::Initialize() {
     Liquid::Cata::SetReflectionPlanes(reflectionPlanes ? static_cast<uint32_t>(reflectionPlanes->m_intValue) : 2u);
     CVar* reflectionSaturation = CVar::Register("reflectionSaturation", "Colour kept in the water's reflections (0 grey as default, 1 full)", 1, "0", ReflectionSaturationCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     Liquid::Cata::SetReflectionSaturation(reflectionSaturation ? reflectionSaturation->m_floatValue : 0.0f);
+    CVar* reflectionScreenSpace = CVar::Register("reflectionScreenSpace", "Water at other heights reflects what is on screen (1 on, 0 the nearest real reflection or the sky)", 1, "1", ReflectionScreenSpaceCallback, CATEGORY_GRAPHICS, false, nullptr, false);
+    Liquid::Cata::SetReflectionScreenSpace(!reflectionScreenSpace || reflectionScreenSpace->m_intValue != 0);
     CVar* reflectionBlend = CVar::Register("reflectionBlend", "Per-pixel water reflection blend (1 on, 0 the older per-chunk steps)", 1, "1", ReflectionBlendCallback, CATEGORY_GRAPHICS, false, nullptr, false);
     Liquid::Cata::SetReflectionPerPixel(reflectionBlend && reflectionBlend->m_intValue != 0);
     CVar::Register("reflectionDebug", "Print the water reflection's level to the terminal (0 off, 1 on)", 1, "0", ReflectionDebugCallback, CATEGORY_GRAPHICS, false, nullptr, false);

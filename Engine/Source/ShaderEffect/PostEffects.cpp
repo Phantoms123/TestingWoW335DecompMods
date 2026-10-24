@@ -724,8 +724,8 @@ bool PostEffects::Blend(CGxTex* target, CGxTex* source, float amount) {
 }
 
 // The water's reflection blend (lerp_ps): the real reflection read where the mask says, the sky one by its red.
-bool PostEffects::ReflectionBlend(CGxTex* target, CGxTex* real, CGxTex* sky, CGxTex* mask, CGxTex* depth, CGxTex* real2, CGxTex* depth2, const float* constants) {
-    if (!target || !real || !sky || !mask || !depth || !real2 || !depth2 || !constants) {
+bool PostEffects::ReflectionBlend(CGxTex* target, CGxTex* real, CGxTex* sky, CGxTex* mask, CGxTex* depth, CGxTex* real2, CGxTex* depth2, CGxTex* scene, CGxTex* sceneDepth, const float* constants) {
+    if (!target || !real || !sky || !mask || !depth || !real2 || !depth2 || !scene || !sceneDepth || !constants) {
         return false;
     }
 
@@ -750,7 +750,9 @@ bool PostEffects::ReflectionBlend(CGxTex* target, CGxTex* real, CGxTex* sky, CGx
     device->RsSet(GxRs_Texture3, depth);
     device->RsSet(GxRs_Texture4, real2);
     device->RsSet(GxRs_Texture5, depth2);
-    device->ShaderConstantsSet(GxSh_Pixel, 0, constants, 6);
+    device->RsSet(GxRs_Texture6, scene);
+    device->RsSet(GxRs_Texture7, sceneDepth);
+    device->ShaderConstantsSet(GxSh_Pixel, 0, constants, 7);
     Pass(state, target, s_lerpPs, nullptr);
     state.End();
     return true;

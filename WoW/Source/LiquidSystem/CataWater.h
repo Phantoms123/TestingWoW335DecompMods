@@ -47,6 +47,8 @@ namespace Liquid {
         void SetReflectionPlanes(uint32_t planes);
         void SetReflectionPerPixel(bool enable);
         void SetReflectionSaturation(float saturation);
+        // Water away from the reflected levels reflects what is on screen (traced), else the sky.
+        void SetReflectionScreenSpace(bool enable);
         // How far the real reflection shows (yards; it fades out over the second half, 0 = no fade).
         void SetReflectionDistance(float distance);
         void SetReflectionModelSize(float size);
